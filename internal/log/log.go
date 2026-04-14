@@ -7,6 +7,7 @@ package log
 import (
 	"io"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -18,11 +19,11 @@ type Config struct {
 	Level string
 	// Format is the output format: "text" (human-readable) or "json".
 	Format string
-	// Output overrides the writer (used in tests; defaults to os.Stdout).
+	// Output is the destination writer. Defaults to os.Stdout.
 	Output io.Writer
 }
 
-var logger zerolog.Logger
+var globalLogger atomic.Pointer[zerolog.Logger]
 
 // Init configures the global logger. Must be called before any logging.
 func Init(cfg Config) {
@@ -43,20 +44,21 @@ func Init(cfg Config) {
 		level = zerolog.InfoLevel
 	}
 
-	logger = zerolog.New(w).Level(level).With().Timestamp().Logger()
+	l := zerolog.New(w).Level(level).With().Timestamp().Logger()
+	globalLogger.Store(&l)
 }
 
 // Debug returns a debug-level log event.
-func Debug() *zerolog.Event { return logger.Debug() }
+func Debug() *zerolog.Event { return globalLogger.Load().Debug() }
 
 // Info returns an info-level log event.
-func Info() *zerolog.Event { return logger.Info() }
+func Info() *zerolog.Event { return globalLogger.Load().Info() }
 
 // Warn returns a warn-level log event.
-func Warn() *zerolog.Event { return logger.Warn() }
+func Warn() *zerolog.Event { return globalLogger.Load().Warn() }
 
 // Error returns an error-level log event.
-func Error() *zerolog.Event { return logger.Error() }
+func Error() *zerolog.Event { return globalLogger.Load().Error() }
 
 // With returns the logger with additional context fields.
-func With() zerolog.Context { return logger.With() }
+func With() zerolog.Context { return globalLogger.Load().With() }

@@ -2,10 +2,13 @@ package log_test
 
 import (
 	"bytes"
+	"io"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/lorem-dev/locksmith/internal/log"
+	"github.com/rs/zerolog"
 )
 
 func TestInit_TextFormat(t *testing.T) {
@@ -21,6 +24,11 @@ func TestInit_TextFormat(t *testing.T) {
 }
 
 func TestInit_JSONFormat(t *testing.T) {
+	// Ensure we use the default zerolog message field name
+	origFieldName := zerolog.MessageFieldName
+	zerolog.MessageFieldName = "message"
+	defer func() { zerolog.MessageFieldName = origFieldName }()
+
 	var buf bytes.Buffer
 	log.Init(log.Config{Level: "info", Format: "json", Output: &buf})
 
@@ -101,7 +109,25 @@ func TestWith(t *testing.T) {
 }
 
 func TestInit_DefaultOutput(t *testing.T) {
-	// Verify Init with nil Output does not panic (defaults to os.Stdout).
-	log.Init(log.Config{Level: "info", Format: "text"})
-	// If we reach here without panic, the test passes.
+	// Redirect stdout
+	origStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+
+	log.Init(log.Config{Level: "info", Format: "text"}) // nil Output → os.Stdout
+	log.Info().Msg("default output test")
+
+	w.Close()
+	os.Stdout = origStdout
+
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, r); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "default output test") {
+		t.Errorf("expected output on stdout, got %q", buf.String())
+	}
 }
