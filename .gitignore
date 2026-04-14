@@ -1,0 +1,10 @@
+bin/
+gen/proto/
+docs/plans/
+.worktrees/
+.reports/
+*.sock
+TODO.md
+# Track local skills but nothing else under .claude/
+.claude/*
+!.claude/skills/

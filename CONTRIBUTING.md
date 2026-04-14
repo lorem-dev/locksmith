@@ -1,0 +1,45 @@
+# Contributing to Locksmith
+
+## Commit Messages
+
+Use [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+<type>(<scope>): <description>
+
+[optional body]
+
+[optional footer]
+Relates #<GITHUB-ISSUE>
+```
+
+**Types:** `feat`, `fix`, `chore`, `docs`, `test`, `refactor`, `perf`, `ci`, `build`
+
+**Rules:**
+- Description in English, imperative mood ("add", not "added")
+- No mentions of AI tools or agents in commit messages
+- Reference issues with `Relates #123` in the footer when applicable
+- Keep subject line under 72 characters
+- Use `(scope)` sparingly — only reuse a scope that already exists in the git log.
+  Before adding a scope, run `git log --oneline | grep "type(" | head -20` to check
+  what scopes are established. Prefer no scope over inventing a new one.
+
+**Examples:**
+```
+feat(session): add TTL-based expiry with memory wipe
+fix(keychain): handle errSecUserCanceled from Touch ID prompt
+chore: update golangci-lint to v1.57
+```
+
+## Test Coverage
+
+- Minimum coverage per package: **90%**
+- Run before submitting: `make test-coverage`
+- Race detector must pass: `make test-race`
+- Integration tests: `make test-integration`
+
+## Code Style
+
+- Follow `golangci-lint` rules defined in `.golangci.yml`
+- All exported symbols must have godoc comments
+- Complex unexported logic must have inline comments
