@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package locksmith.v1;
 
-option go_package = "locksmith/v1;locksmithv1";
+option go_package = "github.com/lorem-dev/locksmith/gen/proto/locksmith/v1;locksmithv1";
 
 // LocksmithService is the gRPC service exposed by the daemon over Unix socket.
 // CLI is a thin client to this service.

@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package vault.v1;
 
-option go_package = "vault/v1;vaultv1";
+option go_package = "github.com/lorem-dev/locksmith/gen/proto/vault/v1;vaultv1";
 
 // VaultProvider is the gRPC service that every vault plugin must implement.
 service VaultProvider {
