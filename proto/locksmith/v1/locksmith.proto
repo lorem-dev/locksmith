@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package locksmith.v1;
+
+option go_package = "locksmith/v1;locksmithv1";
+
+// LocksmithService is the gRPC service exposed by the daemon over Unix socket.
+// CLI is a thin client to this service.
+service LocksmithService {
+  rpc GetSecret(GetSecretRequest) returns (GetSecretResponse);
+  rpc SessionStart(SessionStartRequest) returns (SessionStartResponse);
+  rpc SessionEnd(SessionEndRequest) returns (SessionEndResponse);
+  rpc SessionList(SessionListRequest) returns (SessionListResponse);
+  rpc VaultList(VaultListRequest) returns (VaultListResponse);
+  rpc VaultHealth(VaultHealthRequest) returns (VaultHealthResponse);
+}
+
+message GetSecretRequest {
+  string session_id = 1;
+  string key_alias = 2;
+  string vault_name = 3;
+  string path = 4;
+}
+
+message GetSecretResponse {
+  bytes secret = 1;
+  string content_type = 2;
+}
+
+message SessionStartRequest {
+  string ttl = 1;
+  repeated string allowed_keys = 2;
+}
+
+message SessionStartResponse {
+  string session_id = 1;
+  string expires_at = 2;
+}
+
+message SessionEndRequest {
+  string session_id = 1;
+}
+
+message SessionEndResponse {}
+
+message SessionListRequest {}
+
+message SessionListResponse {
+  repeated SessionInfo sessions = 1;
+}
+
+message SessionInfo {
+  string session_id = 1;
+  string created_at = 2;
+  string expires_at = 3;
+  repeated string allowed_keys = 4;
+  int32 cached_secrets_count = 5;
+}
+
+message VaultListRequest {}
+
+message VaultListResponse {
+  repeated VaultInfo vaults = 1;
+}
+
+message VaultInfo {
+  string name = 1;
+  string type = 2;
+  repeated string platforms = 3;
+  string version = 4;
+}
+
+message VaultHealthRequest {}
+
+message VaultHealthResponse {
+  repeated VaultHealthInfo vaults = 1;
+}
+
+message VaultHealthInfo {
+  string name = 1;
+  bool available = 2;
+  string message = 3;
+}

@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package vault.v1;
+
+option go_package = "vault/v1;vaultv1";
+
+// VaultProvider is the gRPC service that every vault plugin must implement.
+service VaultProvider {
+  rpc GetSecret(GetSecretRequest) returns (GetSecretResponse);
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+  rpc Info(InfoRequest) returns (PluginInfo);
+}
+
+message GetSecretRequest {
+  string path = 1;
+  map<string, string> opts = 2;
+}
+
+message GetSecretResponse {
+  bytes secret = 1;
+  string content_type = 2;
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  bool available = 1;
+  string message = 2;
+}
+
+message InfoRequest {}
+
+message PluginInfo {
+  string name = 1;
+  string version = 2;
+  repeated string platforms = 3;
+}
