@@ -1,3 +1,3 @@
 module github.com/lorem-dev/locksmith-plugin-gopass
 
-go 1.22.1
+go 1.25.9
