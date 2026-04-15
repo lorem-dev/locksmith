@@ -17,7 +17,7 @@ var locksmithAllowList = []string{
 }
 
 // InstallSandboxPermissions adds locksmith commands to the agent's permission allowlist.
-// Note: "Bash(...)" refers to the Claude Code tool name, not the user's shell —
+// Note: "Bash(...)" refers to the Claude Code tool name, not the user's shell -
 // it works regardless of whether the user runs bash, zsh, or fish.
 func InstallSandboxPermissions(agent DetectedAgent) error {
 	switch agent.Name {

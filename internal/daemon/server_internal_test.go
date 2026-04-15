@@ -243,7 +243,7 @@ func TestResolveKey_UnknownVault(t *testing.T) {
 }
 
 func TestGetSecret_WithStoreInOpts(t *testing.T) {
-	// Vault has a Store field — opts["store"] path.
+	// Vault has a Store field - opts["store"] path.
 	cfg := &config.Config{
 		Defaults: config.Defaults{SessionTTL: "1h"},
 		Vaults:   map[string]config.Vault{"myvault": {Type: "keychain", Store: "mystore"}},
@@ -292,7 +292,7 @@ func TestGetSecret_DirectVaultWithStore(t *testing.T) {
 }
 
 func TestGetSecret_DirectVaultNotInConfig(t *testing.T) {
-	// Direct vault+path where VaultName is not in cfg.Vaults — fallback path.
+	// Direct vault+path where VaultName is not in cfg.Vaults - fallback path.
 	cfg := &config.Config{
 		Defaults: config.Defaults{SessionTTL: "1h"},
 		Vaults:   map[string]config.Vault{},
@@ -317,7 +317,7 @@ func TestGetSecret_DirectVaultNotInConfig(t *testing.T) {
 }
 
 // failingMockRegistry implements pluginRegistry with Types() returning an entry
-// but Get() failing — exercises the VaultHealth manager.Get error branch.
+// but Get() failing - exercises the VaultHealth manager.Get error branch.
 type failingMockRegistry struct{}
 
 func (f *failingMockRegistry) Get(_ string) (sdk.Provider, error) {

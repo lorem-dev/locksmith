@@ -196,7 +196,7 @@ func TestDaemon_loadPlugins_MissingBinary(t *testing.T) {
 		Keys:     map[string]config.Key{},
 	}
 	d := New(cfg)
-	// Should not error — just warns when binary not found.
+	// Should not error - just warns when binary not found.
 	if err := d.loadPlugins(); err != nil {
 		t.Fatalf("loadPlugins() with missing binary should warn not error: %v", err)
 	}
@@ -290,7 +290,7 @@ func TestDaemon_WaitForShutdown_Signal(t *testing.T) {
 	syscall.Kill(os.Getpid(), syscall.SIGINT)
 	select {
 	case <-done:
-		// WaitForShutdown returned — success.
+		// WaitForShutdown returned - success.
 	case <-time.After(2 * time.Second):
 		t.Fatal("WaitForShutdown() did not return after SIGINT")
 	}

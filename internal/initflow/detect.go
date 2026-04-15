@@ -43,7 +43,7 @@ func DetectAgents(homeDir string) []DetectedAgent {
 			a.ConfigDir = dirPath
 		}
 
-		// Strategy 2: CLI binary in PATH (fallback — agent may not have created dir yet)
+		// Strategy 2: CLI binary in PATH (fallback - agent may not have created dir yet)
 		if !a.Detected {
 			if _, err := exec.LookPath(a.BinaryName); err == nil {
 				a.Detected = true

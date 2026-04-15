@@ -15,13 +15,13 @@ func TestConfigCheck_DefaultPath(t *testing.T) {
 	// Do NOT pass --config so that cfgPath == "" and DefaultConfigPath() is called.
 	root.SetArgs([]string{"config", "check"})
 	// This will fail because the default config doesn't exist in the test environment.
-	// We don't care about the outcome — we care that the branch is covered.
+	// We don't care about the outcome - we care that the branch is covered.
 	_ = root.Execute()
 }
 
 // TestServeCmd_DefaultPath covers the cfgPath == "" branch in serve.go.
 // The default config path typically doesn't exist, so serve fails fast with a
-// "loading config" error — covering the DefaultConfigPath() call.
+// "loading config" error - covering the DefaultConfigPath() call.
 func TestServeCmd_DefaultPath(t *testing.T) {
 	root := cli.NewRootCmd()
 	// Do NOT pass --config so cfgPath == "" and DefaultConfigPath() is called.

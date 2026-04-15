@@ -6,13 +6,24 @@ PROTOC_GEN_GO_VERSION ?= v1.36.11
 PROTOC_GEN_GO_GRPC_VERSION ?= v1.6.1
 GOLANGCI_LINT_VERSION ?= v1.64.8
 
+# Resolve GOBIN so tools installed via 'go install' are always found,
+# even when $GOBIN / $GOPATH/bin is not in $PATH.
+GOBIN := $(shell go env GOBIN)
+ifeq ($(GOBIN),)
+GOBIN := $(shell go env GOPATH)/bin
+endif
+
+# Prepend GOBIN to PATH for all make recipes so buf can find
+# protoc-gen-go / protoc-gen-go-grpc plugin binaries.
+export PATH := $(GOBIN):$(PATH)
+
 # First-time setup: install tools, download dependencies, and generate protobuf code.
 # Run this once after cloning the repository.
 init: install-tools
 	go work sync
 	mkdir -p gen/proto
-	buf generate
-	buf lint
+	$(GOBIN)/buf generate
+	$(GOBIN)/buf lint
 	@echo "Ready. Run 'make build-all' to compile."
 
 build:
@@ -25,8 +36,8 @@ build-plugins:
 build-all: build build-plugins
 
 lint: install-tools
-	golangci-lint run ./...
-	buf lint
+	$(GOBIN)/golangci-lint run ./...
+	$(GOBIN)/buf lint
 
 # Run unit tests across all workspace modules.
 # Uses .scripts/workspace-test which auto-discovers modules from go.work.
@@ -50,8 +61,8 @@ test-integration:
 # Installs pinned tool versions into GOPATH/bin on each run (no-op if already at correct version).
 proto: install-tools
 	mkdir -p gen/proto
-	buf generate
-	buf lint
+	$(GOBIN)/buf generate
+	$(GOBIN)/buf lint
 
 # Install all code-generation and lint tools at pinned versions.
 # Safe to run repeatedly - go install is idempotent for the same version.

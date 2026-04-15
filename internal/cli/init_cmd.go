@@ -8,7 +8,7 @@ import (
 	"github.com/lorem-dev/locksmith/internal/initflow"
 )
 
-// newInitCmd returns the `locksmith init` command — an interactive setup wizard
+// newInitCmd returns the `locksmith init` command - an interactive setup wizard
 // that configures vaults, detects AI agents, and installs instructions/permissions.
 func newInitCmd() *cobra.Command {
 	var noTUI, auto, skipAgents bool

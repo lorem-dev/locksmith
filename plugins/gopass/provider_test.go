@@ -25,7 +25,7 @@ func TestGopassProvider_Info(t *testing.T) {
 
 func TestGopassProvider_HealthCheck_NotInstalled(t *testing.T) {
 	if _, err := exec.LookPath("gopass"); err == nil {
-		t.Skip("gopass is installed — skipping not-installed test")
+		t.Skip("gopass is installed - skipping not-installed test")
 	}
 	p := &GopassProvider{}
 	resp, err := p.HealthCheck(context.Background(), &vaultv1.HealthCheckRequest{})
@@ -136,7 +136,7 @@ func TestGopassProvider_GetSecret_WithStore(t *testing.T) {
 		t.Skip("gopass not installed")
 	}
 	p := &GopassProvider{}
-	// This will fail because the path doesn't exist — we just want to verify
+	// This will fail because the path doesn't exist - we just want to verify
 	// the store prefix is applied (the error message should contain the store prefix)
 	_, err := p.GetSecret(context.Background(), &vaultv1.GetSecretRequest{
 		Path: "nonexistent-key-12345",

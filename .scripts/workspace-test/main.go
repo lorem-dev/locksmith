@@ -8,7 +8,7 @@
 //	go run ./.scripts/workspace-test coverage    # coverage report per module
 //
 // The script resolves go.work relative to the current working directory by
-// walking upward — so it works regardless of the subdirectory you run from.
+// walking upward - so it works regardless of the subdirectory you run from.
 package main
 
 import (
