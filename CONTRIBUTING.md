@@ -20,7 +20,7 @@ Relates #<GITHUB-ISSUE>
 - No mentions of AI tools or agents in commit messages
 - Reference issues with `Relates #123` in the footer when applicable
 - Keep subject line under 72 characters
-- Use `(scope)` sparingly — only reuse a scope that already exists in the git log.
+- Use `(scope)` sparingly - only reuse a scope that already exists in the git log.
   Before adding a scope, run `git log --oneline | grep "type(" | head -20` to check
   what scopes are established. Prefer no scope over inventing a new one.
 

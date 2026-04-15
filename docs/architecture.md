@@ -42,9 +42,9 @@ locksmith CLI  ──(gRPC/Unix socket)──▶  locksmith daemon
 
 Each plugin is a standalone binary implementing the `VaultProviderService` gRPC service:
 
-- `GetSecret` — fetches a secret; triggers vault authorization (Touch ID, passphrase)
-- `HealthCheck` — verifies the vault is installed and accessible
-- `Info` — returns plugin name, version, and supported platforms
+- `GetSecret` - fetches a secret; triggers vault authorization (Touch ID, passphrase)
+- `HealthCheck` - verifies the vault is installed and accessible
+- `Info` - returns plugin name, version, and supported platforms
 
 ### CLI
 

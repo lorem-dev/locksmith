@@ -33,8 +33,8 @@ keys:
 |------|-------------|
 | `keychain` | macOS Keychain (CGo, Touch ID) |
 | `gopass` | gopass password manager (shells out to `gopass` CLI) |
-| `1password` | 1Password (shells out to `op` CLI) — future |
-| `gnome-keyring` | GNOME Keyring (D-Bus) — future |
+| `1password` | 1Password (shells out to `op` CLI) - future |
+| `gnome-keyring` | GNOME Keyring (D-Bus) - future |
 
 ## Direct Access (Without Alias)
 
