@@ -12,7 +12,7 @@ import (
 	"github.com/lorem-dev/locksmith/internal/config"
 	"github.com/lorem-dev/locksmith/internal/log"
 	pluginpkg "github.com/lorem-dev/locksmith/internal/plugin"
-	sdk "github.com/lorem-dev/locksmith-sdk"
+	sdk "github.com/lorem-dev/locksmith/sdk"
 	"github.com/lorem-dev/locksmith/internal/session"
 )
 

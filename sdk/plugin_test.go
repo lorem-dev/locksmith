@@ -5,7 +5,7 @@ import (
 	"net"
 	"testing"
 
-	sdk "github.com/lorem-dev/locksmith-sdk"
+	sdk "github.com/lorem-dev/locksmith/sdk"
 	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"

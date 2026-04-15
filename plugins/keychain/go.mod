@@ -2,13 +2,13 @@ module github.com/lorem-dev/locksmith-plugin-keychain
 
 go 1.25.9
 
-replace github.com/lorem-dev/locksmith-sdk => ../../sdk
+replace github.com/lorem-dev/locksmith/sdk => ../../sdk
 
 replace github.com/lorem-dev/locksmith => ../../
 
 require (
 	github.com/lorem-dev/locksmith v0.0.0-00010101000000-000000000000
-	github.com/lorem-dev/locksmith-sdk v0.0.0-00010101000000-000000000000
+	github.com/lorem-dev/locksmith/sdk v0.0.0-00010101000000-000000000000
 )
 
 require (

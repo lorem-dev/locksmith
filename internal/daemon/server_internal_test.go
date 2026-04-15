@@ -7,7 +7,7 @@ import (
 
 	locksmithv1 "github.com/lorem-dev/locksmith/gen/proto/locksmith/v1"
 	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
-	sdk "github.com/lorem-dev/locksmith-sdk"
+	sdk "github.com/lorem-dev/locksmith/sdk"
 	"github.com/lorem-dev/locksmith/internal/config"
 	"github.com/lorem-dev/locksmith/internal/session"
 )

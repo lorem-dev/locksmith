@@ -8,7 +8,7 @@ When conversing with the user, always respond in the user's language.
 
 ## Module Names
 - Main module: `github.com/lorem-dev/locksmith`
-- SDK: `github.com/lorem-dev/locksmith-sdk`
+- SDK: `github.com/lorem-dev/locksmith/sdk`
 - Gopass plugin: `github.com/lorem-dev/locksmith-plugin-gopass`
 - Keychain plugin: `github.com/lorem-dev/locksmith-plugin-keychain`
 

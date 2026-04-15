@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	goplugin "github.com/hashicorp/go-plugin"
-	sdk "github.com/lorem-dev/locksmith-sdk"
+	sdk "github.com/lorem-dev/locksmith/sdk"
 	"github.com/lorem-dev/locksmith/internal/log"
 	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
 )
