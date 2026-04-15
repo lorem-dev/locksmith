@@ -55,7 +55,7 @@ func NewClientConfig(binaryPath string) *goplugin.ClientConfig {
 
 // VaultGRPCPlugin implements goplugin.GRPCPlugin.
 type VaultGRPCPlugin struct {
-	goplugin.Plugin
+	goplugin.NetRPCUnsupportedPlugin
 	Impl Provider
 }
 
