@@ -1,0 +1,8 @@
+## Locksmith Integration
+
+Secrets are managed by Locksmith. Use `locksmith get --key <alias>` to retrieve them.
+
+Before accessing secrets:
+1. Ensure `LOCKSMITH_SESSION` is set in the environment
+2. If not set, run `locksmith session start` and export the session ID
+3. Pass `LOCKSMITH_SESSION` to sub-agents

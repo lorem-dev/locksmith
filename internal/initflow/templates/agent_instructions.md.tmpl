@@ -1,0 +1,16 @@
+# Locksmith — Agent Instructions
+
+## Retrieving Secrets
+
+Use `locksmith get --key <alias>` to retrieve secrets from configured vaults.
+
+## Session Management
+
+1. Start: `locksmith session start` → outputs session ID
+2. Export: `export LOCKSMITH_SESSION=<session_id>`
+3. All subsequent `locksmith get` calls use this session
+4. End: `locksmith session end`
+
+## Sub-Agents
+
+Pass `LOCKSMITH_SESSION` to sub-agents via environment. They inherit the parent session's access.

@@ -1,0 +1,8 @@
+## Locksmith Integration
+
+This environment uses [Locksmith](https://github.com/lorem-dev/locksmith) for secure MCP secret management.
+
+- Retrieve secrets: `locksmith get --key <alias>`
+- Check session: `echo $LOCKSMITH_SESSION`
+- Start session: `locksmith session start` then `export LOCKSMITH_SESSION=<id>`
+- Delegate to sub-agents by passing `LOCKSMITH_SESSION` in environment

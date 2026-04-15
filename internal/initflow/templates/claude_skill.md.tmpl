@@ -1,0 +1,13 @@
+---
+name: locksmith-auth
+description: Use when MCP server requires authentication headers
+---
+
+When an MCP server config contains `$(locksmith get ...)` in headers:
+1. Check if LOCKSMITH_SESSION is set in environment
+2. If not — run `locksmith session start` and export the token
+3. Use `locksmith get --key <name>` to retrieve secrets
+4. Pass retrieved value as the header value
+5. Delegate LOCKSMITH_SESSION to sub-agents via environment
+
+Never hardcode secrets. Never cache secrets outside of locksmith.
