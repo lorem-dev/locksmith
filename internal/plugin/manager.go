@@ -90,7 +90,7 @@ func DefaultSearchDirs() []string {
 		dirs = append(dirs, filepath.Join(home, ".config", "locksmith", "plugins"))
 	}
 	if pathEnv := os.Getenv("PATH"); pathEnv != "" {
-		dirs = append(dirs, strings.Split(pathEnv, ":")...)
+		dirs = append(dirs, filepath.SplitList(pathEnv)...)
 	}
 	return dirs
 }
