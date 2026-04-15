@@ -19,6 +19,7 @@ func newSessionCmd() *cobra.Command {
 	return cmd
 }
 
+// newSessionStartCmd returns the `locksmith session start` command.
 func newSessionStartCmd() *cobra.Command {
 	var ttl string
 	var keys []string
@@ -52,6 +53,7 @@ func newSessionStartCmd() *cobra.Command {
 	return cmd
 }
 
+// newSessionEndCmd returns the `locksmith session end` command.
 func newSessionEndCmd() *cobra.Command {
 	var sessionID string
 	cmd := &cobra.Command{
@@ -82,6 +84,7 @@ func newSessionEndCmd() *cobra.Command {
 	return cmd
 }
 
+// newSessionListCmd returns the `locksmith session list` command.
 func newSessionListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",

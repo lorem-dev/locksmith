@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
@@ -12,12 +11,12 @@ import (
 )
 
 // newServeCmd returns the `locksmith serve` command.
-func newServeCmd() *cobra.Command {
+func newServeCmd(cfgFile *string) *cobra.Command {
 	return &cobra.Command{
 		Use:   "serve",
 		Short: "Start the locksmith daemon",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfgPath := cfgFile
+			cfgPath := *cfgFile
 			if cfgPath == "" {
 				cfgPath = config.DefaultConfigPath()
 			}
@@ -30,11 +29,7 @@ func newServeCmd() *cobra.Command {
 			d := daemon.New(cfg)
 			go d.WaitForShutdown()
 
-			if err := d.Start(); err != nil {
-				fmt.Fprintf(os.Stderr, "error: %v\n", err)
-				os.Exit(1)
-			}
-			return nil
+			return d.Start()
 		},
 	}
 }

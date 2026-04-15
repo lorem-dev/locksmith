@@ -9,13 +9,13 @@ import (
 )
 
 // newConfigCmd returns the `locksmith config` command group.
-func newConfigCmd() *cobra.Command {
+func newConfigCmd(cfgFile *string) *cobra.Command {
 	cmd := &cobra.Command{Use: "config", Short: "Configuration management"}
 	cmd.AddCommand(&cobra.Command{
 		Use:   "check",
 		Short: "Validate config file",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfgPath := cfgFile
+			cfgPath := *cfgFile
 			if cfgPath == "" {
 				cfgPath = config.DefaultConfigPath()
 			}

@@ -2,10 +2,10 @@ package cli
 
 import "github.com/spf13/cobra"
 
-var cfgFile string
-
 // NewRootCmd builds the cobra root command with all subcommands registered.
 func NewRootCmd() *cobra.Command {
+	var cfgFile string
+
 	root := &cobra.Command{
 		Use:   "locksmith",
 		Short: "Secure secret middleware for AI agents",
@@ -13,11 +13,11 @@ func NewRootCmd() *cobra.Command {
 	}
 	root.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default ~/.config/locksmith/config.yaml)")
 	root.AddCommand(
-		newServeCmd(),
+		newServeCmd(&cfgFile),
 		newGetCmd(),
 		newSessionCmd(),
 		newVaultCmd(),
-		newConfigCmd(),
+		newConfigCmd(&cfgFile),
 		newInitCmd(),
 	)
 	return root
