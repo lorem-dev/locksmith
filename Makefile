@@ -30,8 +30,7 @@ build:
 	go build -o bin/locksmith ./cmd/locksmith
 
 build-plugins:
-	go build -o bin/locksmith-plugin-keychain ./plugins/keychain
-	go build -o bin/locksmith-plugin-gopass ./plugins/gopass
+	go run ./.scripts/build-plugins
 
 build-all: build build-plugins
 
@@ -40,18 +39,17 @@ lint: install-tools
 	$(GOBIN)/buf lint
 
 # Run unit tests across all workspace modules.
-# Uses .scripts/workspace-test which auto-discovers modules from go.work.
 test:
-	go run ./.scripts/workspace-test test
+	./.scripts/test.sh
 
-# Run with race detector across all workspace modules
+# Run with race detector across all workspace modules.
 test-race:
-	go run ./.scripts/workspace-test race
+	./.scripts/test-race.sh
 
 # Run with coverage report across all workspace modules.
 # Saves per-module HTML reports to .reports/ and prints a summary table.
 test-coverage:
-	go run ./.scripts/workspace-test coverage
+	./.scripts/test-coverage.sh
 
 # Run integration tests (require daemon + plugins)
 test-integration:
