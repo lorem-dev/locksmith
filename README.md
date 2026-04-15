@@ -17,6 +17,7 @@ Or build from source:
 ```bash
 git clone https://github.com/lorem-dev/locksmith
 cd locksmith
+make proto       # generate protobuf code (required after clone)
 make build-all
 ```
 
