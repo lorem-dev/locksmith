@@ -1,5 +1,5 @@
 bin/
-gen/proto/
+# gen/proto/ is committed - required for library consumers via go get
 docs/plans/
 .worktrees/
 .reports/
