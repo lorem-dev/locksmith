@@ -2,7 +2,7 @@ go 1.25.9
 
 use (
 	.
-	./sdk
-	./plugins/keychain
 	./plugins/gopass
+	./plugins/keychain
+	./sdk
 )
