@@ -32,7 +32,7 @@ func TestVaultGRPCPlugin_GRPCServer(t *testing.T) {
 	}
 	defer conn.Close()
 
-	client := vaultv1.NewVaultProviderClient(conn)
+	client := vaultv1.NewVaultProviderServiceClient(conn)
 	resp, err := client.GetSecret(context.Background(), &vaultv1.GetSecretRequest{Path: "test"})
 	if err != nil {
 		t.Fatalf("GetSecret() via registered server: %v", err)
@@ -49,7 +49,7 @@ func TestVaultGRPCPlugin_GRPCClient(t *testing.T) {
 		t.Fatal(err)
 	}
 	grpcSrv := grpc.NewServer()
-	vaultv1.RegisterVaultProviderServer(grpcSrv, sdk.NewGRPCServer(&mockProvider{}))
+	vaultv1.RegisterVaultProviderServiceServer(grpcSrv, sdk.NewGRPCServer(&mockProvider{}))
 	go grpcSrv.Serve(lis) //nolint:errcheck
 	defer grpcSrv.Stop()
 
@@ -87,8 +87,8 @@ func (m *mockProvider) HealthCheck(_ context.Context, _ *vaultv1.HealthCheckRequ
 	return &vaultv1.HealthCheckResponse{Available: true, Message: "ok"}, nil
 }
 
-func (m *mockProvider) Info(_ context.Context, _ *vaultv1.InfoRequest) (*vaultv1.PluginInfo, error) {
-	return &vaultv1.PluginInfo{Name: "mock", Version: "0.1.0", Platforms: []string{"darwin"}}, nil
+func (m *mockProvider) Info(_ context.Context, _ *vaultv1.InfoRequest) (*vaultv1.InfoResponse, error) {
+	return &vaultv1.InfoResponse{Name: "mock", Version: "0.1.0", Platforms: []string{"darwin"}}, nil
 }
 
 func TestGRPCServer_GetSecret(t *testing.T) {
@@ -140,7 +140,7 @@ func TestVaultGRPCClient_GetSecret(t *testing.T) {
 		t.Fatal(err)
 	}
 	grpcSrv := grpc.NewServer()
-	vaultv1.RegisterVaultProviderServer(grpcSrv, sdk.NewGRPCServer(&mockProvider{}))
+	vaultv1.RegisterVaultProviderServiceServer(grpcSrv, sdk.NewGRPCServer(&mockProvider{}))
 	go grpcSrv.Serve(lis) //nolint:errcheck
 	defer grpcSrv.Stop()
 
@@ -166,7 +166,7 @@ func TestVaultGRPCClient_HealthCheck(t *testing.T) {
 		t.Fatal(err)
 	}
 	grpcSrv := grpc.NewServer()
-	vaultv1.RegisterVaultProviderServer(grpcSrv, sdk.NewGRPCServer(&mockProvider{}))
+	vaultv1.RegisterVaultProviderServiceServer(grpcSrv, sdk.NewGRPCServer(&mockProvider{}))
 	go grpcSrv.Serve(lis) //nolint:errcheck
 	defer grpcSrv.Stop()
 
@@ -192,7 +192,7 @@ func TestVaultGRPCClient_Info(t *testing.T) {
 		t.Fatal(err)
 	}
 	grpcSrv := grpc.NewServer()
-	vaultv1.RegisterVaultProviderServer(grpcSrv, sdk.NewGRPCServer(&mockProvider{}))
+	vaultv1.RegisterVaultProviderServiceServer(grpcSrv, sdk.NewGRPCServer(&mockProvider{}))
 	go grpcSrv.Serve(lis) //nolint:errcheck
 	defer grpcSrv.Stop()
 

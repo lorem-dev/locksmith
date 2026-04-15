@@ -58,8 +58,8 @@ func (p *mockProvider) HealthCheck(_ context.Context, _ *vaultv1.HealthCheckRequ
 	return &vaultv1.HealthCheckResponse{Available: p.available, Message: "ok"}, nil
 }
 
-func (p *mockProvider) Info(_ context.Context, _ *vaultv1.InfoRequest) (*vaultv1.PluginInfo, error) {
-	return &vaultv1.PluginInfo{Version: p.version, Platforms: p.platforms}, nil
+func (p *mockProvider) Info(_ context.Context, _ *vaultv1.InfoRequest) (*vaultv1.InfoResponse, error) {
+	return &vaultv1.InfoResponse{Version: p.version, Platforms: p.platforms}, nil
 }
 
 func newServerWithMock(providers map[string]sdk.Provider) *Server {

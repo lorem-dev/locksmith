@@ -11,6 +11,7 @@ build-all: build build-plugins
 
 lint:
 	golangci-lint run ./...
+	buf lint
 
 # Run unit tests across all modules
 test:
@@ -48,11 +49,9 @@ test-integration:
 	go test -tags=integration -v ./...
 
 proto:
-	protoc \
-		--go_out=gen/proto --go_opt=paths=source_relative \
-		--go-grpc_out=gen/proto --go-grpc_opt=paths=source_relative \
-		proto/vault/v1/vault.proto \
-		proto/locksmith/v1/locksmith.proto
+	mkdir -p gen/proto
+	buf generate
+	buf lint
 
 clean:
 	rm -rf bin/ .reports/

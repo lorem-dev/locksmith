@@ -79,8 +79,8 @@ func (p *GopassProvider) HealthCheck(_ context.Context, _ *vaultv1.HealthCheckRe
 }
 
 // Info returns plugin metadata.
-func (p *GopassProvider) Info(_ context.Context, _ *vaultv1.InfoRequest) (*vaultv1.PluginInfo, error) {
-	return &vaultv1.PluginInfo{
+func (p *GopassProvider) Info(_ context.Context, _ *vaultv1.InfoRequest) (*vaultv1.InfoResponse, error) {
+	return &vaultv1.InfoResponse{
 		Name:      "gopass",
 		Version:   "0.1.0",
 		Platforms: []string{"darwin", "linux"},

@@ -54,7 +54,7 @@ func (p *stubProvider) GetSecret(_ context.Context, _ *vaultv1.GetSecretRequest)
 func (p *stubProvider) HealthCheck(_ context.Context, _ *vaultv1.HealthCheckRequest) (*vaultv1.HealthCheckResponse, error) {
 	return nil, nil
 }
-func (p *stubProvider) Info(_ context.Context, _ *vaultv1.InfoRequest) (*vaultv1.PluginInfo, error) {
+func (p *stubProvider) Info(_ context.Context, _ *vaultv1.InfoRequest) (*vaultv1.InfoResponse, error) {
 	return nil, nil
 }
 

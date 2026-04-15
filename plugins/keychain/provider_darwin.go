@@ -111,6 +111,6 @@ func (p *KeychainProvider) HealthCheck(_ context.Context, _ *vaultv1.HealthCheck
 }
 
 // Info returns plugin metadata.
-func (p *KeychainProvider) Info(_ context.Context, _ *vaultv1.InfoRequest) (*vaultv1.PluginInfo, error) {
-	return &vaultv1.PluginInfo{Name: "keychain", Version: "0.1.0", Platforms: []string{"darwin"}}, nil
+func (p *KeychainProvider) Info(_ context.Context, _ *vaultv1.InfoRequest) (*vaultv1.InfoResponse, error) {
+	return &vaultv1.InfoResponse{Name: "keychain", Version: "0.1.0", Platforms: []string{"darwin"}}, nil
 }
