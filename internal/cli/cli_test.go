@@ -41,16 +41,18 @@ func TestNewRootCmd_Help(t *testing.T) {
 	}
 }
 
-func TestGetCmd_NoSession(t *testing.T) {
+func TestGetCmd_NoDaemon(t *testing.T) {
+	// When no daemon is running, locksmith get should fail regardless of session state.
 	root := cli.NewRootCmd()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
 	root.SetArgs([]string{"get", "--key", "test"})
 	t.Setenv("LOCKSMITH_SESSION", "")
+	t.Setenv("LOCKSMITH_SOCKET", "/tmp/locksmith-nonexistent-test.sock")
 	err := root.Execute()
 	if err == nil {
-		t.Fatal("expected error when LOCKSMITH_SESSION not set")
+		t.Fatal("expected error when daemon is not running")
 	}
 }
 

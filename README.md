@@ -29,14 +29,24 @@ locksmith init
 # 2. Start the daemon
 locksmith serve &
 
-# 3. Start a session
+# 3. Retrieve a secret - a session starts automatically on first use
+locksmith get --key my-api-key
+
+# Optional: start a session explicitly to reuse it across calls
+# (avoids repeated vault authorization for the same task)
 export LOCKSMITH_SESSION=$(locksmith session start | jq -r .session_id)
+# Sessions expire automatically by TTL - no need to end them manually
+```
 
-# 4. Use in MCP config headers
-# "Authorization": "Bearer $(locksmith get --key my-api-key)"
+## Agent Usage
 
-# 5. End session when done
-locksmith session end
+Agents call `locksmith get --key <alias>` directly. If `LOCKSMITH_SESSION` is not
+set, a session is started automatically. To share a session with sub-agents, export
+the session ID printed to stderr:
+
+```bash
+export LOCKSMITH_SESSION=$(locksmith session start | jq -r .session_id)
+# pass LOCKSMITH_SESSION to sub-agents via environment
 ```
 
 ## MCP Integration

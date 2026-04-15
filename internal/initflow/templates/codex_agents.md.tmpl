@@ -2,7 +2,8 @@
 
 Secrets are managed by Locksmith. Use `locksmith get --key <alias>` to retrieve them.
 
-Before accessing secrets:
-1. Ensure `LOCKSMITH_SESSION` is set in the environment
-2. If not set, run `locksmith session start` and export the session ID
-3. Pass `LOCKSMITH_SESSION` to sub-agents
+- If `LOCKSMITH_SESSION` is not set, `locksmith get` auto-starts a session and prints
+  the session ID to stderr. Sessions expire by TTL automatically.
+- Export the session ID to reuse it across calls and avoid repeated vault authorization:
+  `export LOCKSMITH_SESSION=$(locksmith session start | jq -r .session_id)`
+- Pass `LOCKSMITH_SESSION` to sub-agents so they share the parent session.

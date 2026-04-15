@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -151,6 +152,41 @@ func TestGetCmd_WithSession(t *testing.T) {
 	t.Setenv("LOCKSMITH_SESSION", "test-session-123")
 	if err := runWithSocket(t, socketPath, "get", "--key", "mykey"); err != nil {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// TestGetCmd_AutoStartSession verifies that locksmith get auto-starts a session
+// when LOCKSMITH_SESSION is not set in the environment.
+func TestGetCmd_AutoStartSession(t *testing.T) {
+	srv := &mockServer{
+		sessionStartResp: &locksmithv1.SessionStartResponse{
+			SessionId: "auto-session-id",
+			ExpiresAt: "2099-01-01T00:00:00Z",
+		},
+		getSecretResp: &locksmithv1.GetSecretResponse{Secret: []byte("autosecret")},
+	}
+	socketPath, cleanup := startMockDaemon(t, srv)
+	defer cleanup()
+
+	t.Setenv("LOCKSMITH_SESSION", "")
+	if err := runWithSocket(t, socketPath, "get", "--key", "mykey"); err != nil {
+		t.Errorf("unexpected error from auto-start: %v", err)
+	}
+}
+
+// TestGetCmd_AutoStartSession_StartError verifies that an error from SessionStart
+// is surfaced to the caller when auto-starting a session.
+func TestGetCmd_AutoStartSession_StartError(t *testing.T) {
+	srv := &mockServer{
+		sessionStartErr: fmt.Errorf("vault unavailable"),
+	}
+	socketPath, cleanup := startMockDaemon(t, srv)
+	defer cleanup()
+
+	t.Setenv("LOCKSMITH_SESSION", "")
+	err := runWithSocket(t, socketPath, "get", "--key", "mykey")
+	if err == nil {
+		t.Fatal("expected error when SessionStart fails")
 	}
 }
 

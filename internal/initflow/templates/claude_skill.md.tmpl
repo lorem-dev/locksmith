@@ -3,11 +3,15 @@ name: locksmith-auth
 description: Use when MCP server requires authentication headers
 ---
 
-When an MCP server config contains `$(locksmith get ...)` in headers:
-1. Check if LOCKSMITH_SESSION is set in environment
-2. If not — run `locksmith session start` and export the token
-3. Use `locksmith get --key <name>` to retrieve secrets
-4. Pass retrieved value as the header value
-5. Delegate LOCKSMITH_SESSION to sub-agents via environment
+Use `locksmith get --key <alias>` to retrieve secrets from configured vaults.
+
+If `LOCKSMITH_SESSION` is not set in the environment, `locksmith get` automatically
+starts a session using the default TTL from config and prints the session ID to stderr.
+Sessions expire by TTL automatically - no manual cleanup needed.
+
+To reuse the same session across multiple calls (avoids repeated vault authorization):
+1. Run `locksmith session start` once and export the token:
+   `export LOCKSMITH_SESSION=$(locksmith session start | jq -r .session_id)`
+2. Pass `LOCKSMITH_SESSION` to sub-agents via environment so they share the same session.
 
 Never hardcode secrets. Never cache secrets outside of locksmith.

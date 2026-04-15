@@ -48,8 +48,11 @@ Each plugin is a standalone binary implementing the `VaultProviderService` gRPC 
 
 ### CLI
 
-Thin gRPC client to the daemon. Reads `LOCKSMITH_SESSION` from environment.
-Returns an error with a helpful hint if the daemon is not running.
+Thin gRPC client to the daemon. If `LOCKSMITH_SESSION` is set in the environment,
+`locksmith get` uses that session. If unset, it auto-starts a session using the
+default TTL from config and prints the session ID to stderr so the caller can
+optionally export it for reuse. Returns an error with a helpful hint if the daemon
+is not running.
 
 ## Session Delegation
 

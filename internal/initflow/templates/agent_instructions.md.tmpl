@@ -1,16 +1,22 @@
-# Locksmith — Agent Instructions
+# Locksmith - Agent Instructions
 
 ## Retrieving Secrets
 
 Use `locksmith get --key <alias>` to retrieve secrets from configured vaults.
 
+If `LOCKSMITH_SESSION` is not set, `locksmith get` automatically starts a session
+using the default TTL from config and prints the session ID to stderr.
+
 ## Session Management
 
-1. Start: `locksmith session start` → outputs session ID
+Sessions are TTL-based and expire automatically - no need to end them manually.
+
+To share a session across multiple calls (avoids repeated vault authorization):
+1. Start: `locksmith session start` - outputs session ID and expiry
 2. Export: `export LOCKSMITH_SESSION=<session_id>`
-3. All subsequent `locksmith get` calls use this session
-4. End: `locksmith session end`
+3. All subsequent `locksmith get` calls reuse this session until it expires
 
 ## Sub-Agents
 
-Pass `LOCKSMITH_SESSION` to sub-agents via environment. They inherit the parent session's access.
+Pass `LOCKSMITH_SESSION` to sub-agents via environment. They inherit the parent
+session's access and secret cache.
