@@ -6,12 +6,16 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 PASS=0
 FAIL=0
 
+# Filter known harmless macOS linker warnings from stderr while preserving
+# the exit code of the go test invocation itself.
+go_test() { "$@" 2> >(grep -Ev "malformed LC_DYSYMTAB" >&2); }
+
 while IFS= read -r mod; do
   dir="$ROOT/$mod"
   [ "$mod" = "." ] && dir="$ROOT"
 
   printf '\033[90m--- %s\033[0m\n' "$mod"
-  if (cd "$dir" && go test -race ./...); then
+  if (cd "$dir" && go_test go test -race ./...); then
     printf '    \033[32mPASS\033[0m\n\n'
     PASS=$((PASS + 1))
   else
