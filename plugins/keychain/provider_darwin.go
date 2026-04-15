@@ -69,21 +69,12 @@ import (
 // Authorization (Touch ID or password) is triggered by the OS when SecItemCopyMatching is called.
 type KeychainProvider struct{}
 
-// GetSecret retrieves a secret from the macOS Keychain. The service defaults to "locksmith"
-// and can be overridden via opts["service"]. The path is used as the account name.
-//
-// Note: GetSecret is not covered by unit tests because the CGo Security framework call
-// requires an actual Keychain item and may prompt for Touch ID / password. It is exercised
-// by integration tests (Task 15).
-func (p *KeychainProvider) GetSecret(_ context.Context, req *vaultv1.GetSecretRequest) (*vaultv1.GetSecretResponse, error) {
-	service := "locksmith"
-	if svc, ok := req.Opts["service"]; ok && svc != "" {
-		service = svc
-	}
-
+// keychainGetPasswordFunc is the function used to retrieve passwords from the keychain.
+// It can be replaced in tests to avoid requiring real keychain access.
+var keychainGetPasswordFunc = func(service, account string) ([]byte, error) {
 	cService := C.CString(service)
 	defer C.free(unsafe.Pointer(cService))
-	cAccount := C.CString(req.Path)
+	cAccount := C.CString(account)
 	defer C.free(unsafe.Pointer(cAccount))
 
 	result := C.keychainGetPassword(cService, cAccount)
@@ -96,7 +87,21 @@ func (p *KeychainProvider) GetSecret(_ context.Context, req *vaultv1.GetSecretRe
 	secret := C.GoBytes(unsafe.Pointer(result.data), result.length)
 	C.memset(unsafe.Pointer(result.data), 0, C.size_t(result.length))
 	C.free(unsafe.Pointer(result.data))
+	return secret, nil
+}
 
+// GetSecret retrieves a secret from the macOS Keychain. The service defaults to "locksmith"
+// and can be overridden via opts["service"]. The path is used as the account name.
+func (p *KeychainProvider) GetSecret(_ context.Context, req *vaultv1.GetSecretRequest) (*vaultv1.GetSecretResponse, error) {
+	service := "locksmith"
+	if svc, ok := req.Opts["service"]; ok && svc != "" {
+		service = svc
+	}
+
+	secret, err := keychainGetPasswordFunc(service, req.Path)
+	if err != nil {
+		return nil, err
+	}
 	return &vaultv1.GetSecretResponse{Secret: secret, ContentType: "text/plain"}, nil
 }
 
