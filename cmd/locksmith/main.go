@@ -3,9 +3,13 @@ package main
 import (
 	"fmt"
 	"os"
+
+	"github.com/lorem-dev/locksmith/internal/cli"
 )
 
 func main() {
-	fmt.Println("locksmith")
-	os.Exit(0)
+	if err := cli.NewRootCmd().Execute(); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
 }
