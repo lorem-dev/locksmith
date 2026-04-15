@@ -17,3 +17,7 @@
 - Agent integration: Claude Code, Codex
 - Sandbox allowlist generation for agent restricted modes
 - Documentation: README, architecture, configuration, plugins guide
+- Integration test for full session lifecycle (build tag: integration)
+- SDK module renamed to `github.com/lorem-dev/locksmith/sdk`
+- buf linter added; vault.proto naming warnings fixed (VaultProviderService, InfoResponse)
+- Makefile: pinned tool versions (buf, protoc-gen-go, protoc-gen-go-grpc, golangci-lint) with install-tools target
