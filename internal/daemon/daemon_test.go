@@ -4,6 +4,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 
@@ -270,4 +271,27 @@ func TestDaemon_cleanupExpired_WithExpiredSession(t *testing.T) {
 	time.Sleep(time.Millisecond)
 	// cleanupExpired should remove the expired session and log.
 	d.cleanupExpired()
+}
+
+func TestDaemon_WaitForShutdown_Signal(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.Defaults{SessionTTL: "1h", SocketPath: filepath.Join(t.TempDir(), "signal.sock")},
+		Vaults:   map[string]config.Vault{},
+		Keys:     map[string]config.Key{},
+	}
+	d := New(cfg)
+	done := make(chan struct{})
+	go func() {
+		d.WaitForShutdown()
+		close(done)
+	}()
+	// Give signal handler time to register.
+	time.Sleep(20 * time.Millisecond)
+	syscall.Kill(os.Getpid(), syscall.SIGINT)
+	select {
+	case <-done:
+		// WaitForShutdown returned — success.
+	case <-time.After(2 * time.Second):
+		t.Fatal("WaitForShutdown() did not return after SIGINT")
+	}
 }

@@ -25,17 +25,20 @@ type Daemon struct {
 	store   *session.Store
 	plugins *pluginpkg.Manager
 
-	mu         sync.Mutex
-	grpcServer *grpc.Server
-	listener   net.Listener
+	mu          sync.Mutex
+	grpcServer  *grpc.Server
+	listener    net.Listener
+	stopCleanup chan struct{}
+	stopOnce    sync.Once
 }
 
 // New creates a Daemon from the given config.
 func New(cfg *config.Config) *Daemon {
 	return &Daemon{
-		cfg:     cfg,
-		store:   session.NewStore(),
-		plugins: pluginpkg.NewManager(),
+		cfg:         cfg,
+		store:       session.NewStore(),
+		plugins:     pluginpkg.NewManager(),
+		stopCleanup: make(chan struct{}),
 	}
 }
 
@@ -86,6 +89,8 @@ func (d *Daemon) Stop() {
 	ln := d.listener
 	d.mu.Unlock()
 
+	d.stopOnce.Do(func() { close(d.stopCleanup) })
+
 	if srv != nil {
 		srv.GracefulStop()
 	}
@@ -123,8 +128,13 @@ func (d *Daemon) loadPlugins() error {
 func (d *Daemon) cleanupLoop() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
-	for range ticker.C {
-		d.cleanupExpired()
+	for {
+		select {
+		case <-ticker.C:
+			d.cleanupExpired()
+		case <-d.stopCleanup:
+			return
+		}
 	}
 }
 

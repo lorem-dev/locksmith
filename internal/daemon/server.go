@@ -195,6 +195,7 @@ func (s *Server) resolveKey(req *locksmithv1.GetSecretRequest) (vaultType, path 
 	return req.VaultName, req.Path, opts, nil
 }
 
+// parseTTL returns the requested duration, falling back to defaultTTL when requested is empty.
 func parseTTL(requested, defaultTTL string) (time.Duration, error) {
 	ttlStr := requested
 	if ttlStr == "" {
