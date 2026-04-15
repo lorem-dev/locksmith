@@ -1,10 +1,19 @@
-.PHONY: build build-plugins build-all lint test test-coverage test-race test-integration proto install-tools clean
+.PHONY: build build-plugins build-all lint test test-coverage test-race test-integration proto install-tools init clean
 
-# Tool versions — bump here to upgrade everywhere
+# Tool versions - bump here to upgrade everywhere
 BUF_VERSION ?= v1.68.1
 PROTOC_GEN_GO_VERSION ?= v1.36.11
 PROTOC_GEN_GO_GRPC_VERSION ?= v1.6.1
 GOLANGCI_LINT_VERSION ?= v1.64.8
+
+# First-time setup: install tools, download dependencies, and generate protobuf code.
+# Run this once after cloning the repository.
+init: install-tools
+	go work sync
+	mkdir -p gen/proto
+	buf generate
+	buf lint
+	@echo "Ready. Run 'make build-all' to compile."
 
 build:
 	go build -o bin/locksmith ./cmd/locksmith
@@ -45,7 +54,7 @@ proto: install-tools
 	buf lint
 
 # Install all code-generation and lint tools at pinned versions.
-# Safe to run repeatedly — go install is idempotent for the same version.
+# Safe to run repeatedly - go install is idempotent for the same version.
 install-tools:
 	go install github.com/bufbuild/buf/cmd/buf@$(BUF_VERSION)
 	go install google.golang.org/protobuf/cmd/protoc-gen-go@$(PROTOC_GEN_GO_VERSION)
