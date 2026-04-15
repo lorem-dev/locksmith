@@ -8,3 +8,5 @@ TODO.md
 # Track local skills but nothing else under .claude/
 .claude/*
 !.claude/skills/
+# Output files
+*.out
