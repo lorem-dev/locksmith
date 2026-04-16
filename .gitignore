@@ -1,6 +1,6 @@
 bin/
 # gen/proto/ is committed - required for library consumers via go get
-docs/plans/
+docs/superpowers/
 .worktrees/
 .reports/
 *.sock

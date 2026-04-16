@@ -106,10 +106,60 @@ keys:
 | -25308   | errSecInteractionNotAllowed | PermissionDenied |
 | others   | unexpected           | Internal           |
 
+### Documentation
+
+`docs/configuration.md` gets a dedicated section for each vault plugin with full configuration reference and examples:
+
+**Keychain plugin:**
+
+```yaml
+vaults:
+  work:
+    type: keychain
+    service: com.acme.work    # default keychain service for all keys in this vault
+
+keys:
+  slack:
+    vault: work
+    path: slack               # resolves to service="com.acme.work", account="slack"
+  github:
+    vault: work
+    path: github/token        # overrides service: service="github", account="token"
+  legacy:
+    vault: work
+    path: legacy-tool         # service defaults to "locksmith" if vault has no service:
+```
+
+Notes:
+- `service` in vault config sets the default macOS Keychain service name for all keys
+- Path shorthand `service/account` overrides the vault-level service for that key only
+- Passwords are stored and retrieved using `SecItemCopyMatching` via CGo
+- Only available on macOS; the plugin binary is only built for darwin/amd64 and darwin/arm64
+
+**gopass plugin:**
+
+```yaml
+vaults:
+  gopass:
+    type: gopass
+    store: work               # optional: gopass mount name (default: root store)
+
+keys:
+  notion:
+    vault: gopass
+    path: personal/notion     # gopass path within the store
+```
+
+Notes:
+- Requires gopass installed and configured (`gopass ls` must work)
+- GPG passphrase input in background daemons requires locksmith-pinentry - see the "GPG passphrase and background daemons" section
+- `store:` is passed as `--store` to gopass; omit to use the default root store
+
 ### Changes
 
 - `internal/config/config.go` - add `Service string` to `Vault` struct
 - `plugins/keychain/provider_darwin.go` - parse `service/account` path, resolve service, call `SecCopyErrorMessageString` for human-readable errors, return typed `sdk.VaultError`
+- `docs/configuration.md` - per-plugin configuration reference with examples
 
 ---
 
@@ -174,32 +224,52 @@ Hint: check that the key path and service name are correct
 
 Hints are shown on a separate line in gray (when the terminal supports color) based on the gRPC status code:
 
-| Code              | Hint                                                                 |
-|-------------------|----------------------------------------------------------------------|
-| NotFound          | check that the key path and service name are correct                 |
-| PermissionDenied  | access denied - check vault permissions                              |
+| Code              | Hint                                                                                  |
+|-------------------|---------------------------------------------------------------------------------------|
+| NotFound          | check that the key path and service name are correct                                  |
+| PermissionDenied  | access denied - check vault permissions                                               |
 | Unauthenticated   | GPG passphrase required but no UI available - see docs/configuration.md#gpg-pinentry |
-| Unavailable       | vault plugin failed to start - re-run with --log-level debug         |
-| others            | (no hint, message only)                                              |
+| Unavailable       | vault plugin failed to start - re-run with --log-level debug                         |
+| InvalidArgument   | invalid key configuration - check vault and path in config.yaml                      |
+| DeadlineExceeded  | vault plugin timed out - check if the vault service is reachable                     |
+| Unimplemented     | this vault does not support the requested operation                                   |
+| Internal          | unexpected vault error - re-run with --log-level debug for full details               |
+| Unknown           | unexpected error - re-run with --log-level debug for full details                     |
 
 If the error is not a gRPC status error (unexpected internal error), the full error chain is printed unchanged.
+
+**Terminal output coloring.** The CLI uses color to make output scannable at a glance:
+
+| Element           | Color / style                        |
+|-------------------|--------------------------------------|
+| `Error:` prefix   | bold red                             |
+| Error message     | default (no color)                   |
+| `Hint:` prefix    | bold yellow                          |
+| Hint text         | gray                                 |
+| Success value     | default                              |
+
+Color is disabled automatically when stdout is not a TTY (piped output, CI) by checking `isatty(1)`. The `NO_COLOR` environment variable also disables color (per https://no-color.org).
+
+Color helpers live in `internal/cli/color.go` and are used across all CLI commands, not just `get`.
 
 ### Changes
 
 - `internal/cli/get.go` - extract gRPC status, print `desc` only, append hint line where applicable
-- `internal/cli/` - add `formatError(err error) string` helper shared across commands
+- `internal/cli/color.go` - new file: `colorize(code int, text string) string`, `isTTY() bool`, `isColorEnabled() bool`; respects `NO_COLOR` and TTY detection
+- `internal/cli/errors.go` - new file: `formatError(err error) string` and `formatHint(code codes.Code) string` helpers shared across commands
 
 ---
 
 ## Affected modules
 
-| Module                            | Changes                                      |
-|-----------------------------------|----------------------------------------------|
-| `github.com/lorem-dev/locksmith/sdk` | `errors.go` (new), `plugin.go` (unwrap) |
-| `github.com/lorem-dev/locksmith`  | `config.go`, `server.go`, `cli/get.go`       |
-| `github.com/lorem-dev/locksmith-plugin-keychain` | `provider_darwin.go`          |
-| `github.com/lorem-dev/locksmith-plugin-gopass`   | `provider.go`                 |
-| `cmd/locksmith-pinentry/`         | new binary                                   |
+| Module                            | Changes                                                              |
+|-----------------------------------|----------------------------------------------------------------------|
+| `github.com/lorem-dev/locksmith/sdk` | `errors.go` (new), `plugin.go` (unwrap)                         |
+| `github.com/lorem-dev/locksmith`  | `config.go`, `server.go`, `cli/get.go`, `cli/color.go` (new), `cli/errors.go` (new) |
+| `github.com/lorem-dev/locksmith-plugin-keychain` | `provider_darwin.go`                             |
+| `github.com/lorem-dev/locksmith-plugin-gopass`   | `provider.go`                                    |
+| `cmd/locksmith-pinentry/`         | new binary                                                           |
+| `docs/configuration.md`           | per-plugin reference, GPG limitations, config examples               |
 
 ---
 
