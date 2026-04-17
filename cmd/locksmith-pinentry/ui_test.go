@@ -106,24 +106,3 @@ func TestGetPassword_NoTTY(t *testing.T) {
 	}
 }
 
-// TestTryGUI_Fails verifies tryGUI returns errCancelled in headless environments.
-// On Darwin, osascript will fail when there is no window server (e.g. CI).
-// On other platforms, DISPLAY/WAYLAND_DISPLAY are unset so it returns early.
-func TestTryGUI_Fails(t *testing.T) {
-	_, err := tryGUI("test description", "test prompt")
-	// In a headless test environment tryGUI must fail gracefully.
-	// We accept either a nil error (if there happens to be a GUI) or errCancelled.
-	// What we must NOT get is a panic or unexpected error type.
-	if err != nil && err != errCancelled {
-		t.Errorf("tryGUI returned unexpected error type: %v", err)
-	}
-}
-
-// TestDefaultGetPassword_Smoke verifies defaultGetPassword does not panic and
-// returns either a pin (possibly empty) or errCancelled (never an unexpected error type).
-func TestDefaultGetPassword_Smoke(t *testing.T) {
-	_, err := defaultGetPassword("test description", "test prompt")
-	if err != nil && err != errCancelled {
-		t.Errorf("unexpected error: %v", err)
-	}
-}

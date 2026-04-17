@@ -289,6 +289,46 @@ func TestRunInit_Interactive_SkipAgents(t *testing.T) {
 	}
 }
 
+func TestRunInit_Interactive_GPGPinentryAccepted(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	mp := &mockPrompter{
+		configDir:      filepath.Join(home, ".config", "locksmith"),
+		vaults:         []string{"gopass"},
+		summaryConfirm: true,
+		gpgPinentry:    true, // user opts in to locksmith-pinentry
+	}
+
+	result, err := initflow.RunInit(initflow.InitOptions{Prompter: mp})
+	if err != nil {
+		t.Fatalf("RunInit() error: %v", err)
+	}
+	if !result.GPGPinentryConfigured {
+		t.Error("expected GPGPinentryConfigured = true when user accepts")
+	}
+}
+
+func TestRunInit_Interactive_GPGPinentrySkippedForNonGopass(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	mp := &mockPrompter{
+		configDir:      filepath.Join(home, ".config", "locksmith"),
+		vaults:         []string{"keychain"}, // gopass not selected - GPG step skipped
+		summaryConfirm: true,
+		gpgPinentry:    true, // would return true but should never be called
+	}
+
+	result, err := initflow.RunInit(initflow.InitOptions{Prompter: mp})
+	if err != nil {
+		t.Fatalf("RunInit() error: %v", err)
+	}
+	if result.GPGPinentryConfigured {
+		t.Error("GPGPinentryConfigured should be false when gopass not selected")
+	}
+}
+
 func TestRunInit_Interactive_NoSandboxWhenNoAgents(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

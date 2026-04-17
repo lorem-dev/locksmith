@@ -32,7 +32,7 @@ func run(r io.Reader, w io.Writer, getPassword func(desc, prompt string) (string
 				// GPG_ERR_CANCELED = 83886179
 				fmt.Fprintln(w, "ERR 83886179 Operation cancelled")
 			} else {
-				fmt.Fprintf(w, "D %s\n", pin)
+				fmt.Fprintf(w, "D %s\n", encodeAssuan(pin))
 				fmt.Fprintln(w, "OK")
 			}
 		case "SETDESC":
@@ -51,6 +51,22 @@ func run(r io.Reader, w io.Writer, getPassword func(desc, prompt string) (string
 			fmt.Fprintf(w, "ERR 536871187 Unknown command %s\n", cmd)
 		}
 	}
+}
+
+// encodeAssuan percent-encodes characters that must not appear literally in an
+// Assuan data line: '%', CR, LF, and NUL.
+func encodeAssuan(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch c {
+		case '%', '\r', '\n', 0:
+			fmt.Fprintf(&b, "%%%02X", c)
+		default:
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
 }
 
 // decodePercent decodes Assuan percent-encoding (%XX hex codes).

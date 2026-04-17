@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"runtime"
 	"testing"
 
@@ -100,7 +99,7 @@ func TestKeychainProvider_GetSecret_Error(t *testing.T) {
 	}
 	orig := keychainGetPasswordFunc
 	keychainGetPasswordFunc = func(service, account string) ([]byte, error) {
-		return nil, fmt.Errorf("keychain: SecItemCopyMatching failed: -25300")
+		return nil, keychainError(-25300, "The specified item could not be found in the keychain.")
 	}
 	defer func() { keychainGetPasswordFunc = orig }()
 
@@ -108,6 +107,13 @@ func TestKeychainProvider_GetSecret_Error(t *testing.T) {
 	_, err := p.GetSecret(context.Background(), &vaultv1.GetSecretRequest{Path: "key"})
 	if err == nil {
 		t.Fatal("GetSecret() expected error")
+	}
+	s, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("error is not a gRPC status: %v", err)
+	}
+	if s.Code() != codes.NotFound {
+		t.Errorf("Code() = %v, want NotFound", s.Code())
 	}
 }
 

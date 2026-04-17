@@ -55,6 +55,34 @@ func TestRun_SetDescPrompt(t *testing.T) {
 	}
 }
 
+func TestEncodeAssuan(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"plain", "plain"},
+		{"pass%word", "pass%25word"},
+		{"a\nb", "a%0Ab"},
+		{"a\rb", "a%0Db"},
+		{"a\x00b", "a%00b"},
+		{"p%25q", "p%2525q"},
+	}
+	for _, tc := range cases {
+		got := encodeAssuan(tc.in)
+		if got != tc.want {
+			t.Errorf("encodeAssuan(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestRun_GetPin_EncodesPercent(t *testing.T) {
+	var out bytes.Buffer
+	input := "GETPIN\nBYE\n"
+	run(strings.NewReader(input), &out, func(_, _ string) (string, error) {
+		return "my%secret", nil
+	})
+	if !strings.Contains(out.String(), "D my%25secret") {
+		t.Errorf("expected D my%%25secret in output, got: %q", out.String())
+	}
+}
+
 func TestDecodePercent(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"hello", "hello"},
