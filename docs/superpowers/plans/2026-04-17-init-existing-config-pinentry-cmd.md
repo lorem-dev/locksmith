@@ -839,9 +839,10 @@ an invalid config is silently replaced.
 
 - [ ] **Step 2: Add `locksmith config pinentry` section**
 
-Append at the end of `docs/configuration.md` (after the GPG limitations section):
+Append at the end of `docs/configuration.md` (after the GPG limitations section).
+The content to append (verbatim, including the leading `---`):
 
-```markdown
+~~~markdown
 ---
 
 ## locksmith config pinentry
@@ -868,7 +869,7 @@ locksmith config pinentry [--auto] [--no-tui]
 The command comments out any existing `pinentry-program` line in
 `~/.gnupg/gpg-agent.conf`, writes the new path, and restarts `gpg-agent`.
 See "GPG passphrase and background daemons" above for full context.
-```
+~~~
 
 - [ ] **Step 3: Run a quick sanity build to make sure nothing is broken**
 
