@@ -20,8 +20,14 @@ When conversing with the user, always respond in the user's language.
 - `proto/` - protobuf definitions
 - `gen/proto/` - generated code (do not edit manually, gitignored)
 - `docs/` - documentation (architecture, configuration, plugins)
-- `docs/plans/` - superpowers implementation plans (gitignored, default plan location)
+- `docs/superpowers/plans/` - superpowers implementation plans (gitignored, default plan location)
+- `docs/superpowers/specs/` - superpowers design specs (gitignored, default spec location)
 - `.worktrees/` - git worktrees (gitignored, default worktree location)
+
+## Superpowers Conventions
+- Plans: save to `docs/superpowers/plans/YYYY-MM-DD-<feature>.md`
+- Specs: save to `docs/superpowers/specs/YYYY-MM-DD-<feature>-design.md`
+- Both directories are gitignored; use `git add -f` when committing them intentionally.
 
 ## Commits
 Follow Conventional Commits (see CONTRIBUTING.md). No mentions of AI tools.
