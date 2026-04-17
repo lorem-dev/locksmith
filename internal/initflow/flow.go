@@ -13,10 +13,25 @@ import (
 	"github.com/lorem-dev/locksmith/internal/config"
 )
 
+// ExistingConfigAction is the user's choice when a config file already exists.
+type ExistingConfigAction int
+
+const (
+	// ActionContinue keeps the existing file; applyInit skips writing config.yaml.
+	ActionContinue ExistingConfigAction = iota
+	// ActionOverwrite proceeds through the wizard and replaces the file.
+	ActionOverwrite
+	// ActionExit cancels init without changes.
+	ActionExit
+)
+
 // Prompter is the interface for all user-facing interactive prompts.
 // The default implementation uses charmbracelet/huh TUI forms; tests can inject
 // a mock via InitOptions.Prompter to exercise RunInit without a real TTY.
 type Prompter interface {
+	// ExistingConfig is called when a config file already exists at path.
+	// validErr is nil if the file passes validation, or the validation error otherwise.
+	ExistingConfig(path string, validErr error) (ExistingConfigAction, error)
 	ConfigLocation(defaultDir string) (string, error)
 	VaultSelection(vaults []DetectedVault) ([]string, error)
 	AgentSelection(agents []DetectedAgent) ([]DetectedAgent, error)
@@ -40,11 +55,12 @@ type InitOptions struct {
 
 // InitResult holds the resolved configuration from the init wizard.
 type InitResult struct {
-	ConfigPath           string
-	SelectedVaults       []string
-	SelectedAgents       []DetectedAgent
-	SandboxEnabled       bool
+	ConfigPath            string
+	SelectedVaults        []string
+	SelectedAgents        []DetectedAgent
+	SandboxEnabled        bool
 	GPGPinentryConfigured bool // true if the user opted to configure locksmith-pinentry
+	ConfigPreexisted      bool // true when an existing config was found and kept
 }
 
 // RunInit runs the interactive setup wizard. In --auto mode all prompts are
@@ -395,6 +411,11 @@ func (p *huhPrompter) Summary(result *InitResult) (bool, error) {
 		return false, err
 	}
 	return confirmed, nil
+}
+
+// ExistingConfig prompts the user when a config file already exists.
+func (p *huhPrompter) ExistingConfig(path string, validErr error) (ExistingConfigAction, error) {
+	return ActionExit, nil // placeholder - replaced in Task 3
 }
 
 // GPGPinentry prompts whether to configure locksmith-pinentry in gpg-agent.conf.
