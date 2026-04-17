@@ -246,10 +246,10 @@ func (x *SessionStartResponse) GetExpiresAt() string {
 }
 
 type SessionEndRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	SessionIdPrefix string                 `protobuf:"bytes,1,opt,name=session_id_prefix,json=sessionIdPrefix,proto3" json:"session_id_prefix,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *SessionEndRequest) Reset() {
@@ -282,15 +282,16 @@ func (*SessionEndRequest) Descriptor() ([]byte, []int) {
 	return file_locksmith_v1_locksmith_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *SessionEndRequest) GetSessionId() string {
+func (x *SessionEndRequest) GetSessionIdPrefix() string {
 	if x != nil {
-		return x.SessionId
+		return x.SessionIdPrefix
 	}
 	return ""
 }
 
 type SessionEndResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -323,6 +324,13 @@ func (x *SessionEndResponse) ProtoReflect() protoreflect.Message {
 // Deprecated: Use SessionEndResponse.ProtoReflect.Descriptor instead.
 func (*SessionEndResponse) Descriptor() ([]byte, []int) {
 	return file_locksmith_v1_locksmith_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *SessionEndResponse) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
 }
 
 type SessionListRequest struct {
@@ -791,11 +799,12 @@ const file_locksmith_v1_locksmith_proto_rawDesc = "" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1d\n" +
 	"\n" +
-	"expires_at\x18\x02 \x01(\tR\texpiresAt\"2\n" +
-	"\x11SessionEndRequest\x12\x1d\n" +
+	"expires_at\x18\x02 \x01(\tR\texpiresAt\"?\n" +
+	"\x11SessionEndRequest\x12*\n" +
+	"\x11session_id_prefix\x18\x01 \x01(\tR\x0fsessionIdPrefix\"3\n" +
+	"\x12SessionEndResponse\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\"\x14\n" +
-	"\x12SessionEndResponse\"\x14\n" +
 	"\x12SessionListRequest\"L\n" +
 	"\x13SessionListResponse\x125\n" +
 	"\bsessions\x18\x01 \x03(\v2\x19.locksmith.v1.SessionInfoR\bsessions\"\xbf\x01\n" +

@@ -38,10 +38,12 @@ message SessionStartResponse {
 }
 
 message SessionEndRequest {
-  string session_id = 1;
+  string session_id_prefix = 1;
 }
 
-message SessionEndResponse {}
+message SessionEndResponse {
+  string session_id = 1;
+}
 
 message SessionListRequest {}
 

@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 )
@@ -56,7 +57,7 @@ func (s *Store) Get(id string) (*Session, error) {
 	sess, ok := s.sessions[id]
 	s.mu.RUnlock()
 	if !ok {
-		return nil, fmt.Errorf("session %q not found", id)
+		return nil, fmt.Errorf("session for prefix %q not found", id)
 	}
 	if time.Now().After(sess.ExpiresAt) {
 		// Acquire write lock to delete expired session.
@@ -75,20 +76,48 @@ func (s *Store) Get(id string) (*Session, error) {
 	return sess, nil
 }
 
+// getByMask returns all sessions whose ID matches the id prefix.
+func (s *Store) getByMask(idPrefix string) []*Session {
+	prefix := strings.ToLower(idPrefix)
+	foundSessionIds := make([]*Session, 0, 1)
+
+	for _, session := range s.sessions {
+		sessionId := strings.ToLower(session.ID)
+		if strings.HasPrefix(sessionId, prefix) {
+			foundSessionIds = append(foundSessionIds, session)
+			if len(sessionId) == len(prefix) {
+				break
+			}
+		}
+	}
+
+	return foundSessionIds
+}
+
 // Delete invalidates a session and wipes all cached secrets from memory.
-func (s *Store) Delete(id string) error {
+func (s *Store) Delete(idPrefix string) (*string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	foundSessions := s.getByMask(idPrefix)
+	if len(foundSessions) == 0 {
+		return nil, fmt.Errorf("session for prefix %q not found", idPrefix)
+	}
+	if len(foundSessions) > 1 {
+		return nil, fmt.Errorf("multiple sessions found for prefix %q", idPrefix)
+	}
+
+	id := foundSessions[0].ID
 	sess, ok := s.sessions[id]
 	if !ok {
-		return fmt.Errorf("session %q not found", id)
+		return nil, fmt.Errorf("internal error while deleting session for prefix %q", idPrefix)
 	}
 	for key, secret := range sess.secrets {
 		wipeBytes(secret)
 		delete(sess.secrets, key)
 	}
 	delete(s.sessions, id)
-	return nil
+	return &id, nil
 }
 
 // CacheSecret stores a secret value bound to the given session and key name.

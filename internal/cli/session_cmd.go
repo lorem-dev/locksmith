@@ -55,16 +55,16 @@ func newSessionStartCmd() *cobra.Command {
 
 // newSessionEndCmd returns the `locksmith session end` command.
 func newSessionEndCmd() *cobra.Command {
-	var sessionID string
+	var sessionIDPrefix string
 	cmd := &cobra.Command{
 		Use:   "end",
 		Short: "End an agent session",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if sessionID == "" {
-				sessionID = os.Getenv("LOCKSMITH_SESSION")
+			if sessionIDPrefix == "" {
+				sessionIDPrefix = os.Getenv("LOCKSMITH_SESSION")
 			}
-			if sessionID == "" {
-				return fmt.Errorf("session ID required: use --session or set LOCKSMITH_SESSION")
+			if sessionIDPrefix == "" {
+				return fmt.Errorf("session ID prefix required: use --session or set LOCKSMITH_SESSION")
 			}
 			client, conn, err := dialDaemon("")
 			if err != nil {
@@ -73,14 +73,14 @@ func newSessionEndCmd() *cobra.Command {
 			defer conn.Close()
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			if _, err := client.SessionEnd(ctx, &locksmithv1.SessionEndRequest{SessionId: sessionID}); err != nil {
+			if _, err := client.SessionEnd(ctx, &locksmithv1.SessionEndRequest{SessionIdPrefix: sessionIDPrefix}); err != nil {
 				return fmt.Errorf("ending session: %w", err)
 			}
 			fmt.Println("session ended")
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&sessionID, "session", "", "session ID (default: $LOCKSMITH_SESSION)")
+	cmd.Flags().StringVar(&sessionIDPrefix, "session", "", "session ID prefix (default: $LOCKSMITH_SESSION)")
 	return cmd
 }
 

@@ -15,8 +15,8 @@ import (
 	"github.com/lorem-dev/locksmith/internal/config"
 	"github.com/lorem-dev/locksmith/internal/log"
 	pluginpkg "github.com/lorem-dev/locksmith/internal/plugin"
-	sdk "github.com/lorem-dev/locksmith/sdk"
 	"github.com/lorem-dev/locksmith/internal/session"
+	sdk "github.com/lorem-dev/locksmith/sdk"
 )
 
 // pluginRegistry is the subset of plugin.Manager used by Server.
@@ -69,11 +69,12 @@ func (s *Server) SessionStart(_ context.Context, req *locksmithv1.SessionStartRe
 
 // SessionEnd invalidates a session and wipes its cached secrets.
 func (s *Server) SessionEnd(_ context.Context, req *locksmithv1.SessionEndRequest) (*locksmithv1.SessionEndResponse, error) {
-	if err := s.store.Delete(req.SessionId); err != nil {
+	sessionId, err := s.store.Delete(req.SessionIdPrefix)
+	if err != nil {
 		return nil, err
 	}
-	log.Info().Str("session", req.SessionId).Msg("session ended")
-	return &locksmithv1.SessionEndResponse{}, nil
+	log.Info().Str("session", *sessionId).Msg("session ended")
+	return &locksmithv1.SessionEndResponse{SessionId: *sessionId}, nil
 }
 
 // SessionList returns metadata for all active sessions.
@@ -82,7 +83,7 @@ func (s *Server) SessionList(_ context.Context, _ *locksmithv1.SessionListReques
 	infos := make([]*locksmithv1.SessionInfo, len(sessions))
 	for i, sess := range sessions {
 		infos[i] = &locksmithv1.SessionInfo{
-			SessionId:   sess.ID,
+			SessionId:   sdk.HideSession(sess.ID),
 			CreatedAt:   sess.CreatedAt.Format(time.RFC3339),
 			ExpiresAt:   sess.ExpiresAt.Format(time.RFC3339),
 			AllowedKeys: sess.AllowedKeys,

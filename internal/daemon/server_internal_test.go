@@ -220,7 +220,7 @@ func TestSessionEnd_NotFound(t *testing.T) {
 		Keys:     map[string]config.Key{},
 	}
 	srv := &Server{cfg: cfg, store: session.NewStore()}
-	_, err := srv.SessionEnd(context.Background(), &locksmithv1.SessionEndRequest{SessionId: "ls_notfound"})
+	_, err := srv.SessionEnd(context.Background(), &locksmithv1.SessionEndRequest{SessionIdPrefix: "ls_notfound"})
 	if err == nil {
 		t.Fatal("SessionEnd() expected error for unknown session")
 	}

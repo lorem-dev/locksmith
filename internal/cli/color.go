@@ -50,3 +50,11 @@ func ColorGray(text string, color bool) string {
 	}
 	return fmt.Sprintf("\033[90m%s\033[0m", text)
 }
+
+// ColorCyan returns text in bold cyan when color is enabled.
+func ColorCyan(text string, color bool) string {
+	if !color {
+		return text
+	}
+	return fmt.Sprintf("\033[1;36m%s\033[0m", text)
+}

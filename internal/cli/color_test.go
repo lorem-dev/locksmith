@@ -84,3 +84,17 @@ func TestColorGray_ColorEnabled(t *testing.T) {
 		t.Error("ColorGray() with color enabled should wrap text with ANSI codes")
 	}
 }
+
+func TestColorCyan_ColorDisabled(t *testing.T) {
+	result := cli.ColorCyan("hello", false)
+	if result != "hello" {
+		t.Errorf("ColorCyan() with color disabled = %q, want %q", result, "hello")
+	}
+}
+
+func TestColorCyan_ColorEnabled(t *testing.T) {
+	result := cli.ColorCyan("hello", true)
+	if result == "hello" {
+		t.Error("ColorCyan() with color enabled should wrap text with ANSI codes")
+	}
+}

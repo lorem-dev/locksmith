@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
+	locksmithv1 "github.com/lorem-dev/locksmith/gen/proto/locksmith/v1"
 	"github.com/lorem-dev/locksmith/internal/config"
 	"github.com/lorem-dev/locksmith/internal/daemon"
 	"github.com/lorem-dev/locksmith/internal/log"
 	"github.com/lorem-dev/locksmith/internal/session"
-	locksmithv1 "github.com/lorem-dev/locksmith/gen/proto/locksmith/v1"
 )
 
 func TestMain(m *testing.M) {
@@ -56,13 +56,48 @@ func TestSessionStart_DefaultTTL(t *testing.T) {
 func TestSessionEnd(t *testing.T) {
 	srv := newTestServer()
 	startResp, _ := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
-	_, err := srv.SessionEnd(context.Background(), &locksmithv1.SessionEndRequest{SessionId: startResp.SessionId})
+	endResp, err := srv.SessionEnd(context.Background(), &locksmithv1.SessionEndRequest{SessionIdPrefix: startResp.SessionId})
 	if err != nil {
 		t.Fatalf("SessionEnd() error: %v", err)
+	}
+	if endResp.SessionId != startResp.SessionId {
+		t.Errorf("session ID mismatch: got %s, want %s", endResp.SessionId, startResp.SessionId)
 	}
 	listResp, _ := srv.SessionList(context.Background(), &locksmithv1.SessionListRequest{})
 	if len(listResp.Sessions) != 0 {
 		t.Errorf("sessions after end = %d, want 0", len(listResp.Sessions))
+	}
+}
+
+func TestSessionEnd_Prefix(t *testing.T) {
+	srv := newTestServer()
+	startResp, _ := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
+	endResp, err := srv.SessionEnd(context.Background(), &locksmithv1.SessionEndRequest{SessionIdPrefix: startResp.SessionId[:5]})
+	if err != nil {
+		t.Fatalf("SessionEnd() error: %v", err)
+	}
+	if endResp.SessionId != startResp.SessionId {
+		t.Errorf("session ID mismatch: got %s, want %s", endResp.SessionId, startResp.SessionId)
+	}
+}
+
+func TestSessionEnd_NotFound(t *testing.T) {
+	srv := newTestServer()
+	_, err := srv.SessionEnd(context.Background(), &locksmithv1.SessionEndRequest{SessionIdPrefix: "ls_nonexistent"})
+	want := `session for prefix "ls_nonexistent" not found`
+	if err == nil || err.Error() != want {
+		t.Fatalf("SessionEnd() error = %v, want '%s'", err, want)
+	}
+}
+
+func TestSessionEnd_Multiple(t *testing.T) {
+	srv := newTestServer()
+	srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
+	srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
+	_, err := srv.SessionEnd(context.Background(), &locksmithv1.SessionEndRequest{SessionIdPrefix: "ls_"})
+	want := `multiple sessions found for prefix "ls_"`
+	if err == nil || err.Error() != want {
+		t.Fatalf("SessionEnd() error = %v, want '%s'", err, want)
 	}
 }
 

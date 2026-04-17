@@ -65,12 +65,42 @@ func TestStore_Get_Expired(t *testing.T) {
 func TestStore_Delete(t *testing.T) {
 	s := session.NewStore()
 	sess, _ := s.Create(time.Hour, nil)
-	if err := s.Delete(sess.ID); err != nil {
+	if _, err := s.Delete(sess.ID); err != nil {
 		t.Fatalf("Delete() error: %v", err)
 	}
 	_, err := s.Get(sess.ID)
 	if err == nil {
 		t.Fatal("Get() expected error after Delete()")
+	}
+}
+
+func TestStore_Delete_Prefix(t *testing.T) {
+	s := session.NewStore()
+	sess, _ := s.Create(time.Hour, nil)
+	if _, err := s.Delete(sess.ID[:8]); err != nil {
+		t.Fatalf("Delete() error: %v", err)
+	}
+	_, err := s.Get(sess.ID)
+	if err == nil {
+		t.Fatal("Get() expected error after Delete() with prefix")
+	}
+}
+
+func TestStore_Delete_NotFound(t *testing.T) {
+	s := session.NewStore()
+	want := `session for prefix "non-existent-session" not found`
+	if _, err := s.Delete("non-existent-session"); err == nil || err.Error() != want {
+		t.Fatalf("Delete() error = %v, want %q", err, want)
+	}
+}
+
+func TestStore_Delete_Multiple(t *testing.T) {
+	s := session.NewStore()
+	s.Create(time.Hour, nil)
+	s.Create(time.Hour, nil)
+	want := `multiple sessions found for prefix "ls_"`
+	if _, err := s.Delete("ls_"); err == nil || err.Error() != want {
+		t.Fatalf("Delete() error = %v, want %q", err, want)
 	}
 }
 
@@ -145,14 +175,6 @@ func TestStore_Cleanup_WipesSecrets(t *testing.T) {
 		if b != 0 {
 			t.Errorf("secret byte[%d] = %d after Cleanup, want 0", i, b)
 		}
-	}
-}
-
-func TestStore_Delete_NotFound(t *testing.T) {
-	s := session.NewStore()
-	err := s.Delete("ls_doesnotexist")
-	if err == nil {
-		t.Fatal("Delete() expected error for nonexistent session")
 	}
 }
 
