@@ -35,7 +35,7 @@ func newGetCmd() *cobra.Command {
 				// reuse across subsequent calls (avoids repeated vault authorization).
 				startResp, err := client.SessionStart(ctx, &locksmithv1.SessionStartRequest{})
 				if err != nil {
-					return fmt.Errorf("auto-starting session: %w", err)
+					return err
 				}
 				sessionID = startResp.SessionId
 				fmt.Fprintf(os.Stderr, "locksmith: session started (expires %s)\n  export LOCKSMITH_SESSION=%s\n",
@@ -49,7 +49,7 @@ func newGetCmd() *cobra.Command {
 				Path:      path,
 			})
 			if err != nil {
-				return fmt.Errorf("getting secret: %w", err)
+				return err
 			}
 
 			fmt.Print(string(resp.Secret))

@@ -1,6 +1,7 @@
 package cli_test
 
 import (
+	"errors"
 	"testing"
 
 	"google.golang.org/grpc/codes"
@@ -9,6 +10,54 @@ import (
 	locksmithv1 "github.com/lorem-dev/locksmith/gen/proto/locksmith/v1"
 	"github.com/lorem-dev/locksmith/internal/cli"
 )
+
+func TestFormatError_GRPCNotFound(t *testing.T) {
+	err := status.Error(codes.NotFound, "keychain: item not found")
+	msg, hint := cli.FormatErrorParts(err)
+	if msg != "keychain: item not found" {
+		t.Errorf("msg = %q, want %q", msg, "keychain: item not found")
+	}
+	if hint == "" {
+		t.Error("expected non-empty hint for NotFound")
+	}
+}
+
+func TestFormatError_NonGRPC(t *testing.T) {
+	err := errors.New("something unexpected")
+	msg, hint := cli.FormatErrorParts(err)
+	if msg != "something unexpected" {
+		t.Errorf("msg = %q, want %q", msg, "something unexpected")
+	}
+	if hint != "" {
+		t.Errorf("hint should be empty for non-gRPC error, got %q", hint)
+	}
+}
+
+func TestFormatError_GRPCWithHints(t *testing.T) {
+	tests := []struct {
+		code     codes.Code
+		wantHint bool
+	}{
+		{codes.PermissionDenied, true},
+		{codes.Unauthenticated, true},
+		{codes.Unavailable, true},
+		{codes.InvalidArgument, true},
+		{codes.DeadlineExceeded, true},
+		{codes.Unimplemented, true},
+		{codes.Internal, true},
+		{codes.Unknown, true},
+	}
+	for _, tt := range tests {
+		err := status.Error(tt.code, "test error")
+		msg, hint := cli.FormatErrorParts(err)
+		if msg != "test error" {
+			t.Errorf("code %v: msg = %q, want %q", tt.code, msg, "test error")
+		}
+		if tt.wantHint && hint == "" {
+			t.Errorf("code %v: expected non-empty hint", tt.code)
+		}
+	}
+}
 
 // Tests for the error paths in command RunE functions.
 
