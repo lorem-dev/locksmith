@@ -9,6 +9,8 @@ import (
 
 	goplugin "github.com/hashicorp/go-plugin"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
 )
@@ -111,9 +113,18 @@ func NewGRPCClient(conn *grpc.ClientConn) Provider {
 	return &VaultGRPCClient{client: vaultv1.NewVaultProviderServiceClient(conn)}
 }
 
-// GetSecret calls the remote plugin's GetSecret over gRPC.
+// GetSecret calls the remote plugin's GetSecret over gRPC and unwraps any
+// gRPC status error into a *VaultError so the status code survives the
+// second gRPC boundary (plugin -> daemon -> CLI).
 func (c *VaultGRPCClient) GetSecret(ctx context.Context, req *vaultv1.GetSecretRequest) (*vaultv1.GetSecretResponse, error) {
-	return c.client.GetSecret(ctx, req)
+	resp, err := c.client.GetSecret(ctx, req)
+	if err != nil {
+		if s, ok := status.FromError(err); ok && s.Code() != codes.OK {
+			return nil, &VaultError{Code: s.Code(), Message: s.Message()}
+		}
+		return nil, err
+	}
+	return resp, nil
 }
 
 // HealthCheck calls the remote plugin's HealthCheck over gRPC.

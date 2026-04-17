@@ -2,13 +2,16 @@ package sdk_test
 
 import (
 	"context"
+	"errors"
 	"net"
 	"testing"
 
 	sdk "github.com/lorem-dev/locksmith/sdk"
 	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 // TestVaultGRPCPlugin_GRPCServer tests that GRPCServer registers the service and
@@ -77,6 +80,24 @@ func TestVaultGRPCPlugin_GRPCClient(t *testing.T) {
 	}
 }
 
+// errorProvider is a Provider that always returns a gRPC status error from GetSecret.
+type errorProvider struct {
+	code codes.Code
+	msg  string
+}
+
+func (e *errorProvider) GetSecret(_ context.Context, _ *vaultv1.GetSecretRequest) (*vaultv1.GetSecretResponse, error) {
+	return nil, status.Errorf(e.code, "%s", e.msg)
+}
+
+func (e *errorProvider) HealthCheck(_ context.Context, _ *vaultv1.HealthCheckRequest) (*vaultv1.HealthCheckResponse, error) {
+	return &vaultv1.HealthCheckResponse{Available: true}, nil
+}
+
+func (e *errorProvider) Info(_ context.Context, _ *vaultv1.InfoRequest) (*vaultv1.InfoResponse, error) {
+	return &vaultv1.InfoResponse{Name: "error", Version: "0.0.0"}, nil
+}
+
 type mockProvider struct{}
 
 func (m *mockProvider) GetSecret(_ context.Context, _ *vaultv1.GetSecretRequest) (*vaultv1.GetSecretResponse, error) {
@@ -131,6 +152,56 @@ func TestNewClientConfig(t *testing.T) {
 	cfg := sdk.NewClientConfig("/usr/local/bin/locksmith-plugin-test")
 	if cfg == nil {
 		t.Fatal("NewClientConfig() returned nil")
+	}
+}
+
+// TestVaultGRPCClient_GetSecret_PreservesStatusCode verifies that when a plugin
+// returns a gRPC status error, VaultGRPCClient.GetSecret unwraps it into a
+// *VaultError so the code and message survive the gRPC boundary intact.
+func TestVaultGRPCClient_GetSecret_PreservesStatusCode(t *testing.T) {
+	cases := []struct {
+		name string
+		code codes.Code
+		msg  string
+	}{
+		{"NotFound", codes.NotFound, "keychain: item not found"},
+		{"PermissionDenied", codes.PermissionDenied, "access denied"},
+		{"Internal", codes.Internal, "unexpected vault error"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			lis, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			grpcSrv := grpc.NewServer()
+			vaultv1.RegisterVaultProviderServiceServer(grpcSrv, sdk.NewGRPCServer(&errorProvider{code: tc.code, msg: tc.msg}))
+			go grpcSrv.Serve(lis) //nolint:errcheck
+			defer grpcSrv.Stop()
+
+			conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer conn.Close()
+
+			client := sdk.NewGRPCClient(conn)
+			_, gotErr := client.GetSecret(context.Background(), &vaultv1.GetSecretRequest{Path: "test"})
+			if gotErr == nil {
+				t.Fatal("GetSecret() returned nil error, want error")
+			}
+
+			var ve *sdk.VaultError
+			if !errors.As(gotErr, &ve) {
+				t.Fatalf("error type = %T, want *sdk.VaultError", gotErr)
+			}
+			if ve.Code != tc.code {
+				t.Errorf("VaultError.Code = %v, want %v", ve.Code, tc.code)
+			}
+			if ve.Message != tc.msg {
+				t.Errorf("VaultError.Message = %q, want %q", ve.Message, tc.msg)
+			}
+		})
 	}
 }
 
