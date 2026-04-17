@@ -7,6 +7,8 @@ import (
 
 	locksmithv1 "github.com/lorem-dev/locksmith/gen/proto/locksmith/v1"
 	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	sdk "github.com/lorem-dev/locksmith/sdk"
 	"github.com/lorem-dev/locksmith/internal/config"
 	"github.com/lorem-dev/locksmith/internal/session"
@@ -42,9 +44,12 @@ type mockProvider struct {
 	platforms   []string
 	getErr      error
 	healthErr   error
+	// lastReq is set to the most recent GetSecret request for opts inspection.
+	lastReq *vaultv1.GetSecretRequest
 }
 
-func (p *mockProvider) GetSecret(_ context.Context, _ *vaultv1.GetSecretRequest) (*vaultv1.GetSecretResponse, error) {
+func (p *mockProvider) GetSecret(_ context.Context, req *vaultv1.GetSecretRequest) (*vaultv1.GetSecretResponse, error) {
+	p.lastReq = req
 	if p.getErr != nil {
 		return nil, p.getErr
 	}
@@ -344,5 +349,82 @@ func TestVaultHealth_GetError(t *testing.T) {
 	}
 	if resp.Vaults[0].Message == "" {
 		t.Error("expected error message in vault health info")
+	}
+}
+
+func TestGetSecret_PreservesVaultErrorCode(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.Defaults{SessionTTL: "1h"},
+		Vaults:   map[string]config.Vault{"keychain": {Type: "keychain"}},
+		Keys:     map[string]config.Key{"notion": {Vault: "keychain", Path: "notion"}},
+	}
+	provider := &mockProvider{getErr: sdk.NotFoundError("keychain: item not found")}
+	reg := &mockRegistry{providers: map[string]sdk.Provider{"keychain": provider}}
+	srv := NewServerWithRegistry(cfg, session.NewStore(), reg)
+
+	startResp, _ := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
+	_, err := srv.GetSecret(context.Background(), &locksmithv1.GetSecretRequest{
+		SessionId: startResp.SessionId,
+		KeyAlias:  "notion",
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	s, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("error is not gRPC status: %T %v", err, err)
+	}
+	if s.Code() != codes.NotFound {
+		t.Errorf("Code() = %v, want NotFound", s.Code())
+	}
+}
+
+func TestResolveKey_PassesServiceOpt(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.Defaults{SessionTTL: "1h"},
+		Vaults:   map[string]config.Vault{"keychain": {Type: "keychain", Service: "com.example.app"}},
+		Keys:     map[string]config.Key{"mykey": {Vault: "keychain", Path: "myaccount"}},
+	}
+	provider := &mockProvider{secret: []byte("secret"), contentType: "text/plain"}
+	reg := &mockRegistry{providers: map[string]sdk.Provider{"keychain": provider}}
+	srv := NewServerWithRegistry(cfg, session.NewStore(), reg)
+
+	startResp, _ := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
+	_, err := srv.GetSecret(context.Background(), &locksmithv1.GetSecretRequest{
+		SessionId: startResp.SessionId,
+		KeyAlias:  "mykey",
+	})
+	if err != nil {
+		t.Fatalf("GetSecret() error: %v", err)
+	}
+	if provider.lastReq == nil {
+		t.Fatal("provider was not called")
+	}
+	if provider.lastReq.Opts["service"] != "com.example.app" {
+		t.Errorf("opts[service] = %q, want %q", provider.lastReq.Opts["service"], "com.example.app")
+	}
+}
+
+func TestResolveKey_DirectVault_PassesServiceOpt(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.Defaults{SessionTTL: "1h"},
+		Vaults:   map[string]config.Vault{"keychain": {Type: "keychain", Service: "com.example.direct"}},
+		Keys:     map[string]config.Key{},
+	}
+	provider := &mockProvider{secret: []byte("secret"), contentType: "text/plain"}
+	reg := &mockRegistry{providers: map[string]sdk.Provider{"keychain": provider}}
+	srv := NewServerWithRegistry(cfg, session.NewStore(), reg)
+
+	startResp, _ := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
+	_, err := srv.GetSecret(context.Background(), &locksmithv1.GetSecretRequest{
+		SessionId: startResp.SessionId,
+		VaultName: "keychain",
+		Path:      "someaccount",
+	})
+	if err != nil {
+		t.Fatalf("GetSecret() error: %v", err)
+	}
+	if provider.lastReq.Opts["service"] != "com.example.direct" {
+		t.Errorf("opts[service] = %q, want %q", provider.lastReq.Opts["service"], "com.example.direct")
 	}
 }

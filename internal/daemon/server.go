@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	locksmithv1 "github.com/lorem-dev/locksmith/gen/proto/locksmith/v1"
 	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
 	"github.com/lorem-dev/locksmith/internal/config"
@@ -38,6 +41,12 @@ func NewServer(cfg *config.Config, store *session.Store, plugins *pluginpkg.Mana
 	if plugins != nil {
 		reg = plugins
 	}
+	return &Server{cfg: cfg, store: store, plugins: reg}
+}
+
+// NewServerWithRegistry creates a Server with an arbitrary pluginRegistry.
+// Use this in tests to inject fakes; production code uses NewServer.
+func NewServerWithRegistry(cfg *config.Config, store *session.Store, reg pluginRegistry) *Server {
 	return &Server{cfg: cfg, store: store, plugins: reg}
 }
 
@@ -110,7 +119,10 @@ func (s *Server) GetSecret(ctx context.Context, req *locksmithv1.GetSecretReques
 
 	resp, err := provider.GetSecret(ctx, &vaultv1.GetSecretRequest{Path: path, Opts: opts})
 	if err != nil {
-		return nil, fmt.Errorf("fetching secret from vault: %w", err)
+		if s, ok := status.FromError(err); ok && s.Code() != codes.OK {
+			return nil, status.Errorf(s.Code(), "fetching secret: %s", s.Message())
+		}
+		return nil, status.Errorf(codes.Internal, "fetching secret: %s", err.Error())
 	}
 
 	s.store.CacheSecret(req.SessionId, cacheKey, resp.Secret)
@@ -181,6 +193,9 @@ func (s *Server) resolveKey(req *locksmithv1.GetSecretRequest) (vaultType, path 
 		if vaultDef.Store != "" {
 			opts["store"] = vaultDef.Store
 		}
+		if vaultDef.Service != "" {
+			opts["service"] = vaultDef.Service
+		}
 		return vaultDef.Type, keyDef.Path, opts, nil
 	}
 	if req.VaultName == "" || req.Path == "" {
@@ -189,6 +204,9 @@ func (s *Server) resolveKey(req *locksmithv1.GetSecretRequest) (vaultType, path 
 	if vaultDef, ok := s.cfg.Vaults[req.VaultName]; ok {
 		if vaultDef.Store != "" {
 			opts["store"] = vaultDef.Store
+		}
+		if vaultDef.Service != "" {
+			opts["service"] = vaultDef.Service
 		}
 		return vaultDef.Type, req.Path, opts, nil
 	}
