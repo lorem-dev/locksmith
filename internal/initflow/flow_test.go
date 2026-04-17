@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/lorem-dev/locksmith/internal/config"
 	"github.com/lorem-dev/locksmith/internal/initflow"
 )
 
@@ -20,10 +21,12 @@ type mockPrompter struct {
 	agentErr          error
 	sandbox           bool
 	sandboxErr        error
-	summaryConfirm    bool
-	summaryErr        error
-	gpgPinentry       bool
-	gpgPinentryErr    error
+	summaryConfirm       bool
+	summaryErr           error
+	gpgPinentry          bool
+	gpgPinentryErr       error
+	existingConfigAction initflow.ExistingConfigAction
+	existingConfigErr    error
 }
 
 func (m *mockPrompter) ConfigLocation(_ string) (string, error) {
@@ -48,6 +51,10 @@ func (m *mockPrompter) Summary(_ *initflow.InitResult) (bool, error) {
 
 func (m *mockPrompter) GPGPinentry(_ string) (bool, error) {
 	return m.gpgPinentry, m.gpgPinentryErr
+}
+
+func (m *mockPrompter) ExistingConfig(_ string, _ error) (initflow.ExistingConfigAction, error) {
+	return m.existingConfigAction, m.existingConfigErr
 }
 
 func TestAgentMatches_CaseInsensitive(t *testing.T) {
@@ -348,5 +355,117 @@ func TestRunInit_Interactive_NoSandboxWhenNoAgents(t *testing.T) {
 	}
 	if result.SandboxEnabled {
 		t.Error("SandboxEnabled should be false when no agents selected")
+	}
+}
+
+func TestRunInit_ExistingConfig_Valid_Continue(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cfgDir := filepath.Join(home, ".config", "locksmith")
+	os.MkdirAll(cfgDir, 0o755)
+	cfgPath := filepath.Join(cfgDir, "config.yaml")
+	// Write a minimal valid config.
+	os.WriteFile(cfgPath, []byte("defaults:\n  session_ttl: 1h\n"), 0o644)
+	originalContent, _ := os.ReadFile(cfgPath)
+
+	mp := &mockPrompter{
+		configDir:            cfgDir,
+		summaryConfirm:       true,
+		existingConfigAction: initflow.ActionContinue,
+	}
+	result, err := initflow.RunInit(initflow.InitOptions{Prompter: mp})
+	if err != nil {
+		t.Fatalf("RunInit() error: %v", err)
+	}
+	if !result.ConfigPreexisted {
+		t.Error("expected ConfigPreexisted = true")
+	}
+	// File must not be overwritten.
+	gotContent, _ := os.ReadFile(cfgPath)
+	if string(gotContent) != string(originalContent) {
+		t.Errorf("config file was modified; want unchanged")
+	}
+}
+
+func TestRunInit_ExistingConfig_Valid_Overwrite(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cfgDir := filepath.Join(home, ".config", "locksmith")
+	os.MkdirAll(cfgDir, 0o755)
+	cfgPath := filepath.Join(cfgDir, "config.yaml")
+	os.WriteFile(cfgPath, []byte("defaults:\n  session_ttl: 1h\n"), 0o644)
+
+	mp := &mockPrompter{
+		configDir:            cfgDir,
+		summaryConfirm:       true,
+		existingConfigAction: initflow.ActionOverwrite,
+	}
+	result, err := initflow.RunInit(initflow.InitOptions{Prompter: mp})
+	if err != nil {
+		t.Fatalf("RunInit() error: %v", err)
+	}
+	if result.ConfigPreexisted {
+		t.Error("ConfigPreexisted should be false when user chose Overwrite")
+	}
+}
+
+func TestRunInit_ExistingConfig_Exit(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cfgDir := filepath.Join(home, ".config", "locksmith")
+	os.MkdirAll(cfgDir, 0o755)
+	os.WriteFile(filepath.Join(cfgDir, "config.yaml"), []byte("defaults:\n  session_ttl: 1h\n"), 0o644)
+
+	mp := &mockPrompter{
+		configDir:            cfgDir,
+		existingConfigAction: initflow.ActionExit,
+	}
+	_, err := initflow.RunInit(initflow.InitOptions{Prompter: mp})
+	if err == nil {
+		t.Fatal("RunInit() expected error when user exits")
+	}
+}
+
+func TestRunInit_ExistingConfig_Valid_AutoContinues(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cfgDir := filepath.Join(home, ".config", "locksmith")
+	os.MkdirAll(cfgDir, 0o755)
+	cfgPath := filepath.Join(cfgDir, "config.yaml")
+	os.WriteFile(cfgPath, []byte("defaults:\n  session_ttl: 1h\n"), 0o644)
+	originalContent, _ := os.ReadFile(cfgPath)
+
+	result, err := initflow.RunInit(initflow.InitOptions{Auto: true, SkipAgents: true})
+	if err != nil {
+		t.Fatalf("RunInit() error: %v", err)
+	}
+	if !result.ConfigPreexisted {
+		t.Error("expected ConfigPreexisted = true for valid config in auto mode")
+	}
+	gotContent, _ := os.ReadFile(cfgPath)
+	if string(gotContent) != string(originalContent) {
+		t.Errorf("config file was modified in auto mode with valid config")
+	}
+}
+
+func TestRunInit_ExistingConfig_Invalid_AutoOverwrites(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cfgDir := filepath.Join(home, ".config", "locksmith")
+	os.MkdirAll(cfgDir, 0o755)
+	cfgPath := filepath.Join(cfgDir, "config.yaml")
+	// Write a config that references a non-existent vault - will fail validation.
+	os.WriteFile(cfgPath, []byte("keys:\n  mykey:\n    vault: missing\n    path: p\n"), 0o644)
+
+	result, err := initflow.RunInit(initflow.InitOptions{Auto: true, SkipAgents: true})
+	if err != nil {
+		t.Fatalf("RunInit() error: %v", err)
+	}
+	if result.ConfigPreexisted {
+		t.Error("ConfigPreexisted should be false when invalid config was overwritten")
+	}
+	// File must have been rewritten to a valid config.
+	if _, loadErr := config.Load(cfgPath); loadErr != nil {
+		t.Errorf("overwritten config is not valid: %v", loadErr)
 	}
 }
