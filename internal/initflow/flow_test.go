@@ -12,16 +12,18 @@ import (
 // mockPrompter is a test double for initflow.Prompter that returns configured
 // canned responses, allowing RunInit to be exercised without a real TTY.
 type mockPrompter struct {
-	configDir      string
-	configErr      error
-	vaults         []string
-	vaultErr       error
-	agents         []initflow.DetectedAgent
-	agentErr       error
-	sandbox        bool
-	sandboxErr     error
-	summaryConfirm bool
-	summaryErr     error
+	configDir         string
+	configErr         error
+	vaults            []string
+	vaultErr          error
+	agents            []initflow.DetectedAgent
+	agentErr          error
+	sandbox           bool
+	sandboxErr        error
+	summaryConfirm    bool
+	summaryErr        error
+	gpgPinentry       bool
+	gpgPinentryErr    error
 }
 
 func (m *mockPrompter) ConfigLocation(_ string) (string, error) {
@@ -42,6 +44,10 @@ func (m *mockPrompter) Sandbox() (bool, error) {
 
 func (m *mockPrompter) Summary(_ *initflow.InitResult) (bool, error) {
 	return m.summaryConfirm, m.summaryErr
+}
+
+func (m *mockPrompter) GPGPinentry(_ string) (bool, error) {
+	return m.gpgPinentry, m.gpgPinentryErr
 }
 
 func TestAgentMatches_CaseInsensitive(t *testing.T) {

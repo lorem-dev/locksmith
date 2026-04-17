@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/charmbracelet/huh"
@@ -21,6 +22,9 @@ type Prompter interface {
 	AgentSelection(agents []DetectedAgent) ([]DetectedAgent, error)
 	Sandbox() (bool, error)
 	Summary(result *InitResult) (bool, error)
+	// GPGPinentry asks whether to configure locksmith-pinentry in gpg-agent.conf.
+	// existingPinentry is the current pinentry-program value (empty if none).
+	GPGPinentry(existingPinentry string) (bool, error)
 }
 
 // InitOptions controls the behaviour of RunInit.
@@ -36,10 +40,11 @@ type InitOptions struct {
 
 // InitResult holds the resolved configuration from the init wizard.
 type InitResult struct {
-	ConfigPath     string
-	SelectedVaults []string
-	SelectedAgents []DetectedAgent
-	SandboxEnabled bool
+	ConfigPath           string
+	SelectedVaults       []string
+	SelectedAgents       []DetectedAgent
+	SandboxEnabled       bool
+	GPGPinentryConfigured bool // true if the user opted to configure locksmith-pinentry
 }
 
 // RunInit runs the interactive setup wizard. In --auto mode all prompts are
@@ -87,6 +92,26 @@ func RunInit(opts InitOptions) (*InitResult, error) {
 		result.SelectedVaults, err = prompter.VaultSelection(detectedVaults)
 		if err != nil {
 			return nil, err
+		}
+	}
+
+	// --- GPG pinentry configuration (interactive only, when gopass is selected) ---
+	if !opts.Auto {
+		gopassSelected := false
+		for _, v := range result.SelectedVaults {
+			if v == "gopass" {
+				gopassSelected = true
+				break
+			}
+		}
+		if gopassSelected {
+			gnupgDir := filepath.Join(homeDir, ".gnupg")
+			existing := ReadExistingPinentry(gnupgDir)
+			configure, err := prompter.GPGPinentry(existing)
+			if err != nil {
+				return nil, err
+			}
+			result.GPGPinentryConfigured = configure
 		}
 	}
 
@@ -163,6 +188,26 @@ func applyInit(result *InitResult, homeDir string) error {
 		return fmt.Errorf("writing config: %w", err)
 	}
 	fmt.Printf("  config written to %s\n", result.ConfigPath)
+
+	// Apply GPG pinentry configuration if the user opted in.
+	if result.GPGPinentryConfigured {
+		pinentryPath, lookErr := exec.LookPath("locksmith-pinentry")
+		if lookErr != nil {
+			fmt.Println("  warning: locksmith-pinentry not found in PATH - run 'make init' first")
+		} else {
+			gnupgDir := filepath.Join(homeDir, ".gnupg")
+			replaced, applyErr := ApplyGPGPinentry(gnupgDir, pinentryPath)
+			if applyErr != nil {
+				fmt.Printf("  warning: could not update gpg-agent.conf: %v\n", applyErr)
+			} else {
+				if replaced != "" {
+					fmt.Printf("  gpg-agent: previous pinentry-program (%s) commented out\n", replaced)
+				}
+				fmt.Printf("  gpg-agent: pinentry-program set to %s\n", pinentryPath)
+				exec.Command("gpgconf", "--kill", "gpg-agent").Run() //nolint:errcheck
+			}
+		}
+	}
 
 	writer := NewAgentWriter(homeDir)
 	for _, agent := range result.SelectedAgents {
@@ -345,6 +390,28 @@ func (p *huhPrompter) Summary(result *InitResult) (bool, error) {
 	var confirmed bool
 	form := p.formWith(huh.NewForm(huh.NewGroup(
 		huh.NewConfirm().Title("Apply?").Value(&confirmed),
+	)))
+	if err := form.Run(); err != nil {
+		return false, err
+	}
+	return confirmed, nil
+}
+
+// GPGPinentry prompts whether to configure locksmith-pinentry in gpg-agent.conf.
+func (p *huhPrompter) GPGPinentry(existingPinentry string) (bool, error) {
+	title := "Configure locksmith-pinentry for GPG passphrase prompts?"
+	desc := "Required for gopass vault when locksmith runs as a background daemon (no TTY)."
+	if existingPinentry != "" {
+		desc = fmt.Sprintf(
+			"WARNING: your gpg-agent.conf already has pinentry-program = %s\n"+
+				"  The existing line will be commented out and replaced.\n"+
+				"  You can restore it manually at any time.\n\n"+
+				"Configure locksmith-pinentry?",
+			existingPinentry)
+	}
+	var confirmed bool
+	form := p.formWith(huh.NewForm(huh.NewGroup(
+		huh.NewConfirm().Title(title).Description(desc).Value(&confirmed),
 	)))
 	if err := form.Run(); err != nil {
 		return false, err
