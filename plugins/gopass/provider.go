@@ -6,19 +6,23 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
+	sdk "github.com/lorem-dev/locksmith/sdk"
 	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
 )
 
 // GopassProvider retrieves secrets from a gopass password store.
-// lookPath and runCmd are injectable for testing; zero values use the real exec functions.
+// lookPath, runCmd, and cmdFactory are injectable for testing; zero values use the real exec functions.
 type GopassProvider struct {
 	// lookPath is used to locate the gopass binary. Defaults to exec.LookPath.
 	lookPath func(string) (string, error)
 	// runCmd is used to run a command and return its combined exit status. Defaults to cmd.Run().
 	runCmd func(name string, args ...string) error
+	// cmdFactory builds the exec.Cmd for GetSecret calls. Nil uses exec.CommandContext.
+	cmdFactory func(ctx context.Context, name string, args ...string) *exec.Cmd
 }
 
 func (p *GopassProvider) resolveLookPath() func(string) (string, error) {
@@ -37,6 +41,30 @@ func (p *GopassProvider) resolveRunCmd() func(string, ...string) error {
 	}
 }
 
+func (p *GopassProvider) resolveCmdFactory() func(context.Context, string, ...string) *exec.Cmd {
+	if p.cmdFactory != nil {
+		return p.cmdFactory
+	}
+	return func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		return exec.CommandContext(ctx, name, args...)
+	}
+}
+
+// buildGopassEnv returns the explicit environment for gopass subprocesses.
+// Only non-empty variables are included to avoid overriding with empty strings.
+// HOME, PATH, and GNUPGHOME ensure gopass can locate gpg-agent.
+// DISPLAY, WAYLAND_DISPLAY, and GPG_TTY allow gpg-agent to prompt for the passphrase.
+func buildGopassEnv() []string {
+	keys := []string{"HOME", "PATH", "GNUPGHOME", "DISPLAY", "WAYLAND_DISPLAY", "GPG_TTY"}
+	var env []string
+	for _, k := range keys {
+		if v := os.Getenv(k); v != "" {
+			env = append(env, k+"="+v)
+		}
+	}
+	return env
+}
+
 // GetSecret fetches a secret from gopass by path. Optionally uses a named store
 // via opts["store"]. Authorization (GPG passphrase / Touch ID) is handled by gopass.
 func (p *GopassProvider) GetSecret(ctx context.Context, req *vaultv1.GetSecretRequest) (*vaultv1.GetSecretResponse, error) {
@@ -45,13 +73,20 @@ func (p *GopassProvider) GetSecret(ctx context.Context, req *vaultv1.GetSecretRe
 		secretPath = store + "/" + req.Path
 	}
 
+	factory := p.resolveCmdFactory()
 	var stdout, stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, "gopass", "show", "-o", secretPath)
+	cmd := factory(ctx, "gopass", "show", "-o", secretPath)
+	cmd.Env = buildGopassEnv()
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("gopass show %q: %s: %w", secretPath, strings.TrimSpace(stderr.String()), err)
+		stderrStr := strings.TrimSpace(stderr.String())
+		if strings.Contains(stderrStr, "Inappropriate ioctl for device") {
+			return nil, sdk.UnauthenticatedError(
+				"GPG passphrase required but no UI available - see docs/configuration.md#gpg-pinentry")
+		}
+		return nil, fmt.Errorf("gopass show %q: %s: %w", secretPath, stderrStr, err)
 	}
 
 	return &vaultv1.GetSecretResponse{

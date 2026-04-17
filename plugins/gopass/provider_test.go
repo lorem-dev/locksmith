@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"os/exec"
+	"strings"
 	"testing"
 
 	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestGopassProvider_Info(t *testing.T) {
@@ -144,5 +147,97 @@ func TestGopassProvider_GetSecret_WithStore(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("GetSecret() expected error for nonexistent key")
+	}
+}
+
+func TestBuildGopassEnv_IncludesSetVars(t *testing.T) {
+	t.Setenv("HOME", "/home/tester")
+	t.Setenv("PATH", "/usr/bin:/bin")
+	t.Setenv("GNUPGHOME", "/home/tester/.gnupg")
+	t.Setenv("DISPLAY", ":0")
+	t.Setenv("WAYLAND_DISPLAY", "") // empty - should be omitted
+	t.Setenv("GPG_TTY", "/dev/pts/0")
+
+	env := buildGopassEnv()
+
+	has := func(key string) bool {
+		prefix := key + "="
+		for _, e := range env {
+			if strings.HasPrefix(e, prefix) {
+				return true
+			}
+		}
+		return false
+	}
+
+	for _, want := range []string{"HOME", "PATH", "GNUPGHOME", "DISPLAY", "GPG_TTY"} {
+		if !has(want) {
+			t.Errorf("buildGopassEnv() missing %s", want)
+		}
+	}
+	if has("WAYLAND_DISPLAY") {
+		t.Error("buildGopassEnv() should omit empty WAYLAND_DISPLAY")
+	}
+}
+
+func TestGopassProvider_GetSecret_InadequateIoctl(t *testing.T) {
+	p := &GopassProvider{
+		cmdFactory: func(_ context.Context, name string, args ...string) *exec.Cmd {
+			// Simulate a command that writes ioctl error to stderr and fails.
+			return exec.Command("sh", "-c",
+				`echo "gpg: signing failed: Inappropriate ioctl for device" >&2; exit 2`)
+		},
+	}
+	_, err := p.GetSecret(context.Background(), &vaultv1.GetSecretRequest{
+		Path: "test/key",
+		Opts: map[string]string{},
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	s, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("error is not gRPC status: %T %v", err, err)
+	}
+	if s.Code() != codes.Unauthenticated {
+		t.Errorf("Code() = %v, want Unauthenticated", s.Code())
+	}
+}
+
+func TestGopassProvider_GetSecret_Success_Mocked(t *testing.T) {
+	p := &GopassProvider{
+		cmdFactory: func(_ context.Context, name string, args ...string) *exec.Cmd {
+			return exec.Command("sh", "-c", "printf mysecret")
+		},
+	}
+	resp, err := p.GetSecret(context.Background(), &vaultv1.GetSecretRequest{
+		Path: "test/key",
+		Opts: map[string]string{},
+	})
+	if err != nil {
+		t.Fatalf("GetSecret() error: %v", err)
+	}
+	if string(resp.Secret) != "mysecret" {
+		t.Errorf("secret = %q, want %q", resp.Secret, "mysecret")
+	}
+}
+
+func TestGopassProvider_GetSecret_GenericError_Mocked(t *testing.T) {
+	p := &GopassProvider{
+		cmdFactory: func(_ context.Context, name string, args ...string) *exec.Cmd {
+			return exec.Command("sh", "-c", `echo "some error" >&2; exit 1`)
+		},
+	}
+	_, err := p.GetSecret(context.Background(), &vaultv1.GetSecretRequest{
+		Path: "test/key",
+		Opts: map[string]string{},
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	// Generic error should NOT be a gRPC Unauthenticated error.
+	s, ok := status.FromError(err)
+	if ok && s.Code() == codes.Unauthenticated {
+		t.Errorf("generic gopass error should not map to Unauthenticated")
 	}
 }
