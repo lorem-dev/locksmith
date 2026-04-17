@@ -28,18 +28,33 @@ After `configDir` is resolved (step 1 of `RunInit`), before any other prompts:
 configPath := filepath.Join(configDir, "config.yaml")
 
 if _, err := os.Stat(configPath); err == nil {      // file exists
-    validErr := config.Load(configPath) error-or-nil
-    action, err := prompter.ExistingConfig(configPath, validErr)
-    switch action:
-        ActionExit     -> return nil, fmt.Errorf("cancelled by user")
-        ActionContinue -> set result.ConfigPreexisted = true; skip writing config.yaml in applyInit
-        ActionOverwrite -> continue wizard normally (writes new config.yaml)
+    _, validErr := config.Load(configPath)          // nil = valid
+
+    var action ExistingConfigAction
+    if opts.Auto {
+        // auto mode: never prompt, decide by validity
+        if validErr == nil {
+            action = ActionContinue   // valid -> keep as-is
+        } else {
+            action = ActionOverwrite  // invalid -> regenerate silently
+        }
+    } else {
+        action, err = prompter.ExistingConfig(configPath, validErr)
+        if err != nil {
+            return nil, err
+        }
+    }
+
+    switch action {
+    case ActionExit:
+        return nil, fmt.Errorf("cancelled by user")
+    case ActionContinue:
+        result.ConfigPreexisted = true  // applyInit skips config.yaml write
+    case ActionOverwrite:
+        // fall through: wizard continues normally
+    }
 }
 ```
-
-`--auto` mode:
-- Config valid + auto -> `ActionContinue` (no prompt, no overwrite)
-- Config invalid + auto -> `ActionOverwrite` (no prompt, regenerate)
 
 ### Prompter interface addition
 
@@ -126,17 +141,23 @@ type ConfigPinentryPrompter interface {
 func RunConfigPinentry(opts ConfigPinentryOptions) (*ConfigPinentryResult, error)
 ```
 
+If `opts.Prompter == nil`, `RunConfigPinentry` constructs a default prompter:
+```go
+accessible := opts.NoTUI || os.Getenv("TERM") == "dumb" || !isTerminal()
+opts.Prompter = NewHuhPrompter(accessible, nil, nil)
+```
+`ConfigPinentryOptions` therefore also carries `NoTUI bool` (mirrors `InitOptions`).
+
 Flow inside `RunConfigPinentry`:
-1. `exec.LookPath("locksmith-pinentry")` - if not found, return error
+1. `os.UserHomeDir()` to resolve `gnupgDir`
+2. `exec.LookPath("locksmith-pinentry")` - if not found, return error:
    `"locksmith-pinentry not found in PATH - run 'make init' first"`
-2. `ReadExistingPinentry(gnupgDir)` to get current value
-3. If `opts.Auto`: `configure = true`; else call `prompter.GPGPinentry(existing)`
-4. If `configure`:
+3. `ReadExistingPinentry(gnupgDir)` to get current value
+4. If `opts.Auto`: `configure = true`; else call `opts.Prompter.GPGPinentry(existing)`
+5. If `configure`:
    - `ApplyGPGPinentry(gnupgDir, pinentryPath)` -> `replaced, err`
    - `exec.Command("gpgconf", "--kill", "gpg-agent").Run()`
-5. Return `&ConfigPinentryResult{Configured: configure, Replaced: replaced}`
-
-`homeDir` resolved via `os.UserHomeDir()` internally.
+6. Return `&ConfigPinentryResult{Configured: configure, Replaced: replaced}`
 
 ### New CLI command
 
@@ -167,6 +188,7 @@ New file `internal/initflow/config_pinentry_test.go`:
 - `TestRunConfigPinentry_Interactive_Accepted` - user accepts -> configured
 - `TestRunConfigPinentry_Interactive_Declined` - user declines -> Configured=false, no file change
 - `TestRunConfigPinentry_ReplacesExisting` - existing pinentry -> Replaced is set
+- `TestRunConfigPinentry_PromptError` - prompter returns error -> RunConfigPinentry propagates it
 
 ---
 
@@ -176,7 +198,7 @@ New file `internal/initflow/config_pinentry_test.go`:
 |------|--------|
 | `internal/initflow/flow.go` | Add `ExistingConfigAction`, `ExistingConfig` to `Prompter`; check in `RunInit`; skip write in `applyInit` when `ConfigPreexisted`; add `ConfigPreexisted` to `InitResult` |
 | `internal/initflow/flow_test.go` | Add `existingConfigAction/Err` to `mockPrompter`; 5 new tests |
-| `internal/initflow/config_pinentry.go` | New file: `ConfigPinentryOptions`, `ConfigPinentryResult`, `ConfigPinentryPrompter`, `RunConfigPinentry` |
+| `internal/initflow/config_pinentry.go` | New file: `ConfigPinentryOptions` (incl. `NoTUI bool`), `ConfigPinentryResult`, `ConfigPinentryPrompter`, `RunConfigPinentry` |
 | `internal/initflow/config_pinentry_test.go` | New file: 5 tests |
 | `internal/cli/config_cmd.go` | Add `pinentry` subcommand under `config` |
 | `docs/configuration.md` | Add `locksmith config pinentry` reference; update `locksmith init` re-run behaviour section |
