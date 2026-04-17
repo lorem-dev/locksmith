@@ -20,6 +20,7 @@ export PATH := $(GOBIN):$(PATH)
 # First-time setup: install tools, download dependencies, and generate protobuf code.
 # Run this once after cloning the repository.
 init: install-tools
+	go install ./cmd/locksmith-pinentry
 	go work sync
 	mkdir -p gen/proto
 	$(GOBIN)/buf generate
@@ -28,6 +29,7 @@ init: install-tools
 
 build:
 	go build -o bin/locksmith ./cmd/locksmith
+	go build -o bin/locksmith-pinentry ./cmd/locksmith-pinentry
 
 build-plugins:
 	go run ./.scripts/build-plugins

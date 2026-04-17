@@ -1,44 +1,232 @@
-# Configuration Reference
+# Locksmith Configuration Reference
 
-Default config path: `~/.config/locksmith/config.yaml`
+## Configuration file
+
+Default location: `~/.config/locksmith/config.yaml`
+
+Override with `--config <path>` or the `LOCKSMITH_CONFIG` environment variable.
+
+## Top-level structure
 
 ```yaml
 defaults:
-  session_ttl: 3h                            # default session duration
+  session_ttl: 3h           # default session TTL (e.g. 1h, 30m)
   socket_path: ~/.config/locksmith/locksmith.sock
 
 logging:
-  level: info                                # debug | info | warn | error
-  format: text                               # text | json
+  level: info               # debug | info | warn | error
+  format: text              # text | json
 
 vaults:
-  keychain:
-    type: keychain                           # macOS Keychain
-  my-gopass:
-    type: gopass
-    store: personal                          # optional gopass store name
+  <name>:
+    type: <plugin-type>
+    # ... plugin-specific fields
 
 keys:
-  github-token:
-    vault: keychain
-    path: "github-api-token"                 # account name in Keychain
-  anthropic-key:
-    vault: my-gopass
-    path: "dev/anthropic"                    # path in gopass store
+  <alias>:
+    vault: <vault-name>
+    path: <secret-path>
 ```
 
-## Vault Types
-
-| type | Description |
-|------|-------------|
-| `keychain` | macOS Keychain (CGo, Touch ID) |
-| `gopass` | gopass password manager (shells out to `gopass` CLI) |
-| `1password` | 1Password (shells out to `op` CLI) - future |
-| `gnome-keyring` | GNOME Keyring (D-Bus) - future |
-
-## Direct Access (Without Alias)
+## Direct access (without alias)
 
 ```bash
 locksmith get --vault keychain --path my-account
 locksmith get --vault my-gopass --path dev/key
 ```
+
+---
+
+## Vault plugins
+
+### keychain (macOS only)
+
+Retrieves secrets from the macOS Keychain using the Security framework.
+Authorization (Touch ID or password) is triggered by the OS on each access.
+
+**Configuration:**
+
+```yaml
+vaults:
+  keychain:
+    type: keychain
+    service: com.example.myapp  # optional: default Keychain service name
+```
+
+**Key path format:**
+
+```yaml
+keys:
+  # Plain account - uses vault-level service (or "locksmith" if unset)
+  notion-token:
+    vault: keychain
+    path: notion
+
+  # service/account - overrides vault-level service for this key only
+  github-token:
+    vault: keychain
+    path: github/mytoken
+
+  # No service configured - falls back to "locksmith" for backward compatibility
+  legacy-key:
+    vault: keychain
+    path: my-old-account
+```
+
+**Service resolution order:** path prefix `service/account` > vault `service:` > `"locksmith"` (backward-compatible default).
+
+**Full example:**
+
+```yaml
+vaults:
+  work:
+    type: keychain
+    service: com.acme.work    # default service for all keys in this vault
+
+keys:
+  slack:
+    vault: work
+    path: slack               # service="com.acme.work", account="slack"
+  github:
+    vault: work
+    path: github/token        # service="github", account="token" (overrides vault-level)
+  legacy:
+    vault: work
+    path: legacy-tool         # service="locksmith" if vault has no service: set
+```
+
+**Notes:**
+- Only available on macOS (darwin/amd64 and darwin/arm64).
+- Passwords are stored and retrieved using `SecItemCopyMatching` via CGo.
+- Error messages come directly from `SecCopyErrorMessageString` for readability.
+- A path with more than one `/` is rejected at startup (e.g. `a/b/c` is invalid;
+  use `a/b` for service=`a`, account=`b`).
+
+---
+
+### gopass
+
+Retrieves secrets from a [gopass](https://github.com/gopasspw/gopass) password store.
+
+**Configuration:**
+
+```yaml
+vaults:
+  secrets:
+    type: gopass
+    store: work              # optional: gopass mount name (default: root store)
+
+keys:
+  notion-token:
+    vault: secrets
+    path: personal/notion    # gopass path within the store
+```
+
+**Full example:**
+
+```yaml
+vaults:
+  personal:
+    type: gopass             # uses root store
+  work:
+    type: gopass
+    store: work              # uses "work" gopass mount
+
+keys:
+  github-token:
+    vault: work
+    path: dev/github-api
+  anthropic-key:
+    vault: personal
+    path: ai/anthropic
+```
+
+**Notes:**
+- Requires `gopass` installed and configured (`gopass ls` must succeed).
+- `store:` is passed as the gopass mount name; omit to use the default root store.
+- GPG passphrase prompts in background daemons require `locksmith-pinentry` -
+  see "GPG passphrase and background daemons" below.
+
+---
+
+## Vault types
+
+| type | Description |
+|------|-------------|
+| `keychain` | macOS Keychain (CGo, Touch ID) |
+| `gopass` | gopass password manager (shells out to `gopass` CLI) |
+
+---
+
+## GPG passphrase and background daemons
+
+When the locksmith daemon runs as a background process (launched from `.zshrc`,
+`.bashrc`, or a launchd plist), it has no TTY. This causes `pinentry-curses` to
+fail with `Inappropriate ioctl for device` when gopass needs a GPG passphrase.
+
+**Solution:** `locksmith-pinentry` is a custom pinentry binary that detects the
+available UI and uses the best option automatically:
+
+| Environment | Method |
+|---|---|
+| TTY available | reads directly from `/dev/tty` |
+| macOS, no TTY | native `osascript` password dialog |
+| Linux, display available | `zenity --password` or `kdialog --password` |
+| No UI available | returns cancellation; locksmith returns `Unauthenticated` error |
+
+**Setup:**
+
+Run `make init` once after cloning to build and install `locksmith-pinentry`.
+Then run `locksmith init` - if you select the gopass vault, you will be asked:
+
+```
+Configure locksmith-pinentry for GPG passphrase prompts?
+Required for gopass vault when locksmith runs as a background daemon (no TTY).
+[y/n]
+```
+
+If you choose **yes** and already have a `pinentry-program` line in
+`~/.gnupg/gpg-agent.conf`, the existing line is **commented out** (not
+deleted) and the new path is written below it. For example, if your existing
+config had:
+
+```
+pinentry-program /opt/homebrew/bin/pinentry-mac
+```
+
+After `locksmith init` it becomes:
+
+```
+#pinentry-program /opt/homebrew/bin/pinentry-mac
+pinentry-program /Users/you/go/bin/locksmith-pinentry
+```
+
+You can restore the original setting at any time by editing
+`~/.gnupg/gpg-agent.conf` directly.
+
+In `--auto` mode this step is skipped and `~/.gnupg/gpg-agent.conf` is never
+modified.
+
+**Limitations:**
+
+- **Headless sandbox without display** (CI, agent sandbox without `$DISPLAY`):
+  passphrase input is impossible. Options:
+  - Pre-unlock the GPG key before starting the daemon (use a passphrase-free key,
+    or run `gpg --card-status` to cache the passphrase via an existing GUI session).
+  - Use a passphrase-free GPG setup for the secrets store.
+  - Run the daemon in a user session with display access.
+
+- **macOS without WindowServer access** (pure SSH, `sudo` context, headless launchd):
+  `osascript` will fail silently. `locksmith-pinentry` requires the user to be
+  logged into a GUI session or use `-X` forwarding for the SSH session.
+
+- **Linux without display and without TTY**: both `zenity`/`kdialog` and TTY
+  mode will be unavailable. Passphrase input fails cleanly with an
+  `Unauthenticated` error and a hint pointing to this section.
+
+- **gpg-agent passphrase caching**: if gpg-agent has already cached the
+  passphrase (within its TTL), `locksmith-pinentry` is never invoked. This is
+  the expected production path after the first unlock.
+
+- **locksmith-pinentry must be on PATH**: installed via `make init`. If missing,
+  gopass falls back to the system-configured pinentry (original behavior).
