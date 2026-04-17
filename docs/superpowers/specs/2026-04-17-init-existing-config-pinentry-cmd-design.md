@@ -179,5 +179,35 @@ New file `internal/initflow/config_pinentry_test.go`:
 | `internal/initflow/config_pinentry.go` | New file: `ConfigPinentryOptions`, `ConfigPinentryResult`, `ConfigPinentryPrompter`, `RunConfigPinentry` |
 | `internal/initflow/config_pinentry_test.go` | New file: 5 tests |
 | `internal/cli/config_cmd.go` | Add `pinentry` subcommand under `config` |
+| `docs/configuration.md` | Add `locksmith config pinentry` reference; update `locksmith init` re-run behaviour section |
 
 No changes to `internal/initflow/gpg.go`, `internal/config/`, or any plugin code.
+
+---
+
+## Documentation updates (`docs/configuration.md`)
+
+### `locksmith init` section (update)
+
+Add a note that re-running `locksmith init` on a machine with an existing config will
+detect the file, validate it, and present three options: continue with the existing
+config, overwrite it with a fresh wizard run, or exit without changes.
+
+### New section: `locksmith config pinentry`
+
+```
+## locksmith config pinentry
+
+Configures locksmith-pinentry as the pinentry program for gpg-agent, independently
+of locksmith init. Use this if you skipped the step during init, or ran init with
+--auto.
+
+    locksmith config pinentry [--auto]
+
+Flags:
+  --auto   Configure without prompting (equivalent to answering "yes")
+
+Requires locksmith-pinentry to be installed (run make init once after cloning).
+The command comments out any existing pinentry-program line in
+~/.gnupg/gpg-agent.conf, writes the new path, and restarts gpg-agent.
+```
