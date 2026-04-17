@@ -37,6 +37,9 @@ type Vault struct {
 	Type    string `yaml:"type"`
 	Store   string `yaml:"store,omitempty"`
 	Account string `yaml:"account,omitempty"`
+	// Service is the default Keychain service name for keychain vaults.
+	// Individual keys can override this via the "service/account" path shorthand.
+	Service string `yaml:"service,omitempty"`
 }
 
 // Key is a named alias pointing to a secret in a specific vault.
@@ -51,16 +54,19 @@ func Load(path string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading config %s: %w", path, err)
 	}
+	return LoadFromBytes(data)
+}
 
+// LoadFromBytes parses and validates a config from raw YAML bytes.
+// Useful for testing without writing files to disk.
+func LoadFromBytes(data []byte) (*Config, error) {
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parsing config: %w", err)
 	}
-
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-
 	return &cfg, nil
 }
 
@@ -80,11 +86,16 @@ func (c *Config) Validate() error {
 	}
 
 	for name, key := range c.Keys {
-		if _, ok := c.Vaults[key.Vault]; !ok {
+		vaultDef, ok := c.Vaults[key.Vault]
+		if !ok {
 			return fmt.Errorf("key %q references unknown vault %q", name, key.Vault)
 		}
 		if key.Path == "" {
 			return fmt.Errorf("key %q has empty path", name)
+		}
+		// Keychain paths support "service/account" shorthand but not deeper nesting.
+		if vaultDef.Type == "keychain" && strings.Count(key.Path, "/") > 1 {
+			return fmt.Errorf("key %q: keychain path %q has too many segments (use \"service/account\" or \"account\")", name, key.Path)
 		}
 	}
 

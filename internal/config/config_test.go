@@ -3,6 +3,7 @@ package config_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/lorem-dev/locksmith/internal/config"
@@ -147,5 +148,63 @@ func TestValidate_EmptyKeyPath(t *testing.T) {
 	}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() expected error for key with empty path")
+	}
+}
+
+func TestVault_ServiceField(t *testing.T) {
+	cfg, err := config.LoadFromBytes([]byte(`
+defaults:
+  session_ttl: 1h
+vaults:
+  work:
+    type: keychain
+    service: com.example.work
+keys:
+  mykey:
+    vault: work
+    path: myaccount
+`))
+	if err != nil {
+		t.Fatalf("LoadFromBytes() error: %v", err)
+	}
+	if cfg.Vaults["work"].Service != "com.example.work" {
+		t.Errorf("Service = %q, want %q", cfg.Vaults["work"].Service, "com.example.work")
+	}
+}
+
+func TestValidate_KeychainPathMultipleSlashes(t *testing.T) {
+	_, err := config.LoadFromBytes([]byte(`
+defaults:
+  session_ttl: 1h
+vaults:
+  k:
+    type: keychain
+keys:
+  bad:
+    vault: k
+    path: a/b/c
+`))
+	if err == nil {
+		t.Fatal("expected error for path with multiple slashes")
+	}
+	if !strings.Contains(err.Error(), "a/b/c") {
+		t.Errorf("error should mention path, got: %v", err)
+	}
+}
+
+func TestValidate_KeychainPathSingleSlash_Valid(t *testing.T) {
+	_, err := config.LoadFromBytes([]byte(`
+defaults:
+  session_ttl: 1h
+vaults:
+  k:
+    type: keychain
+keys:
+  ok:
+    vault: k
+    path: github/token
+`))
+	if err != nil {
+		t.Errorf("single-slash path should be valid, got: %v", err)
 	}
 }
