@@ -27,7 +27,11 @@ func newInitCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Printf("\nSetup complete! Config: %s\nRun 'locksmith serve' to start the daemon.\n", result.ConfigPath)
+			msg := "\nSetup complete! Config: %s\n"
+			if !result.ShellHookInstall && !result.ShellHookAlreadyPresent {
+				msg += "Run 'locksmith serve' to start the daemon.\n"
+			}
+			fmt.Printf(msg, result.ConfigPath)
 			return nil
 		},
 	}

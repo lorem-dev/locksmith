@@ -272,3 +272,29 @@ locksmith config pinentry [--auto] [--no-tui]
 The command comments out any existing `pinentry-program` line in
 `~/.gnupg/gpg-agent.conf`, writes the new path, and restarts `gpg-agent`.
 See "GPG passphrase and background daemons" above for full context.
+
+---
+
+## Shell autostart
+
+To start the locksmith daemon automatically when you open a terminal, add a
+shell hook. The `locksmith init` wizard offers to do this for you.
+
+To add it manually, append the following to your shell config file:
+
+**bash / zsh / ash** (`~/.bashrc`, `~/.zshrc`, or `~/.profile`):
+
+```sh
+# locksmith daemon autostart
+if command -v locksmith >/dev/null 2>&1; then locksmith _autostart 2>/dev/null; fi
+```
+
+**fish** (`~/.config/fish/config.fish`):
+
+```fish
+# locksmith daemon autostart
+if command -v locksmith >/dev/null 2>&1; locksmith _autostart 2>/dev/null; end
+```
+
+The hook is idempotent: if the daemon is already running, `_autostart` exits
+immediately without spawning a second process.
