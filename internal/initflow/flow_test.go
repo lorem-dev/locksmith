@@ -469,3 +469,33 @@ func TestRunInit_ExistingConfig_Invalid_AutoOverwrites(t *testing.T) {
 		t.Errorf("overwritten config is not valid: %v", loadErr)
 	}
 }
+
+func TestRunInit_Interactive_GPGPinentryApplied(t *testing.T) {
+	// Cover the applyInit GPG block (lines 243-252) by putting a fake
+	// locksmith-pinentry binary in PATH so exec.LookPath succeeds.
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	// Create a fake locksmith-pinentry script.
+	binDir := t.TempDir()
+	fakePinentry := filepath.Join(binDir, "locksmith-pinentry")
+	if err := os.WriteFile(fakePinentry, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("creating fake pinentry: %v", err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	mp := &mockPrompter{
+		configDir:      filepath.Join(home, ".config", "locksmith"),
+		vaults:         []string{"gopass"},
+		summaryConfirm: true,
+		gpgPinentry:    true,
+	}
+
+	result, err := initflow.RunInit(initflow.InitOptions{Prompter: mp})
+	if err != nil {
+		t.Fatalf("RunInit() error: %v", err)
+	}
+	if !result.GPGPinentryConfigured {
+		t.Error("expected GPGPinentryConfigured = true")
+	}
+}
