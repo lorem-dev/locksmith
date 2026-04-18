@@ -4,6 +4,7 @@ go 1.25.9
 
 require (
 	github.com/charmbracelet/huh v1.0.0
+	github.com/fatih/color v1.13.0
 	github.com/hashicorp/go-plugin v1.7.0
 	github.com/lorem-dev/locksmith/sdk v0.0.0-00010101000000-000000000000
 	github.com/mattn/go-isatty v0.0.20
@@ -31,7 +32,6 @@ require (
 	github.com/charmbracelet/x/term v0.2.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
-	github.com/fatih/color v1.13.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/hashicorp/go-hclog v1.6.3 // indirect
 	github.com/hashicorp/yamux v0.1.2 // indirect
