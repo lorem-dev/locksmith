@@ -15,11 +15,13 @@ Read `LICENSE` and check for a `## Third-Party Notices` heading.
   `go.mod` in the workspace.
 - **Present** - incremental mode: run
   `git diff HEAD~1 -- $(find . -name go.mod -not -path '*/.worktrees/*' -not -path '*/vendor/*')`
-  to find added direct dependencies only. If `HEAD~1` does not exist (initial
-  commit), fall back to full-scan mode.
+  to find added AND removed direct dependencies. If `HEAD~1` does not exist
+  (initial commit), fall back to full-scan mode.
 
-In incremental mode, if the diff shows no new direct dependencies, report
-"No new dependencies found" and stop.
+In incremental mode:
+- Lines prefixed with `+` that are direct deps → **added** (need to be verified and added to LICENSE).
+- Lines prefixed with `-` that are direct deps → **removed** (their entries must be deleted from the `## Third-Party Notices` section in LICENSE).
+- If the diff shows no added and no removed direct dependencies, report "No dependency changes found" and stop.
 
 ### Step 2 - Collect direct dependencies
 
@@ -52,6 +54,8 @@ For each dependency, determine:
    If web access is unavailable, note the license as "unknown" and proceed to
    the user-confirmation step - the user can verify manually via the links
    shown.
+   The field may contain a compound SPDX expression such as `MIT AND Apache-2.0`
+   or `BSD-3-Clause OR MIT` - record the full expression as-is.
 2. **License URL** - direct link to the `LICENSE` file in the upstream
    repository at the tagged version. For `github.com/<org>/<repo>` modules
    this is `https://github.com/<org>/<repo>/blob/<version>/LICENSE`.
@@ -145,8 +149,13 @@ If a NOTICE file was found in Step 3, add a line:
 - NOTICE: <URL to NOTICE file at tagged version>
 ```
 
-In incremental mode, insert new entries in alphabetical order within the
-existing list. Do not duplicate entries that are already present.
+In incremental mode:
+- Insert new entries in alphabetical order. Do not duplicate entries that are
+  already present.
+- For each **removed** dependency identified in Step 1, find the corresponding
+  `### <module-path>` entry in the `## Third-Party Notices` section and delete
+  it along with all its bullet lines, up to (but not including) the next `###`
+  heading or end of file.
 
 ### Step 6 - Update `CONTRIBUTING.md`
 
