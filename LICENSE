@@ -199,3 +199,71 @@
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+
+---
+
+## Third-Party Notices
+
+This project uses the following third-party libraries. Each library
+retains its original copyright and is distributed under its respective
+license.
+
+### github.com/charmbracelet/huh
+- Version: v1.0.0
+- License: MIT
+- Source: https://github.com/charmbracelet/huh
+- License text: https://github.com/charmbracelet/huh/blob/v1.0.0/LICENSE
+
+### github.com/fatih/color
+- Version: v1.13.0
+- License: MIT
+- Source: https://github.com/fatih/color
+- License text: https://github.com/fatih/color/blob/v1.13.0/LICENSE
+
+### github.com/hashicorp/go-plugin
+- Version: v1.7.0
+- License: MPL-2.0
+- Source: https://github.com/hashicorp/go-plugin
+- License text: https://github.com/hashicorp/go-plugin/blob/v1.7.0/LICENSE
+
+### github.com/mattn/go-isatty
+- Version: v0.0.20
+- License: MIT
+- Source: https://github.com/mattn/go-isatty
+- License text: https://github.com/mattn/go-isatty/blob/v0.0.20/LICENSE
+
+### github.com/rs/zerolog
+- Version: v1.35.0
+- License: MIT
+- Source: https://github.com/rs/zerolog
+- License text: https://github.com/rs/zerolog/blob/v1.35.0/LICENSE
+
+### github.com/spf13/cobra
+- Version: v1.10.2
+- License: Apache-2.0
+- Source: https://github.com/spf13/cobra
+- License text: https://github.com/spf13/cobra/blob/v1.10.2/LICENSE.txt
+
+### golang.org/x/term
+- Version: v0.42.0
+- License: BSD-3-Clause
+- Source: https://github.com/golang/term
+- License text: https://github.com/golang/term/blob/v0.42.0/LICENSE
+
+### google.golang.org/grpc
+- Version: v1.80.0
+- License: Apache-2.0
+- Source: https://github.com/grpc/grpc-go
+- License text: https://github.com/grpc/grpc-go/blob/v1.80.0/LICENSE
+
+### google.golang.org/protobuf
+- Version: v1.36.11
+- License: BSD-3-Clause
+- Source: https://github.com/protocolbuffers/protobuf-go
+- License text: https://github.com/protocolbuffers/protobuf-go/blob/v1.36.11/LICENSE
+
+### gopkg.in/yaml.v3
+- Version: v3.0.1
+- License: MIT AND Apache-2.0
+- Source: https://github.com/go-yaml/yaml
+- License text: https://github.com/go-yaml/yaml/blob/v3.0.1/LICENSE

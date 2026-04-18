@@ -1,5 +1,28 @@
 # Contributing to Locksmith
 
+## License Compliance
+
+All direct third-party dependencies must carry a license compatible with
+Apache 2.0 before being merged.
+
+**When adding a new library:**
+1. Run the `check-licenses` skill after editing `go.mod`.
+2. Review the license table the skill displays and confirm each entry.
+3. The skill updates `LICENSE` automatically.
+
+**Licenses that are NOT acceptable** (prohibit commercial use or impose
+copyleft incompatible with Apache 2.0):
+- GPL-2.0 / GPL-3.0 / AGPL-3.0
+- LGPL-2.1 (Go links statically, so LGPL's dynamic-linking exception does
+  not apply)
+- SSPL-1.0 / BSL-1.1
+- Any Creative Commons -NC- variant
+- Any license containing a "Commons Clause" addendum
+
+If the library you need carries one of these licenses, look for a
+permissive alternative or raise the issue with the maintainers before
+adding it.
+
 ## GPG Signing
 
 Signing commits is strongly recommended. It lets maintainers verify that commits genuinely
