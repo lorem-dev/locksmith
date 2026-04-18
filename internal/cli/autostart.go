@@ -1,0 +1,49 @@
+package cli
+
+import (
+	"net"
+	"os"
+	"os/exec"
+	"time"
+
+	"github.com/spf13/cobra"
+
+	"github.com/lorem-dev/locksmith/internal/config"
+)
+
+// newAutostartCmd returns the hidden locksmith _autostart command.
+// It is called from shell rc files: it starts the daemon only if it is not
+// already running, and always exits 0 so shell sessions never fail because
+// of autostart errors.
+func newAutostartCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:    "_autostart",
+		Short:  "Start the daemon if not already running (used by shell hooks)",
+		Hidden: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			socketPath := config.ExpandPath("~/.config/locksmith/locksmith.sock")
+			if env := os.Getenv("LOCKSMITH_SOCKET"); env != "" {
+				socketPath = env
+			}
+
+			// Probe the socket. If the dial succeeds the daemon is alive.
+			conn, err := net.DialTimeout("unix", socketPath, 200*time.Millisecond)
+			if err == nil {
+				conn.Close()
+				return nil // daemon already running
+			}
+
+			// Daemon not running: spawn it in the background.
+			binary, err := os.Executable()
+			if err != nil {
+				return nil // silently ignore
+			}
+			c := exec.Command(binary, "serve") //nolint:gosec // G204: binary is os.Executable(), not user input
+			// Detach stdout/stderr/stdin: the daemon runs silently in the background.
+			_ = c.Start() // fire-and-forget; errors are intentionally swallowed
+			// Give the daemon a moment to bind its socket before the shell continues.
+			time.Sleep(50 * time.Millisecond)
+			return nil
+		},
+	}
+}

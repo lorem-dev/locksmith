@@ -28,6 +28,7 @@ func NewRootCmd() *cobra.Command {
 		newVaultCmd(),
 		newConfigCmd(&cfgFile),
 		newInitCmd(),
+		newAutostartCmd(),
 	)
 	return root
 }
