@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 
 	locksmithv1 "github.com/lorem-dev/locksmith/gen/proto/locksmith/v1"
@@ -40,7 +41,7 @@ func newGetCmd() *cobra.Command {
 				}
 				sessionID = startResp.SessionId
 				fmt.Fprintf(os.Stderr, "locksmith: session started (expires %s)\n  export LOCKSMITH_SESSION=%s\n",
-					startResp.ExpiresAt, ColorCyan(sdk.HideSession(sessionID), true),
+					startResp.ExpiresAt, color.New(color.FgCyan, color.Bold).Sprint(sdk.HideSession(sessionID)),
 				)
 			}
 
