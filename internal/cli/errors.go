@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/fatih/color"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -36,11 +37,10 @@ func FormatErrorParts(err error) (msg, hint string) {
 // PrintError prints a formatted error (and optional hint) to stderr.
 // Uses ANSI color when stderr is a TTY and NO_COLOR is not set.
 func PrintError(err error) {
-	color := IsColorEnabled(false)
 	msg, hint := FormatErrorParts(err)
 
-	fmt.Fprintf(os.Stderr, "%s %s\n", ColorRed("Error:", color), msg)
+	fmt.Fprintf(os.Stderr, "%s %s\n", color.New(color.FgRed, color.Bold).Sprint("Error:"), msg)
 	if hint != "" {
-		fmt.Fprintf(os.Stderr, "%s %s\n", ColorYellow("Hint:", color), ColorGray(hint, color))
+		fmt.Fprintf(os.Stderr, "%s %s\n", color.New(color.FgYellow, color.Bold).Sprint("Hint:"), color.New(color.FgHiBlack).Sprint(hint))
 	}
 }
