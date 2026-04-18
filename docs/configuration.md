@@ -158,6 +158,21 @@ keys:
 
 ---
 
+## Re-running locksmith init
+
+Running `locksmith init` on a machine that already has a config file at the chosen
+path will detect the file and validate it. You will be offered three options:
+
+- **Continue with existing config** - skip rewriting the config file; proceed with
+  agent and sandbox setup only.
+- **Overwrite with new config** - run the full wizard and replace the file.
+- **Exit setup** - cancel without any changes.
+
+In `--auto` mode the choice is made automatically: a valid config is kept as-is;
+an invalid config is silently replaced.
+
+---
+
 ## GPG passphrase and background daemons
 
 When the locksmith daemon runs as a background process (launched from `.zshrc`,
@@ -230,3 +245,30 @@ modified.
 
 - **locksmith-pinentry must be on PATH**: installed via `make init`. If missing,
   gopass falls back to the system-configured pinentry (original behavior).
+
+---
+
+## locksmith config pinentry
+
+Configures `locksmith-pinentry` as the pinentry program for `gpg-agent`, independently
+of `locksmith init`. Use this if you:
+
+- Ran `locksmith init --auto` (which skips the GPG pinentry step), or
+- Want to reconfigure after changing your GPG setup.
+
+```bash
+locksmith config pinentry [--auto] [--no-tui]
+```
+
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--auto` | Configure without prompting (equivalent to answering "yes") |
+| `--no-tui` | Use plain-text prompts instead of the TUI |
+
+**Requires** `locksmith-pinentry` to be installed - run `make init` once after cloning.
+
+The command comments out any existing `pinentry-program` line in
+`~/.gnupg/gpg-agent.conf`, writes the new path, and restarts `gpg-agent`.
+See "GPG passphrase and background daemons" above for full context.

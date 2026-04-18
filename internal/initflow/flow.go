@@ -13,10 +13,25 @@ import (
 	"github.com/lorem-dev/locksmith/internal/config"
 )
 
+// ExistingConfigAction is the user's choice when a config file already exists.
+type ExistingConfigAction int
+
+const (
+	// ActionContinue keeps the existing file; applyInit skips writing config.yaml.
+	ActionContinue ExistingConfigAction = iota
+	// ActionOverwrite proceeds through the wizard and replaces the file.
+	ActionOverwrite
+	// ActionExit cancels init without changes.
+	ActionExit
+)
+
 // Prompter is the interface for all user-facing interactive prompts.
 // The default implementation uses charmbracelet/huh TUI forms; tests can inject
 // a mock via InitOptions.Prompter to exercise RunInit without a real TTY.
 type Prompter interface {
+	// ExistingConfig is called when a config file already exists at path.
+	// validErr is nil if the file passes validation, or the validation error otherwise.
+	ExistingConfig(path string, validErr error) (ExistingConfigAction, error)
 	ConfigLocation(defaultDir string) (string, error)
 	VaultSelection(vaults []DetectedVault) ([]string, error)
 	AgentSelection(agents []DetectedAgent) ([]DetectedAgent, error)
@@ -40,11 +55,12 @@ type InitOptions struct {
 
 // InitResult holds the resolved configuration from the init wizard.
 type InitResult struct {
-	ConfigPath           string
-	SelectedVaults       []string
-	SelectedAgents       []DetectedAgent
-	SandboxEnabled       bool
+	ConfigPath            string
+	SelectedVaults        []string
+	SelectedAgents        []DetectedAgent
+	SandboxEnabled        bool
 	GPGPinentryConfigured bool // true if the user opted to configure locksmith-pinentry
+	ConfigPreexisted      bool // true when an existing config was found and kept
 }
 
 // RunInit runs the interactive setup wizard. In --auto mode all prompts are
@@ -79,6 +95,32 @@ func RunInit(opts InitOptions) (*InitResult, error) {
 		}
 	}
 	result.ConfigPath = filepath.Join(configDir, "config.yaml")
+
+	// --- Existing config check ---
+	if _, statErr := os.Stat(result.ConfigPath); statErr == nil {
+		_, validErr := config.Load(result.ConfigPath)
+		var action ExistingConfigAction
+		if opts.Auto {
+			if validErr == nil {
+				action = ActionContinue
+			} else {
+				action = ActionOverwrite
+			}
+		} else {
+			action, err = prompter.ExistingConfig(result.ConfigPath, validErr)
+			if err != nil {
+				return nil, err
+			}
+		}
+		switch action {
+		case ActionExit:
+			return nil, fmt.Errorf("cancelled by user")
+		case ActionContinue:
+			result.ConfigPreexisted = true
+		case ActionOverwrite:
+			// fall through: wizard continues normally
+		}
+	}
 
 	// --- Vault selection ---
 	detectedVaults := DetectVaults()
@@ -171,23 +213,27 @@ func applyInit(result *InitResult, homeDir string) error {
 		return fmt.Errorf("creating config dir: %w", err)
 	}
 
-	cfg := config.Config{
-		Defaults: config.Defaults{SessionTTL: "3h", SocketPath: "~/.config/locksmith/locksmith.sock"},
-		Logging:  config.Logging{Level: "info", Format: "text"},
-		Vaults:   make(map[string]config.Vault),
-		Keys:     make(map[string]config.Key),
+	if result.ConfigPreexisted {
+		fmt.Printf("  config kept at %s\n", result.ConfigPath)
+	} else {
+		cfg := config.Config{
+			Defaults: config.Defaults{SessionTTL: "3h", SocketPath: "~/.config/locksmith/locksmith.sock"},
+			Logging:  config.Logging{Level: "info", Format: "text"},
+			Vaults:   make(map[string]config.Vault),
+			Keys:     make(map[string]config.Key),
+		}
+		for _, vt := range result.SelectedVaults {
+			cfg.Vaults[vt] = config.Vault{Type: vt}
+		}
+		data, err := yaml.Marshal(&cfg)
+		if err != nil {
+			return fmt.Errorf("marshaling config: %w", err)
+		}
+		if err := os.WriteFile(result.ConfigPath, data, 0o644); err != nil {
+			return fmt.Errorf("writing config: %w", err)
+		}
+		fmt.Printf("  config written to %s\n", result.ConfigPath)
 	}
-	for _, vt := range result.SelectedVaults {
-		cfg.Vaults[vt] = config.Vault{Type: vt}
-	}
-	data, err := yaml.Marshal(&cfg)
-	if err != nil {
-		return fmt.Errorf("marshaling config: %w", err)
-	}
-	if err := os.WriteFile(result.ConfigPath, data, 0o644); err != nil {
-		return fmt.Errorf("writing config: %w", err)
-	}
-	fmt.Printf("  config written to %s\n", result.ConfigPath)
 
 	// Apply GPG pinentry configuration if the user opted in.
 	if result.GPGPinentryConfigured {
@@ -395,6 +441,35 @@ func (p *huhPrompter) Summary(result *InitResult) (bool, error) {
 		return false, err
 	}
 	return confirmed, nil
+}
+
+// ExistingConfig prompts the user when a config file already exists at path.
+// validErr is nil if the config passed validation, or the error otherwise.
+func (p *huhPrompter) ExistingConfig(path string, validErr error) (ExistingConfigAction, error) {
+	title := fmt.Sprintf("Config already exists at %s", path)
+	var desc string
+	continueLabel := "Continue with existing config"
+	if validErr == nil {
+		desc = "The existing config is valid."
+	} else {
+		desc = fmt.Sprintf("The existing config is invalid: %v", validErr)
+		continueLabel = "Continue with invalid config (not recommended)"
+	}
+	var selected ExistingConfigAction
+	form := p.formWith(huh.NewForm(huh.NewGroup(
+		huh.NewSelect[ExistingConfigAction]().
+			Title(title).
+			Description(desc).
+			Options(
+				huh.NewOption(continueLabel, ActionContinue),
+				huh.NewOption("Overwrite with new config", ActionOverwrite),
+				huh.NewOption("Exit setup", ActionExit),
+			).Value(&selected),
+	)))
+	if err := form.Run(); err != nil {
+		return ActionExit, err
+	}
+	return selected, nil
 }
 
 // GPGPinentry prompts whether to configure locksmith-pinentry in gpg-agent.conf.

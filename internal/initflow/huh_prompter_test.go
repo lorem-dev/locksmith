@@ -214,3 +214,132 @@ func TestHuhPrompter_Summary_Cancelled(t *testing.T) {
 		t.Error("Summary() = true, want false")
 	}
 }
+
+func TestHuhPrompter_Summary_WithAgents(t *testing.T) {
+	// Exercises the agentNames loop in Summary.
+	p := newHuhWithInput("y\n")
+	result := &initflow.InitResult{
+		ConfigPath:     "/tmp/test/config.yaml",
+		SelectedVaults: []string{"gopass"},
+		SelectedAgents: []initflow.DetectedAgent{
+			{Name: "Claude Code", Detected: true},
+		},
+		SandboxEnabled: true,
+	}
+	ok, err := p.Summary(result)
+	if err != nil {
+		t.Fatalf("Summary() error: %v", err)
+	}
+	if !ok {
+		t.Error("Summary() = false, want true")
+	}
+}
+
+func TestHuhPrompter_VaultSelection_Unavailable(t *testing.T) {
+	// Exercises the "not available on this platform" label branch.
+	p := newHuhWithInput("0\n")
+	vaults := []initflow.DetectedVault{
+		{Type: "keychain", Available: false, Detected: false},
+	}
+	got, err := p.VaultSelection(vaults)
+	if err != nil {
+		t.Fatalf("VaultSelection() error: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("VaultSelection() = %v, want []", got)
+	}
+}
+
+func TestHuhPrompter_GPGPinentry_Yes(t *testing.T) {
+	p := newHuhWithInput("y\n")
+	got, err := p.GPGPinentry("")
+	if err != nil {
+		t.Fatalf("GPGPinentry() error: %v", err)
+	}
+	if !got {
+		t.Error("GPGPinentry() = false, want true")
+	}
+}
+
+func TestHuhPrompter_GPGPinentry_No(t *testing.T) {
+	p := newHuhWithInput("n\n")
+	got, err := p.GPGPinentry("")
+	if err != nil {
+		t.Fatalf("GPGPinentry() error: %v", err)
+	}
+	if got {
+		t.Error("GPGPinentry() = true, want false")
+	}
+}
+
+func TestHuhPrompter_GPGPinentry_WithExisting(t *testing.T) {
+	// When an existing pinentry is set, the description changes but behaviour is the same.
+	p := newHuhWithInput("y\n")
+	got, err := p.GPGPinentry("/usr/bin/pinentry-mac")
+	if err != nil {
+		t.Fatalf("GPGPinentry() error: %v", err)
+	}
+	if !got {
+		t.Error("GPGPinentry() = false, want true")
+	}
+}
+
+func TestHuhPrompter_ExistingConfig_ValidContinue(t *testing.T) {
+	// Option 1 = ActionContinue; valid config so description says "The existing config is valid."
+	p := newHuhWithInput("1\n")
+	got, err := p.ExistingConfig("/home/user/.config/locksmith/config.yaml", nil)
+	if err != nil {
+		t.Fatalf("ExistingConfig() error: %v", err)
+	}
+	if got != initflow.ActionContinue {
+		t.Errorf("ExistingConfig() = %v, want ActionContinue", got)
+	}
+}
+
+func TestHuhPrompter_ExistingConfig_ValidOverwrite(t *testing.T) {
+	// Option 2 = ActionOverwrite.
+	p := newHuhWithInput("2\n")
+	got, err := p.ExistingConfig("/home/user/.config/locksmith/config.yaml", nil)
+	if err != nil {
+		t.Fatalf("ExistingConfig() error: %v", err)
+	}
+	if got != initflow.ActionOverwrite {
+		t.Errorf("ExistingConfig() = %v, want ActionOverwrite", got)
+	}
+}
+
+func TestHuhPrompter_ExistingConfig_ValidExit(t *testing.T) {
+	// Option 3 = ActionExit.
+	p := newHuhWithInput("3\n")
+	got, err := p.ExistingConfig("/home/user/.config/locksmith/config.yaml", nil)
+	if err != nil {
+		t.Fatalf("ExistingConfig() error: %v", err)
+	}
+	if got != initflow.ActionExit {
+		t.Errorf("ExistingConfig() = %v, want ActionExit", got)
+	}
+}
+
+func TestHuhPrompter_ExistingConfig_InvalidContinue(t *testing.T) {
+	// Invalid config - option 1 = "Continue with invalid config (not recommended)".
+	p := newHuhWithInput("1\n")
+	got, err := p.ExistingConfig("/home/user/.config/locksmith/config.yaml", fmt.Errorf("missing required field"))
+	if err != nil {
+		t.Fatalf("ExistingConfig() error: %v", err)
+	}
+	if got != initflow.ActionContinue {
+		t.Errorf("ExistingConfig() = %v, want ActionContinue", got)
+	}
+}
+
+func TestHuhPrompter_ExistingConfig_InvalidOverwrite(t *testing.T) {
+	// Invalid config - option 2 = ActionOverwrite.
+	p := newHuhWithInput("2\n")
+	got, err := p.ExistingConfig("/home/user/.config/locksmith/config.yaml", fmt.Errorf("parse error"))
+	if err != nil {
+		t.Fatalf("ExistingConfig() error: %v", err)
+	}
+	if got != initflow.ActionOverwrite {
+		t.Errorf("ExistingConfig() = %v, want ActionOverwrite", got)
+	}
+}
