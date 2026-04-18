@@ -1,5 +1,26 @@
 # Contributing to Locksmith
 
+## GPG Signing
+
+Signing commits is strongly recommended. It lets maintainers verify that commits genuinely
+come from you and have not been tampered with.
+
+```bash
+# Sign a single commit
+git commit -S -m "feat: ..."
+
+# Make signing the default for this repo
+git config commit.gpgsign true
+```
+
+If you already have commits without signatures you can re-sign them before opening a PR:
+
+```bash
+# Find the last signed commit and rebase everything after it
+LAST_SIGNED=$(git log --format="%G? %H" | awk '$1=="G"{print $2; exit}')
+git rebase "$LAST_SIGNED" --exec "git commit --amend --no-edit -S"
+```
+
 ## Commit Messages
 
 Use [Conventional Commits](https://www.conventionalcommits.org/):
