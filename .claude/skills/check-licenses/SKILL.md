@@ -14,7 +14,7 @@ Read `LICENSE` and check for a `## Third-Party Notices` heading.
 - **Absent** - full-scan mode: collect all direct dependencies from every
   `go.mod` in the workspace.
 - **Present** - incremental mode: run
-  `git diff HEAD~1 -- $(git ls-files '**/go.mod' go.mod)`
+  `git diff HEAD~1 -- $(find . -name go.mod -not -path '*/.worktrees/*' -not -path '*/vendor/*')`
   to find added direct dependencies only. If `HEAD~1` does not exist (initial
   commit), fall back to full-scan mode.
 
@@ -23,11 +23,14 @@ In incremental mode, if the diff shows no new direct dependencies, report
 
 ### Step 2 - Collect direct dependencies
 
-Discover all `go.mod` files in the workspace with:
+Discover all `go.mod` files in the workspace by recursively searching all
+subdirectories:
+
 ```bash
-git ls-files '**/go.mod' go.mod
+find . -name go.mod -not -path '*/.worktrees/*' -not -path '*/vendor/*'
 ```
-Parse each one found.
+
+Parse each file found.
 
 A line is a **direct dependency** if:
 - It is inside a `require (...)` block or a single-line `require`
