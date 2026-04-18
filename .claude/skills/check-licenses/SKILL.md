@@ -103,6 +103,10 @@ Commons Clause  (as a modifier on any license)
 Licenses that are always acceptable: MIT, Apache-2.0, BSD-2-Clause,
 BSD-3-Clause, ISC, MPL-2.0, Unlicense, CC0-1.0, BlueOak-1.0.0.
 
+Compound SPDX expressions (e.g. `MIT AND Apache-2.0`) are acceptable if
+every component is in the acceptable list above. Evaluate each component
+individually.
+
 If a license identifier does not appear in either the block-list above or
 the acceptable list, treat it as **unknown or ambiguous** and stop to ask
 the user to verify it manually.
