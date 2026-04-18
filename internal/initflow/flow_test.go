@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/lorem-dev/locksmith/internal/config"
@@ -27,6 +28,8 @@ type mockPrompter struct {
 	gpgPinentryErr       error
 	existingConfigAction initflow.ExistingConfigAction
 	existingConfigErr    error
+	shellHookInstall     bool
+	shellHookErr         error
 }
 
 func (m *mockPrompter) ConfigLocation(_ string) (string, error) {
@@ -55,6 +58,10 @@ func (m *mockPrompter) GPGPinentry(_ string) (bool, error) {
 
 func (m *mockPrompter) ExistingConfig(_ string, _ error) (initflow.ExistingConfigAction, error) {
 	return m.existingConfigAction, m.existingConfigErr
+}
+
+func (m *mockPrompter) ShellHook(_ string) (bool, error) {
+	return m.shellHookInstall, m.shellHookErr
 }
 
 func TestAgentMatches_CaseInsensitive(t *testing.T) {
@@ -497,5 +504,163 @@ func TestRunInit_Interactive_GPGPinentryApplied(t *testing.T) {
 	}
 	if !result.GPGPinentryConfigured {
 		t.Error("expected GPGPinentryConfigured = true")
+	}
+}
+
+func TestRunInit_ShellHook_AlreadyInstalled(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	// Pre-write the marker to a fake .zshrc
+	zshrc := filepath.Join(home, ".zshrc")
+	if err := os.WriteFile(zshrc, []byte("# locksmith daemon autostart\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SHELL", "/bin/zsh")
+
+	dir := t.TempDir()
+	_, err := initflow.RunInit(initflow.InitOptions{
+		Auto: true,
+		Prompter: &mockPrompter{
+			configDir:      dir,
+			summaryConfirm: true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Marker must NOT be duplicated
+	data, _ := os.ReadFile(zshrc)
+	count := strings.Count(string(data), "# locksmith daemon autostart")
+	if count != 1 {
+		t.Errorf("marker count = %d, want 1", count)
+	}
+}
+
+func TestRunInit_ShellHook_Auto_Installs(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("SHELL", "/bin/bash")
+
+	dir := t.TempDir()
+	result, err := initflow.RunInit(initflow.InitOptions{
+		Auto: true,
+		Prompter: &mockPrompter{
+			configDir:      dir,
+			summaryConfirm: true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.ShellHookInstall {
+		t.Error("ShellHookInstall should be true in auto mode")
+	}
+
+	bashrc := filepath.Join(home, ".bashrc")
+	data, readErr := os.ReadFile(bashrc)
+	if readErr != nil {
+		t.Fatalf("bashrc not written: %v", readErr)
+	}
+	if !strings.Contains(string(data), "# locksmith daemon autostart") {
+		t.Error("marker not found in .bashrc")
+	}
+}
+
+func TestRunInit_ShellHook_Interactive_Accepted(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("SHELL", "/bin/zsh")
+
+	dir := t.TempDir()
+	result, err := initflow.RunInit(initflow.InitOptions{
+		Prompter: &mockPrompter{
+			configDir:        dir,
+			summaryConfirm:   true,
+			shellHookInstall: true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.ShellHookInstall {
+		t.Error("ShellHookInstall should be true when user accepted")
+	}
+
+	zshrc := filepath.Join(home, ".zshrc")
+	data, _ := os.ReadFile(zshrc)
+	if !strings.Contains(string(data), "# locksmith daemon autostart") {
+		t.Error("marker not found in .zshrc")
+	}
+}
+
+func TestRunInit_ShellHook_Interactive_Declined(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("SHELL", "/bin/bash")
+
+	dir := t.TempDir()
+	result, err := initflow.RunInit(initflow.InitOptions{
+		Prompter: &mockPrompter{
+			configDir:        dir,
+			summaryConfirm:   true,
+			shellHookInstall: false, // user declines
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.ShellHookInstall {
+		t.Error("ShellHookInstall should be false when user declined")
+	}
+
+	bashrc := filepath.Join(home, ".bashrc")
+	if _, statErr := os.Stat(bashrc); statErr == nil {
+		data, _ := os.ReadFile(bashrc)
+		if strings.Contains(string(data), "# locksmith daemon autostart") {
+			t.Error("marker must not be written when user declined")
+		}
+	}
+}
+
+func TestRunInit_ShellHook_UnknownShell(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("SHELL", "/bin/sh") // unknown (not bash/zsh/ash/fish)
+	t.Setenv("0", "")
+
+	dir := t.TempDir()
+	result, err := initflow.RunInit(initflow.InitOptions{
+		Auto: true,
+		Prompter: &mockPrompter{
+			configDir:      dir,
+			summaryConfirm: true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.ShellHookInstall {
+		t.Error("ShellHookInstall must be false for unknown shell")
+	}
+}
+
+func TestRunInit_ShellHook_Error(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("SHELL", "/bin/bash")
+	wantErr := errors.New("shell hook prompt error")
+
+	dir := t.TempDir()
+	_, err := initflow.RunInit(initflow.InitOptions{
+		Prompter: &mockPrompter{
+			configDir:      dir,
+			summaryConfirm: true,
+			shellHookErr:   wantErr,
+		},
+	})
+	if !errors.Is(err, wantErr) {
+		t.Errorf("RunInit() error = %v, want %v", err, wantErr)
 	}
 }

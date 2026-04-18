@@ -11,6 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/lorem-dev/locksmith/internal/config"
+	"github.com/lorem-dev/locksmith/internal/shellhook"
 )
 
 // ExistingConfigAction is the user's choice when a config file already exists.
@@ -40,6 +41,8 @@ type Prompter interface {
 	// GPGPinentry asks whether to configure locksmith-pinentry in gpg-agent.conf.
 	// existingPinentry is the current pinentry-program value (empty if none).
 	GPGPinentry(existingPinentry string) (bool, error)
+	// ShellHook asks whether to append the daemon autostart snippet to rcFile.
+	ShellHook(rcFile string) (bool, error)
 }
 
 // InitOptions controls the behaviour of RunInit.
@@ -59,8 +62,12 @@ type InitResult struct {
 	SelectedVaults        []string
 	SelectedAgents        []DetectedAgent
 	SandboxEnabled        bool
-	GPGPinentryConfigured bool // true if the user opted to configure locksmith-pinentry
-	ConfigPreexisted      bool // true when an existing config was found and kept
+	GPGPinentryConfigured   bool            // true if the user opted to configure locksmith-pinentry
+	ConfigPreexisted        bool            // true when an existing config was found and kept
+	ShellHookInstall        bool            // true if user agreed (or --auto) to install
+	ShellHookAlreadyPresent bool            // true if hook marker was already in rc file
+	ShellHookRCFile         string          // rc file path; empty when shell is unknown
+	ShellHookShell          shellhook.Shell // detected shell
 }
 
 // RunInit runs the interactive setup wizard. In --auto mode all prompts are
@@ -202,6 +209,28 @@ func RunInit(opts InitOptions) (*InitResult, error) {
 		}
 	}
 
+	// Shell hook detection - determine whether to install the daemon autostart hook.
+	{
+		detectedShell := shellhook.DetectShell()
+		rcFile, shellKnown := shellhook.RCFile(detectedShell)
+		result.ShellHookShell = detectedShell
+		result.ShellHookRCFile = rcFile
+		if shellKnown {
+			alreadyInstalled, _ := shellhook.IsInstalled(rcFile) // error treated as not installed
+			if alreadyInstalled {
+				result.ShellHookAlreadyPresent = true
+			} else if opts.Auto {
+				result.ShellHookInstall = true
+			} else {
+				var hookErr error
+				result.ShellHookInstall, hookErr = prompter.ShellHook(rcFile)
+				if hookErr != nil {
+					return nil, hookErr
+				}
+			}
+		}
+	}
+
 	if err := applyInit(result, homeDir); err != nil {
 		return nil, err
 	}
@@ -267,6 +296,20 @@ func applyInit(result *InitResult, homeDir string) error {
 			}
 			fmt.Printf("  %s: sandbox permissions configured\n", agent.Name)
 		}
+	}
+
+	// Apply shell hook.
+	if result.ShellHookAlreadyPresent {
+		fmt.Printf("  shell hook already installed (%s)\n", result.ShellHookRCFile)
+	} else if result.ShellHookInstall {
+		if err := shellhook.Install(result.ShellHookRCFile, result.ShellHookShell); err != nil {
+			fmt.Printf("  warning: could not write to %s: %v\n", result.ShellHookRCFile, err)
+			printShellFallback(result.ShellHookShell, result.ShellHookRCFile)
+		} else {
+			fmt.Printf("  shell hook added to %s\n", result.ShellHookRCFile)
+		}
+	} else {
+		printShellFallback(result.ShellHookShell, result.ShellHookRCFile)
 	}
 	return nil
 }
@@ -472,6 +515,21 @@ func (p *huhPrompter) ExistingConfig(path string, validErr error) (ExistingConfi
 	return selected, nil
 }
 
+// ShellHook asks whether to install the daemon autostart hook in rcFile.
+func (p *huhPrompter) ShellHook(rcFile string) (bool, error) {
+	var confirmed bool
+	form := p.formWith(huh.NewForm(huh.NewGroup(
+		huh.NewConfirm().
+			Title("Add daemon autostart to shell config?").
+			Description(fmt.Sprintf("Appends locksmith daemon autostart to %s", rcFile)).
+			Value(&confirmed),
+	)))
+	if err := form.Run(); err != nil {
+		return false, err
+	}
+	return confirmed, nil
+}
+
 // GPGPinentry prompts whether to configure locksmith-pinentry in gpg-agent.conf.
 func (p *huhPrompter) GPGPinentry(existingPinentry string) (bool, error) {
 	title := "Configure locksmith-pinentry for GPG passphrase prompts?"
@@ -518,4 +576,14 @@ func isTerminal() bool {
 		return false
 	}
 	return fi.Mode()&os.ModeCharDevice != 0
+}
+
+// printShellFallback prints manual instructions for adding the shell hook.
+func printShellFallback(s shellhook.Shell, rcFile string) {
+	snippet := shellhook.Snippet(s)
+	if rcFile != "" {
+		fmt.Printf("\nTo start the daemon automatically, add to %s:\n\n  %s\n\n", rcFile, snippet)
+	} else {
+		fmt.Printf("\nTo start the daemon automatically, add to your shell config:\n\n  %s\n\n", snippet)
+	}
 }
