@@ -2,12 +2,14 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/lorem-dev/locksmith/internal/config"
 	"github.com/lorem-dev/locksmith/internal/daemon"
 	"github.com/lorem-dev/locksmith/internal/log"
+	"github.com/lorem-dev/locksmith/sdk"
 )
 
 // newServeCmd returns the `locksmith serve` command.
@@ -24,7 +26,24 @@ func newServeCmd(cfgFile *string) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
-			log.Init(log.Config{Level: cfg.Logging.Level, Format: cfg.Logging.Format})
+
+			w, err := sdk.NewLogWriter(sdk.LogConfig{
+				Level:  cfg.Logging.Level,
+				Format: cfg.Logging.Format,
+				File:   cfg.Logging.File,
+			})
+			if err != nil {
+				return fmt.Errorf("log setup: %w", err)
+			}
+
+			if sdk.IsDebug() {
+				fmt.Fprintln(os.Stderr,
+					"WARNING: debug logging is enabled - session IDs will be written to logs "+
+						"in plaintext. Do not use debug level in production. "+
+						"See docs/security/debug-logging.md")
+			}
+
+			log.Init(w, cfg.Logging.Level, cfg.Logging.Format)
 
 			d := daemon.New(cfg)
 			go d.WaitForShutdown()
