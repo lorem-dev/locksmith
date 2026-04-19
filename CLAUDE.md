@@ -65,6 +65,23 @@ Do not mention GPG during the session - only check at the very end, after all ot
 - All tests must pass under the race detector
 - Run `make test-coverage` and `make test-race` before committing
 
+## Makefile
+
+`make` is the entry-point for all build, lint, test, and code-generation tasks.
+
+| Command                 | Purpose                                              |
+|-------------------------|------------------------------------------------------|
+| `make init`             | First-time setup: install tools, generate protobuf   |
+| `make build`            | Build locksmith and locksmith-pinentry               |
+| `make build-all`        | Build locksmith + all vault plugins                  |
+| `make lint`             | Run golangci-lint and buf linter                     |
+| `make test`             | Unit tests across all workspace modules              |
+| `make test-race`        | Unit tests with race detector                        |
+| `make test-coverage`    | Coverage report (HTML + summary table in .reports/)  |
+| `make test-integration` | Integration tests (require running daemon + plugins) |
+| `make proto`            | Regenerate protobuf Go code from .proto files        |
+| `make install-tools`    | Install pinned tool versions into $GOPATH/bin        |
+
 ## Dependency Changes
 **Whenever a dependency is added or removed, run the `check-licenses` skill.**
 This audits third-party Go dependencies for license compatibility with Apache 2.0.
