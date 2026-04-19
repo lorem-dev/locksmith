@@ -28,3 +28,7 @@
 - SDK: `HideSession` renamed to `HideSessionId` (breaking change for plugin authors).
 - SDK: new `MaskSessionId` function for log call sites; returns full ID in debug mode.
 - Docs: new `docs/security/debug-logging.md` - security implications of debug mode.
+- Shell autostart hook: the locksmith daemon starts automatically when a
+  terminal opens via a one-line snippet added to ~/.zshrc, ~/.bashrc, or
+  Fish config. `locksmith init` offers to set this up; it can also be added
+  manually. See docs/configuration.md.
