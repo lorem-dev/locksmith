@@ -4,6 +4,7 @@ package plugin
 import (
 	"context"
 	"errors"
+	"io"
 	"testing"
 
 	goplugin "github.com/hashicorp/go-plugin"
@@ -13,7 +14,7 @@ import (
 )
 
 func init() {
-	log.Init(log.Config{Level: "error", Format: "text"})
+	log.Init(io.Discard, "error", "text")
 }
 
 // --- mock helpers ---

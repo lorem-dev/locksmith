@@ -1,7 +1,6 @@
 // Package log provides a thin wrapper around zerolog for structured logging.
-// Call Init() once at startup with the config from the YAML file.
-// All other packages import this package and use the module-level functions
-// (Info, Debug, Warn, Error) which delegate to the global logger.
+// Call Init() once at startup; pass the io.Writer from sdk.NewLogWriter.
+// All other packages use the module-level functions (Info, Debug, Warn, Error).
 package log
 
 import (
@@ -13,38 +12,25 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// Config holds logging configuration loaded from the YAML config file.
-type Config struct {
-	// Level is the minimum log level: "debug", "info", "warn", "error".
-	Level string
-	// Format is the output format: "text" (human-readable) or "json".
-	Format string
-	// Output is the destination writer. Defaults to os.Stdout.
-	Output io.Writer
-}
-
 var globalLogger atomic.Pointer[zerolog.Logger]
 
 // Init configures the global logger. Must be called before any logging.
-func Init(cfg Config) {
-	out := cfg.Output
-	if out == nil {
-		out = os.Stdout
+// w is the destination writer (from sdk.NewLogWriter); nil defaults to os.Stdout.
+func Init(w io.Writer, level, format string) {
+	if w == nil {
+		w = os.Stdout
 	}
-
-	var w io.Writer
-	if cfg.Format == "json" {
-		w = out
+	var wr io.Writer
+	if format == "json" {
+		wr = w
 	} else {
-		w = zerolog.ConsoleWriter{Out: out, TimeFormat: time.RFC3339}
+		wr = zerolog.ConsoleWriter{Out: w, TimeFormat: time.RFC3339}
 	}
-
-	level, err := zerolog.ParseLevel(cfg.Level)
+	lvl, err := zerolog.ParseLevel(level)
 	if err != nil {
-		level = zerolog.InfoLevel
+		lvl = zerolog.InfoLevel
 	}
-
-	l := zerolog.New(w).Level(level).With().Timestamp().Logger()
+	l := zerolog.New(wr).Level(lvl).With().Timestamp().Logger()
 	globalLogger.Store(&l)
 }
 

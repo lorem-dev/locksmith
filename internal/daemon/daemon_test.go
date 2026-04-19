@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -13,7 +14,7 @@ import (
 )
 
 func init() {
-	log.Init(log.Config{Level: "error", Format: "text"})
+	log.Init(io.Discard, "error", "text")
 }
 
 func TestParseTTL_Explicit(t *testing.T) {

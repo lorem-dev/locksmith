@@ -1,6 +1,7 @@
 package plugin_test
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -10,7 +11,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	log.Init(log.Config{Level: "error", Format: "text"})
+	log.Init(io.Discard, "error", "text")
 	os.Exit(m.Run())
 }
 
