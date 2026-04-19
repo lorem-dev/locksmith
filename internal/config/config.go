@@ -30,6 +30,10 @@ type Logging struct {
 	Level string `yaml:"level"`
 	// Format is "text" (human-readable) or "json".
 	Format string `yaml:"format"`
+	// File is an optional path to a log file. If set, logs are written to
+	// this file instead of stdout. Supports ~ expansion.
+	// The file is rotated at 50 MB and logs older than 3 days are deleted.
+	File string `yaml:"file"`
 }
 
 // Vault represents a configured vault backend.
