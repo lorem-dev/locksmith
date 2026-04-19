@@ -70,14 +70,28 @@ Use `internal/log` (zerolog). Never use `fmt.Print*` in daemon/plugin code.
 
 ## Documentation
 All documentation lives in `docs/`. Keep `README.md` focused on install + quickstart.
-Track changes in `CHANGES.md` - development changes go under `## Development`,
-releases under `## Version vX.Y.Z`.
+
+## Changelog (CHANGES.md)
+**Every user-visible change must be recorded in `CHANGES.md` before the work is considered done.**
+
+Rules:
+- Development changes go under `## Development` (create the section if missing).
+- Releases go under `## Version vX.Y.Z`.
+- One bullet per logical change: what changed and why, in plain English.
+- Update `CHANGES.md` in the same commit as the code change - never as a follow-up.
+
+**Superpowers plans must include a dedicated step for updating `CHANGES.md`.**
+When writing a plan (`docs/superpowers/plans/`), add an explicit task like:
+```
+- [ ] Update CHANGES.md under ## Development with a summary of the change
+```
+This step must appear before the "commit" step in every plan.
+
+Use the `changelog` skill (`.claude/skills/changelog/SKILL.md`) to compress the
+`## Development` section into a versioned entry before cutting a release.
 
 ## Typography
 All documentation and comments must use ASCII punctuation only:
 - Hyphens (`-`) instead of em dashes (`-`) or en dashes
 - Straight double quotes (`"`) instead of curly quotes (" ")
 - Straight single quotes (`'`) instead of curly apostrophes (' ')
-
-## Changelog Skill
-Use the `changelog` skill (`.claude/skills/changelog/SKILL.md`) to compress changes before cutting a release.
