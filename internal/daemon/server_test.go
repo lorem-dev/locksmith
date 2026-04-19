@@ -1,9 +1,12 @@
 package daemon_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,6 +15,7 @@ import (
 	"github.com/lorem-dev/locksmith/internal/daemon"
 	"github.com/lorem-dev/locksmith/internal/log"
 	"github.com/lorem-dev/locksmith/internal/session"
+	sdk "github.com/lorem-dev/locksmith/sdk"
 )
 
 func TestMain(m *testing.M) {
@@ -211,5 +215,70 @@ func TestResolveKey_MissingBothAliasAndPath(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("GetSecret() expected error for missing alias and path")
+	}
+}
+
+func TestSessionStart_LogsMaskedSessionId(t *testing.T) {
+	var buf bytes.Buffer
+	_, _ = sdk.NewLogWriter(sdk.LogConfig{Level: "info"})
+	log.Init(&buf, "info", "json")
+	defer log.Init(io.Discard, "error", "text")
+
+	srv := newTestServer()
+	_, err := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{Ttl: "1h"})
+	if err != nil {
+		t.Fatalf("SessionStart() error: %v", err)
+	}
+
+	var entry map[string]interface{}
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &entry); err != nil {
+		t.Fatalf("log output is not valid JSON: %v — output: %q", err, buf.String())
+	}
+	sessionId, ok := entry["session_id"].(string)
+	if !ok {
+		t.Fatalf("log entry missing session_id field, got: %v", entry)
+	}
+	if !strings.Contains(sessionId, "****") {
+		t.Errorf("session_id in log is not masked at info level: %q", sessionId)
+	}
+}
+
+func TestSessionStart_LogsFullSessionIdInDebug(t *testing.T) {
+	var buf bytes.Buffer
+	_, _ = sdk.NewLogWriter(sdk.LogConfig{Level: "debug"})
+	log.Init(&buf, "debug", "json")
+	defer func() {
+		_, _ = sdk.NewLogWriter(sdk.LogConfig{Level: "info"})
+		log.Init(io.Discard, "error", "text")
+	}()
+
+	srv := newTestServer()
+	resp, err := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{Ttl: "1h"})
+	if err != nil {
+		t.Fatalf("SessionStart() error: %v", err)
+	}
+
+	var entry map[string]interface{}
+	for _, line := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
+		if line == "" {
+			continue
+		}
+		var e map[string]interface{}
+		if json.Unmarshal([]byte(line), &e) == nil {
+			if e["message"] == "session started" {
+				entry = e
+				break
+			}
+		}
+	}
+	if entry == nil {
+		t.Fatalf("no 'session started' log entry found in output: %q", buf.String())
+	}
+	sessionId, ok := entry["session_id"].(string)
+	if !ok {
+		t.Fatalf("log entry missing session_id field: %v", entry)
+	}
+	if sessionId != resp.SessionId {
+		t.Errorf("session_id in debug log should be full ID\ngot:  %q\nwant: %q", sessionId, resp.SessionId)
 	}
 }

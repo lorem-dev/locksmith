@@ -60,7 +60,7 @@ func (s *Server) SessionStart(_ context.Context, req *locksmithv1.SessionStartRe
 	if err != nil {
 		return nil, fmt.Errorf("creating session: %w", err)
 	}
-	log.Info().Str("session", sess.ID).Dur("ttl", ttl).Msg("session started")
+	log.Info().Str("session_id", sdk.MaskSessionId(sess.ID)).Dur("ttl", ttl).Msg("session started")
 	return &locksmithv1.SessionStartResponse{
 		SessionId: sess.ID,
 		ExpiresAt: sess.ExpiresAt.Format(time.RFC3339),
@@ -73,7 +73,7 @@ func (s *Server) SessionEnd(_ context.Context, req *locksmithv1.SessionEndReques
 	if err != nil {
 		return nil, err
 	}
-	log.Info().Str("session", *sessionId).Msg("session ended")
+	log.Info().Str("session_id", sdk.MaskSessionId(*sessionId)).Msg("session ended")
 	return &locksmithv1.SessionEndResponse{SessionId: *sessionId}, nil
 }
 
@@ -106,7 +106,7 @@ func (s *Server) GetSecret(ctx context.Context, req *locksmithv1.GetSecretReques
 
 	cacheKey := vaultType + ":" + path
 	if cached, ok := s.store.GetCachedSecret(req.SessionId, cacheKey); ok {
-		log.Debug().Str("session", req.SessionId).Str("key", cacheKey).Msg("serving secret from cache")
+		log.Debug().Str("session_id", sdk.MaskSessionId(req.SessionId)).Str("key", cacheKey).Msg("serving secret from cache")
 		return &locksmithv1.GetSecretResponse{Secret: cached, ContentType: "text/plain"}, nil
 	}
 
@@ -127,7 +127,7 @@ func (s *Server) GetSecret(ctx context.Context, req *locksmithv1.GetSecretReques
 	}
 
 	s.store.CacheSecret(req.SessionId, cacheKey, resp.Secret)
-	log.Info().Str("session", req.SessionId).Str("vault", vaultType).Str("path", path).Msg("secret retrieved and cached")
+	log.Info().Str("session_id", sdk.MaskSessionId(req.SessionId)).Str("vault", vaultType).Str("path", path).Msg("secret retrieved and cached")
 
 	return &locksmithv1.GetSecretResponse{Secret: resp.Secret, ContentType: resp.ContentType}, nil
 }
