@@ -83,7 +83,7 @@ func (s *Server) SessionList(_ context.Context, _ *locksmithv1.SessionListReques
 	infos := make([]*locksmithv1.SessionInfo, len(sessions))
 	for i, sess := range sessions {
 		infos[i] = &locksmithv1.SessionInfo{
-			SessionId:   sdk.HideSession(sess.ID),
+			SessionId:   sdk.HideSessionId(sess.ID),
 			CreatedAt:   sess.CreatedAt.Format(time.RFC3339),
 			ExpiresAt:   sess.ExpiresAt.Format(time.RFC3339),
 			AllowedKeys: sess.AllowedKeys,

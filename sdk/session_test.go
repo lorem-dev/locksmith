@@ -15,15 +15,8 @@ func TestHideSessionId_Short(t *testing.T) {
 
 func TestHideSessionId_Medium(t *testing.T) {
 	id := "abcdefghijklmnop" // 16 chars (>=15, <30)
-	got := sdk.HideSessionId(id)
-	if got == id {
-		t.Errorf("HideSessionId(%q) should mask, returned unchanged", id)
-	}
-	if !strings.HasPrefix(got, "abcde") {
-		t.Errorf("masked ID should start with first 5 chars, got %q", got)
-	}
-	if !strings.HasSuffix(got, "mnop") {
-		t.Errorf("masked ID should end with last 4 chars, got %q", got)
+	if want := "abcde****mnop"; sdk.HideSessionId(id) != want {
+		t.Errorf("HideSessionId(%q) = %q, want %q", id, sdk.HideSessionId(id), want)
 	}
 }
 

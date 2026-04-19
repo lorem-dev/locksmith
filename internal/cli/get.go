@@ -41,7 +41,7 @@ func newGetCmd() *cobra.Command {
 				}
 				sessionID = startResp.SessionId
 				fmt.Fprintf(os.Stderr, "locksmith: session started (expires %s)\n  export LOCKSMITH_SESSION=%s\n",
-					startResp.ExpiresAt, color.New(color.FgCyan, color.Bold).Sprint(sdk.HideSession(sessionID)),
+					startResp.ExpiresAt, color.New(color.FgCyan, color.Bold).Sprint(sdk.HideSessionId(sessionID)),
 				)
 			}
 
