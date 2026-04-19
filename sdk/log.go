@@ -30,7 +30,8 @@ func NewLogWriter(cfg LogConfig) (io.Writer, error) {
 	if cfg.File == "" {
 		return os.Stdout, nil
 	}
-	expanded := expandTilde(cfg.File)
+	home, _ := os.UserHomeDir()
+	expanded := expandTilde(cfg.File, home)
 	if err := os.MkdirAll(filepath.Dir(expanded), 0700); err != nil {
 		return nil, fmt.Errorf("creating log directory: %w", err)
 	}
@@ -46,12 +47,13 @@ func NewLogWriter(cfg LogConfig) (io.Writer, error) {
 // IsDebug reports whether debug-level logging is active.
 func IsDebug() bool { return debugMode.Load() }
 
-func expandTilde(path string) string {
+// expandTilde replaces a leading "~/" in path with home.
+// If home is empty or path does not start with "~/", path is returned unchanged.
+func expandTilde(path, home string) string {
 	if !strings.HasPrefix(path, "~/") {
 		return path
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
+	if home == "" {
 		return path
 	}
 	return filepath.Join(home, path[2:])
