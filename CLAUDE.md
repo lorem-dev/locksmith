@@ -65,6 +65,11 @@ Do not mention GPG during the session - only check at the very end, after all ot
 - All tests must pass under the race detector
 - Run `make test-coverage` and `make test-race` before committing
 
+## Dependency Changes
+**Whenever a dependency is added or removed, run the `check-licenses` skill.**
+This audits third-party Go dependencies for license compatibility with Apache 2.0.
+Run it before committing any change to `go.mod` / `go.sum`.
+
 ## Logging
 Use `internal/log` (zerolog). Never use `fmt.Print*` in daemon/plugin code.
 
