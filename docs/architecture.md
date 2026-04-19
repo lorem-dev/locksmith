@@ -65,3 +65,5 @@ environment variable. The daemon validates the session token on every request.
 - Unix socket has `0600` permissions (owner-only)
 - Plugin processes are isolated; a compromised plugin cannot access other vaults
 - `locksmith get` without a valid session returns an error, not a leaked secret
+- Session IDs are masked in daemon log output unless `logging.level: debug`
+  is active (see [Debug Logging Security Notice](security/debug-logging.md))
