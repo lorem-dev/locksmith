@@ -1,7 +1,7 @@
 # Locksmith
 
 Secure middleware that gives AI agents access to secrets stored in vault providers
-(macOS Keychain, gopass, 1Password, GNOME Keyring), with per-session caching and
+(macOS Keychain, gopass), with per-session caching and
 vault-delegated authorization (Touch ID, GPG passphrase).
 
 **Repository:** https://github.com/lorem-dev/locksmith
@@ -69,12 +69,12 @@ In your MCP server config:
 
 ## Supported Vaults
 
-| Vault | Platform | Auth |
-|-------|----------|------|
-| macOS Keychain | macOS | Touch ID / password |
-| gopass | macOS, Linux | GPG passphrase / Touch ID |
-| 1Password | macOS, Linux | Touch ID / master password |
-| GNOME Keyring | Linux | Keyring password |
+| Vault | Platform | Auth | Status |
+|-------|----------|------|--------|
+| macOS Keychain | macOS | Touch ID / password | Supported |
+| gopass | macOS, Linux | GPG passphrase / Touch ID | Supported |
+| 1Password | macOS, Linux | Touch ID / master password | Planned |
+| GNOME Keyring | Linux | Keyring password | Planned |
 
 ## Documentation
 

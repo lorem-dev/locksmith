@@ -9,10 +9,10 @@ communicating with the central daemon over gRPC, using
 ```
 locksmith CLI  ──(gRPC/Unix socket)──▶  locksmith daemon
                                               │
-                                    ┌─────────┼─────────┐
-                               gRPC ▼    gRPC ▼    gRPC ▼
-                           keychain   gopass   1password
-                           plugin     plugin   plugin
+                                    ┌─────────┴─────────┐
+                               gRPC ▼              gRPC ▼
+                           keychain              gopass
+                           plugin                plugin
 ```
 
 ## Components
