@@ -262,6 +262,12 @@ license.
 - Source: https://github.com/protocolbuffers/protobuf-go
 - License text: https://github.com/protocolbuffers/protobuf-go/blob/v1.36.11/LICENSE
 
+### gopkg.in/natefinch/lumberjack.v2
+- Version: v2.2.1
+- License: MIT
+- Source: https://github.com/natefinch/lumberjack
+- License text: https://github.com/natefinch/lumberjack/blob/v2.2.1/LICENSE
+
 ### gopkg.in/yaml.v3
 - Version: v3.0.1
 - License: MIT AND Apache-2.0
