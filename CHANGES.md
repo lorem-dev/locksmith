@@ -21,3 +21,10 @@
 - SDK module renamed to `github.com/lorem-dev/locksmith/sdk`
 - buf linter added; vault.proto naming warnings fixed (VaultProviderService, InfoResponse)
 - Makefile: pinned tool versions (buf, protoc-gen-go, protoc-gen-go-grpc, golangci-lint) with install-tools target
+- File-based logging: add `logging.file` config option; logs are rotated at
+  50 MB and retained for 3 days via lumberjack; if unset, logs go to stdout.
+- Session IDs are masked in daemon log output unless `logging.level: debug`
+  is active; masking applies only to log call sites, not RPC responses or CLI output.
+- SDK: `HideSession` renamed to `HideSessionId` (breaking change for plugin authors).
+- SDK: new `MaskSessionId` function for log call sites; returns full ID in debug mode.
+- Docs: new `docs/security/debug-logging.md` - security implications of debug mode.

@@ -16,6 +16,7 @@ defaults:
 logging:
   level: info               # debug | info | warn | error
   format: text              # text | json
+  file: ~/.config/locksmith/logs/daemon.log  # optional log file
 
 vaults:
   <name>:
@@ -27,6 +28,38 @@ keys:
     vault: <vault-name>
     path: <secret-path>
 ```
+
+## Logging configuration
+
+### logging.level
+
+**Optional.** Log level for daemon output. Default: `info`.
+
+- `debug` - verbose output; session IDs are logged in plaintext (see security note below)
+- `info` - standard operational messages
+- `warn` - warnings and errors only
+- `error` - errors only
+
+### logging.format
+
+**Optional.** Output format. Default: `text`.
+
+- `text` - human-readable plaintext logs
+- `json` - structured JSON for log aggregators
+
+### logging.file
+
+**Optional.** Path to the log file. If set, all log output is written to this
+file instead of stdout. Supports `~` expansion. The parent directory is created
+automatically with mode `0700` if it does not exist.
+
+The file is rotated when it reaches 50 MB and files older than 3 days are
+deleted automatically.
+
+Recommended when running as a background daemon via the shell hook.
+
+> **Security note:** If `logging.level` is `debug`, session IDs are written to
+> the log in plaintext. See [Debug Logging Security Notice](security/debug-logging.md).
 
 ## Direct access (without alias)
 
