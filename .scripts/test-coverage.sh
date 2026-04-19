@@ -27,7 +27,7 @@ while IFS= read -r mod; do
   html="$REPORTS/coverage-${name}.html"
 
   printf '\033[90m--- %s\033[0m\n' "$mod"
-  if (cd "$dir" && go_test go test -coverprofile="$profile" -covermode=atomic ./...); then
+  if (cd "$dir" && go_test go test -timeout "${TEST_TIMEOUT:-3m}" -coverprofile="$profile" -covermode=atomic ./...); then
     printf '    \033[32mPASS\033[0m\n\n'
     PASS=$((PASS + 1))
     go tool cover -html="$profile" -o "$html" 2>/dev/null || true

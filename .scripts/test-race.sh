@@ -15,7 +15,7 @@ while IFS= read -r mod; do
   [ "$mod" = "." ] && dir="$ROOT"
 
   printf '\033[90m--- %s\033[0m\n' "$mod"
-  if (cd "$dir" && go_test go test -race ./...); then
+  if (cd "$dir" && go_test go test -race -timeout "${TEST_TIMEOUT:-3m}" ./...); then
     printf '    \033[32mPASS\033[0m\n\n'
     PASS=$((PASS + 1))
   else

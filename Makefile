@@ -5,6 +5,8 @@ BUF_VERSION ?= v1.68.1
 PROTOC_GEN_GO_VERSION ?= v1.36.11
 PROTOC_GEN_GO_GRPC_VERSION ?= v1.6.1
 GOLANGCI_LINT_VERSION ?= v1.64.8
+TEST_TIMEOUT ?= 3m
+export TEST_TIMEOUT
 
 # Resolve GOBIN so tools installed via 'go install' are always found,
 # even when $GOBIN / $GOPATH/bin is not in $PATH.
