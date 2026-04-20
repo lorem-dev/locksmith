@@ -1,0 +1,13 @@
+#!/bin/sh
+# Locksmith session hook for Claude Code (UserPromptSubmit).
+#
+# Ensures a valid Locksmith session exists and injects LOCKSMITH_SESSION
+# into the Claude Code agent environment before each prompt.
+#
+# Setup: register this script as a UserPromptSubmit hook in
+# ~/.claude/settings.json. See docs/agent-integration.md for full instructions.
+#
+# If the Locksmith daemon is not running, this hook exits 0 silently so
+# it does not block agent work.
+SESSION=$(locksmith session ensure --quiet 2>/dev/null) || exit 0
+printf '{"env": {"LOCKSMITH_SESSION": "%s"}}\n' "$SESSION"
