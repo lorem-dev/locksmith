@@ -2,6 +2,11 @@
 
 ## Development
 
+- Fixed zombie process leak in `_autostart`: added `go c.Wait()` goroutine
+  so the spawned `serve` child is reaped if it exits before the parent.
+  Also isolated `HOME` in autostart tests to prevent long-lived daemon
+  processes from accumulating across test runs.
+
 - Added `locksmith session ensure` command: reuses an existing valid session
   from `LOCKSMITH_SESSION` or starts a new one; `--quiet` flag for use in hook
   scripts without extra output.
