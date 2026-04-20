@@ -6,6 +6,7 @@ description: Compress development changes into a versioned CHANGES.md entry befo
 ## Instructions
 
 Read CHANGES.md and identify all items listed under `## Development`. Call this list `entries`.
+Record `original_count` = the number of items in `entries`.
 
 If `entries` is empty, skip to "Ask for version".
 
@@ -34,7 +35,7 @@ If no matches are found in Pass 1, proceed to Pass 2 without any output. Do not 
 
 ### Pass 2: Ambiguous groups (confirm with user)
 
-Scan remaining `entries` for groups where 2 or more entries share the same component, module, config key, or named feature but do not match a clear Pass 1 pattern. Track: `pass2_count` (groups confirmed or edited by user, not kept-as-is).
+Scan remaining `entries` for groups where 2 or more entries share the same component, module, config key, or named feature but do not match a clear Pass 1 pattern. Track: `pass2_count` (number of groups confirmed or edited by user - increments by 1 per group, not per entry).
 
 For each ambiguous group, show:
 
@@ -54,6 +55,7 @@ Accept? [yes / edit / keep as-is]
 Wait for the user's response before moving to the next group:
 - `yes` - use the proposed merged entry; increment `pass2_count`
 - `edit` - user provides replacement text; use it; increment `pass2_count`
+  When the user responds `edit`, reply with: `Please provide the replacement text for this group:` and wait for their input.
 - `keep as-is` - all original entries remain unchanged; do not increment `pass2_count`
 
 If no ambiguous groups are found, skip Pass 2 silently.
@@ -68,7 +70,8 @@ Ask the user for the version number (e.g. v0.1.0) and release date.
 
 ### Summarize
 
-Summarize the final `entries` into a concise bullet list - group any remaining related changes, remove remaining redundancy, keep each bullet to one line.
+Summarize the final `entries` into a concise bullet list - group any remaining related changes, keep each bullet to one line.
+After summarizing, record `final_count` = the number of bullets in the final list.
 
 ---
 
