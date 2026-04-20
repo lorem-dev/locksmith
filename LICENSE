@@ -208,6 +208,13 @@ This project uses the following third-party libraries. Each library
 retains its original copyright and is distributed under its respective
 license.
 
+### github.com/bufbuild/buf
+- Version: v1.68.1
+- License: Apache-2.0
+- Note: development tool only - not distributed with Locksmith
+- Source: https://github.com/bufbuild/buf
+- License text: https://github.com/bufbuild/buf/blob/v1.68.1/LICENSE
+
 ### github.com/charmbracelet/huh
 - Version: v1.0.0
 - License: MIT
@@ -219,6 +226,13 @@ license.
 - License: MIT
 - Source: https://github.com/fatih/color
 - License text: https://github.com/fatih/color/blob/v1.13.0/LICENSE
+
+### github.com/golangci/golangci-lint
+- Version: v1.64.8
+- License: GPL-3.0
+- Note: development tool only - not distributed with Locksmith
+- Source: https://github.com/golangci/golangci-lint
+- License text: https://github.com/golangci/golangci-lint/blob/v1.64.8/LICENSE
 
 ### github.com/hashicorp/go-plugin
 - Version: v1.7.0

@@ -2,6 +2,8 @@
 
 ## Development
 
+- LICENSE: added third-party notices for buf and golangci-lint (development
+  tools only, not distributed with Locksmith).
 - Test scripts now enforce a per-module timeout (default 3 minutes, override
   with TEST_TIMEOUT env variable).
 - Initial project scaffold: Go workspace, module structure, Makefile
