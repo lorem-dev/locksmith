@@ -67,3 +67,14 @@ environment variable. The daemon validates the session token on every request.
 - `locksmith get` without a valid session returns an error, not a leaked secret
 - Session IDs are masked in daemon log output unless `logging.level: debug`
   is active (see [Debug Logging Security Notice](security/debug-logging.md))
+
+## Agent Integration
+
+Agents interact with the daemon exclusively through the CLI. Session management
+follows the protocol described in [Agent Integration](agent-integration.md):
+the `locksmith session ensure` command reuses an existing valid session from
+`LOCKSMITH_SESSION` or starts a new one. Platform hook scripts (see
+`docs/hooks/`) automate this for platforms that support hooks (e.g. Claude
+Code). For platforms without hook support, instructions in platform adapter
+files (`docs/hooks/AGENTS.md`, `docs/hooks/GEMINI.md`) guide agents through
+the same protocol.

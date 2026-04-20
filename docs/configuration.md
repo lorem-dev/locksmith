@@ -182,6 +182,28 @@ keys:
 
 ---
 
+## Agent integration
+
+```yaml
+agent:
+  pass_session_to_subagents: true
+```
+
+### agent.pass_session_to_subagents
+
+**Optional.** Controls whether agents should pass `LOCKSMITH_SESSION` to
+sub-agents they spawn. Default: `true`.
+
+When `true`, the agent passes `LOCKSMITH_SESSION` in the environment when
+spawning child agents or tools, allowing them to reuse the parent session
+without re-authorization.
+
+When `false`, each agent obtains its own independent session.
+
+See [Agent Integration](agent-integration.md) for the full protocol.
+
+---
+
 ## Vault types
 
 | type | Description |
