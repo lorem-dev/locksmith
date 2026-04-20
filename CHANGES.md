@@ -2,6 +2,18 @@
 
 ## Development
 
+- Added `locksmith session ensure` command: reuses an existing valid session
+  from `LOCKSMITH_SESSION` or starts a new one; `--quiet` flag for use in hook
+  scripts without extra output.
+- Added `agent.pass_session_to_subagents` config field (default: `true`) to
+  control whether agents pass their session to child agents they spawn.
+- Added `docs/agent-integration.md`: universal session management protocol for
+  all supported agent platforms (Claude Code, Gemini CLI, Cursor, Copilot,
+  Codex).
+- Added `docs/hooks/locksmith-session.sh`: Claude Code `UserPromptSubmit` hook
+  that automatically injects `LOCKSMITH_SESSION` before each prompt.
+- Added platform adapter templates: `docs/hooks/AGENTS.md` (Cursor/Copilot/
+  Codex) and `docs/hooks/GEMINI.md` (Gemini CLI).
 - LICENSE: added third-party notices for buf and golangci-lint (development
   tools only, not distributed with Locksmith).
 - Test scripts now enforce a per-module timeout (default 3 minutes, override
