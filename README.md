@@ -41,14 +41,26 @@ export LOCKSMITH_SESSION=$(locksmith session start | jq -r .session_id)
 
 ## Agent Usage
 
-Agents call `locksmith get --key <alias>` directly. If `LOCKSMITH_SESSION` is not
-set, a session is started automatically. To share a session with sub-agents, export
-the session ID printed to stderr:
+Locksmith provides a session-aware CLI for AI agents. See
+[Agent Integration](docs/agent-integration.md) for the full protocol and
+platform-specific setup (Claude Code hooks, Gemini CLI, Cursor, Copilot,
+Codex).
+
+**Quick start:**
 
 ```bash
-export LOCKSMITH_SESSION=$(locksmith session start | jq -r .session_id)
-# pass LOCKSMITH_SESSION to sub-agents via environment
+# Ensure a valid session (reuses existing or creates new)
+export LOCKSMITH_SESSION=$(locksmith session ensure --quiet)
+
+# Retrieve a secret
+locksmith get --key my-api-key
+
+# Sub-agents: pass the session in their environment
+LOCKSMITH_SESSION=$LOCKSMITH_SESSION some-subagent-tool
 ```
+
+Session delegation to sub-agents is controlled by `agent.pass_session_to_subagents`
+in `~/.config/locksmith/config.yaml` (default: `true`).
 
 ## MCP Integration
 
@@ -80,6 +92,7 @@ In your MCP server config:
 
 - [Architecture](docs/architecture.md)
 - [Configuration Reference](docs/configuration.md)
+- [Agent Integration](docs/agent-integration.md)
 - [Writing Vault Plugins](docs/plugins.md)
 
 ## Contributing

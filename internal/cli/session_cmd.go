@@ -15,7 +15,7 @@ import (
 // newSessionCmd returns the `locksmith session` command group.
 func newSessionCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "session", Short: "Manage agent sessions"}
-	cmd.AddCommand(newSessionStartCmd(), newSessionEndCmd(), newSessionListCmd())
+	cmd.AddCommand(newSessionStartCmd(), newSessionEndCmd(), newSessionListCmd(), newSessionEnsureCmd())
 	return cmd
 }
 
@@ -81,6 +81,59 @@ func newSessionEndCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&sessionIDPrefix, "session", "", "session ID prefix (default: $LOCKSMITH_SESSION)")
+	return cmd
+}
+
+// newSessionEnsureCmd returns the `locksmith session ensure` command.
+// It reuses an existing valid session from LOCKSMITH_SESSION or starts a new one.
+// Exits non-zero if the daemon is not running.
+// With --quiet, only the session ID is printed to stdout (for use in hook scripts).
+func newSessionEnsureCmd() *cobra.Command {
+	var quiet bool
+	cmd := &cobra.Command{
+		Use:   "ensure",
+		Short: "Ensure a valid session exists, reusing or creating one",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, conn, err := dialDaemon("")
+			if err != nil {
+				return err
+			}
+			defer conn.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			// Try to reuse the session from environment.
+			if existing := os.Getenv("LOCKSMITH_SESSION"); existing != "" {
+				resp, err := client.SessionList(ctx, &locksmithv1.SessionListRequest{})
+				if err == nil {
+					for _, s := range resp.Sessions {
+						if s.SessionId == existing {
+							fmt.Fprintln(cmd.OutOrStdout(), existing)
+							return nil
+						}
+					}
+				}
+				// Session not found or expired - fall through to create a new one.
+			}
+
+			resp, err := client.SessionStart(ctx, &locksmithv1.SessionStartRequest{})
+			if err != nil {
+				return fmt.Errorf("starting session: %w", err)
+			}
+
+			if quiet {
+				fmt.Fprintln(cmd.OutOrStdout(), resp.SessionId)
+			} else {
+				fmt.Fprintf(cmd.ErrOrStderr(),
+					"locksmith: session started (expires %s)\n  export LOCKSMITH_SESSION=%s\n",
+					resp.ExpiresAt, resp.SessionId)
+				fmt.Fprintln(cmd.OutOrStdout(), resp.SessionId)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&quiet, "quiet", false, "print only the session ID (for use in scripts)")
 	return cmd
 }
 

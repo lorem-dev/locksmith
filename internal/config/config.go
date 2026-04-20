@@ -14,6 +14,7 @@ import (
 type Config struct {
 	Defaults Defaults         `yaml:"defaults"`
 	Logging  Logging          `yaml:"logging"`
+	Agent    AgentConfig      `yaml:"agent"`
 	Vaults   map[string]Vault `yaml:"vaults"`
 	Keys     map[string]Key   `yaml:"keys"`
 }
@@ -34,6 +35,23 @@ type Logging struct {
 	// this file instead of stdout. Supports ~ expansion.
 	// The file is rotated at 50 MB and logs older than 3 days are deleted.
 	File string `yaml:"file"`
+}
+
+// AgentConfig controls how Locksmith behaves in agentic workflows.
+type AgentConfig struct {
+	// PassSessionToSubagents controls whether agents should pass
+	// LOCKSMITH_SESSION to child agents they spawn. Default: true.
+	// Uses a pointer to distinguish "false" from "not set".
+	PassSessionToSubagents *bool `yaml:"pass_session_to_subagents"`
+}
+
+// PassSubagents returns the effective value of PassSessionToSubagents,
+// applying the default of true when the field is not explicitly set.
+func (a AgentConfig) PassSubagents() bool {
+	if a.PassSessionToSubagents == nil {
+		return true
+	}
+	return *a.PassSessionToSubagents
 }
 
 // Vault represents a configured vault backend.

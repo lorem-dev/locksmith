@@ -96,6 +96,52 @@ func TestSessionCmd_HasSubcommands(t *testing.T) {
 	t.Fatal("session command not found")
 }
 
+func TestSessionEnsureCmd_NoDaemon(t *testing.T) {
+	root := cli.NewRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"session", "ensure"})
+	t.Setenv("LOCKSMITH_SESSION", "")
+	t.Setenv("LOCKSMITH_SOCKET", "/tmp/locksmith-nonexistent-test.sock")
+	err := root.Execute()
+	if err == nil {
+		t.Fatal("session ensure should return error when daemon not running")
+	}
+}
+
+func TestSessionEnsureCmd_NoDaemon_Quiet(t *testing.T) {
+	root := cli.NewRootCmd()
+	var stdout, stderr bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SetArgs([]string{"session", "ensure", "--quiet"})
+	t.Setenv("LOCKSMITH_SESSION", "")
+	t.Setenv("LOCKSMITH_SOCKET", "/tmp/locksmith-nonexistent-test.sock")
+	err := root.Execute()
+	if err == nil {
+		t.Fatal("session ensure --quiet should return error when daemon not running")
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("--quiet should produce no stdout when failing, got: %q", stdout.String())
+	}
+}
+
+func TestSessionCmd_HasEnsureSubcommand(t *testing.T) {
+	root := cli.NewRootCmd()
+	for _, cmd := range root.Commands() {
+		if cmd.Name() == "session" {
+			for _, sub := range cmd.Commands() {
+				if sub.Name() == "ensure" {
+					return
+				}
+			}
+			t.Fatal("session ensure subcommand not found")
+		}
+	}
+	t.Fatal("session command not found")
+}
+
 func TestVaultCmd_HasSubcommands(t *testing.T) {
 	root := cli.NewRootCmd()
 	for _, cmd := range root.Commands() {
