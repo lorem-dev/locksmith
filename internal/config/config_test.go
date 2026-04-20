@@ -208,3 +208,49 @@ keys:
 		t.Errorf("single-slash path should be valid, got: %v", err)
 	}
 }
+
+func TestAgentConfig_Defaults(t *testing.T) {
+	cfg := &config.Config{}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() unexpected error: %v", err)
+	}
+	if !cfg.Agent.PassSubagents() {
+		t.Error("Agent.PassSubagents() default should be true")
+	}
+}
+
+func TestAgentConfig_ParseFalse(t *testing.T) {
+	cfg, err := config.LoadFromBytes([]byte(`
+defaults:
+  session_ttl: 1h
+agent:
+  pass_session_to_subagents: false
+vaults:
+  k:
+    type: keychain
+`))
+	if err != nil {
+		t.Fatalf("LoadFromBytes() error: %v", err)
+	}
+	if cfg.Agent.PassSubagents() {
+		t.Error("Agent.PassSubagents() should be false when set to false")
+	}
+}
+
+func TestAgentConfig_ParseTrue(t *testing.T) {
+	cfg, err := config.LoadFromBytes([]byte(`
+defaults:
+  session_ttl: 1h
+agent:
+  pass_session_to_subagents: true
+vaults:
+  k:
+    type: keychain
+`))
+	if err != nil {
+		t.Fatalf("LoadFromBytes() error: %v", err)
+	}
+	if !cfg.Agent.PassSubagents() {
+		t.Error("Agent.PassSubagents() should be true when explicitly set")
+	}
+}
