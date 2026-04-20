@@ -40,7 +40,14 @@ func newAutostartCmd() *cobra.Command {
 			}
 			c := exec.Command(binary, "serve") //nolint:gosec // G204: binary is os.Executable(), not user input
 			// Detach stdout/stderr/stdin: the daemon runs silently in the background.
-			_ = c.Start() // fire-and-forget; errors are intentionally swallowed
+			if err := c.Start(); err != nil {
+				return nil // silently ignore
+			}
+			// Prevent zombie: reap the child if it exits before this process does.
+			// In normal operation the daemon outlives _autostart and is adopted by
+			// init, which reaps it. If it exits early (e.g. config error), this
+			// goroutine collects the exit status before _autostart itself exits.
+			go func() { _ = c.Wait() }()
 			// Give the daemon a moment to bind its socket before the shell continues.
 			time.Sleep(50 * time.Millisecond)
 			return nil
