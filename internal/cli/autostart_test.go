@@ -38,6 +38,10 @@ func TestAutostart_DaemonNotRunning(t *testing.T) {
 	dir := t.TempDir()
 	sock := filepath.Join(dir, "nonexistent.sock")
 	t.Setenv("LOCKSMITH_SOCKET", sock)
+	// Redirect HOME so the spawned "serve" process cannot find a real config and
+	// exits quickly. Without this, serve finds ~/.config/locksmith/config.yaml and
+	// starts a long-lived daemon that accumulates across test runs.
+	t.Setenv("HOME", dir)
 
 	cmd := cli.NewRootCmd()
 	cmd.SetArgs([]string{"_autostart"})
@@ -55,6 +59,8 @@ func TestAutostart_StaleSocket(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("LOCKSMITH_SOCKET", sock)
+	// Redirect HOME so the spawned "serve" process exits fast (no real config found).
+	t.Setenv("HOME", dir)
 
 	cmd := cli.NewRootCmd()
 	cmd.SetArgs([]string{"_autostart"})
