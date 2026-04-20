@@ -21,7 +21,18 @@ Read `LICENSE` and check for a `## Third-Party Notices` heading.
 In incremental mode:
 - Lines prefixed with `+` that are direct deps → **added** (need to be verified and added to LICENSE).
 - Lines prefixed with `-` that are direct deps → **removed** (their entries must be deleted from the `## Third-Party Notices` section in LICENSE).
-- If the diff shows no added and no removed direct dependencies, report "No dependency changes found" and stop.
+
+Also run:
+```bash
+git diff HEAD~1 -- Makefile
+```
+Scan the diff for changes to `go install` lines (anywhere in the file):
+- Lines prefixed `+` matching `go install`: added build tools → add to LICENSE.
+- Lines prefixed `-` matching `go install`: removed build tools → remove from
+  LICENSE only if the base module does NOT also appear in any `go.mod`.
+
+If neither go.mod nor Makefile has relevant changes, report "No dependency
+changes found" and stop.
 
 ### Step 2 - Collect direct dependencies
 
@@ -44,6 +55,28 @@ Deduplicate across files: if the same module path appears in multiple
 `go.mod` files, keep the entry once at the highest version seen. Use
 semantic version ordering (not lexicographic) to determine the highest
 version.
+
+### Step 2b - Collect Makefile build tools
+
+Read `Makefile`. Find all lines matching the pattern:
+
+```
+go install <module-path>/cmd/<name>@<version-or-variable>
+```
+
+For each matching line:
+1. Strip the `/cmd/<name>` suffix (everything from the last `/cmd/` onward)
+   to get the **base module path**.
+2. If the version token is a Make variable reference like `$(BUF_VERSION)`,
+   resolve it by searching for `BUF_VERSION := vX.Y.Z` or
+   `BUF_VERSION ?= vX.Y.Z` declarations in the same file.
+3. If the base module path already appears in the go.mod deps collected in
+   Step 2, **skip it** - it is already covered. If both have a version, keep
+   the higher one using semantic version ordering.
+
+Label surviving tools as **(build tool)** in the verification table in Step 3.
+Build tools **skip the block-list check** in Step 4 - they are never distributed
+with the software so copyleft restrictions do not apply to users.
 
 ### Step 3 - Look up licenses and build the verification table
 
@@ -88,9 +121,13 @@ responds. If the user replies `no`, stop immediately and make no changes.
 
 ### Step 4 - Block-list check
 
-After the user confirms, check each SPDX identifier against this list.
-If any match, **stop with an error** naming the offending library and
-suggesting it be removed from `go.mod`. Do not modify any file.
+After the user confirms, check each SPDX identifier **for go.mod deps only**
+against this list. Build tools collected in Step 2b are exempt - they are
+never distributed with the software, so copyleft restrictions do not apply.
+
+If any go.mod dep matches the block-list, **stop with an error** naming the
+offending library and suggesting it be removed from `go.mod`. Do not modify
+any file.
 
 ```
 GPL-2.0  GPL-2.0-only  GPL-2.0-or-later
