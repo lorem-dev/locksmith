@@ -1,4 +1,4 @@
-.PHONY: build build-plugins build-all lint test test-coverage test-race test-integration proto install-tools init clean
+.PHONY: build build-plugins build-all lint test test-coverage test-race test-integration proto install-tools init clean tidy
 
 # Tool versions - bump here to upgrade everywhere
 BUF_VERSION ?= v1.68.1
@@ -73,6 +73,9 @@ install-tools:
 	go install google.golang.org/protobuf/cmd/protoc-gen-go@$(PROTOC_GEN_GO_VERSION)
 	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@$(PROTOC_GEN_GO_GRPC_VERSION)
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+
+tidy:
+	go run ./.scripts/tidy
 
 clean:
 	rm -rf bin/ .reports/
