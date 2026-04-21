@@ -2,6 +2,7 @@
 
 ## Development
 
+- Added `make tidy` to run `go mod tidy` across all workspace modules via `.scripts/tidy/main.go`.
 - Fixed zombie process leak in `_autostart`: added `go c.Wait()` goroutine
   so the spawned `serve` child is reaped if it exits before the parent.
   Also isolated `HOME` in autostart tests to prevent long-lived daemon

@@ -1,5 +1,9 @@
 // tidy walks the workspace and runs "go mod tidy" in every directory
 // containing a go.mod file.
+//
+// Usage:
+//
+//	go run ./.scripts/tidy
 package main
 
 import (
