@@ -4,6 +4,8 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -37,6 +39,14 @@ func newAutostartCmd() *cobra.Command {
 			binary, err := os.Executable()
 			if err != nil {
 				return nil // silently ignore
+			}
+			// Guard against recursive spawning when running inside a Go test binary.
+			// os.Executable() returns the test binary (e.g. cli.test or a path under
+			// /tmp/go-build…). Spawning it with "serve" would re-run the full test
+			// suite instead of starting the daemon, causing exponential process growth.
+			base := filepath.Base(binary)
+			if strings.HasSuffix(base, ".test") || strings.Contains(binary, string(os.PathSeparator)+"go-build") {
+				return nil
 			}
 			c := exec.Command(binary, "serve") //nolint:gosec // G204: binary is os.Executable(), not user input
 			// Detach stdout/stderr/stdin: the daemon runs silently in the background.
