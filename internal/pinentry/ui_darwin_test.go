@@ -1,6 +1,6 @@
 //go:build darwin
 
-package main
+package pinentry
 
 import (
 	"os/exec"

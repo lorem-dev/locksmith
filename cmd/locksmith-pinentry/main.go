@@ -1,7 +1,5 @@
 package main
 
-import "os"
+import "github.com/lorem-dev/locksmith/internal/pinentry"
 
-func main() {
-	run(os.Stdin, os.Stdout, defaultGetPassword)
-}
+func main() { pinentry.Run() }
