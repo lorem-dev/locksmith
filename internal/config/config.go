@@ -116,7 +116,7 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("key %q has empty path", name)
 		}
 		// Keychain paths support "service/account" shorthand but not deeper nesting.
-		if vaultDef.Type == "keychain" && strings.Count(key.Path, "/") > 1 {
+		if vaultDef.Type == VaultKeychain && strings.Count(key.Path, "/") > 1 {
 			return fmt.Errorf("key %q: keychain path %q has too many segments (use \"service/account\" or \"account\")", name, key.Path)
 		}
 	}

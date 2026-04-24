@@ -15,7 +15,7 @@ import (
 	"github.com/lorem-dev/locksmith/internal/daemon"
 	"github.com/lorem-dev/locksmith/internal/log"
 	"github.com/lorem-dev/locksmith/internal/session"
-	sdk "github.com/lorem-dev/locksmith/sdk"
+	sdklog "github.com/lorem-dev/locksmith/sdk/log"
 )
 
 func TestMain(m *testing.M) {
@@ -220,7 +220,7 @@ func TestResolveKey_MissingBothAliasAndPath(t *testing.T) {
 
 func TestSessionStart_LogsMaskedSessionId(t *testing.T) {
 	var buf bytes.Buffer
-	_, _ = sdk.NewLogWriter(sdk.LogConfig{Level: "info"})
+	_, _ = sdklog.NewLogWriter(sdklog.LogConfig{Level: "info"})
 	log.Init(&buf, "info", "json")
 	defer log.Init(io.Discard, "error", "text")
 
@@ -245,10 +245,10 @@ func TestSessionStart_LogsMaskedSessionId(t *testing.T) {
 
 func TestSessionStart_LogsFullSessionIdInDebug(t *testing.T) {
 	var buf bytes.Buffer
-	_, _ = sdk.NewLogWriter(sdk.LogConfig{Level: "debug"})
+	_, _ = sdklog.NewLogWriter(sdklog.LogConfig{Level: "debug"})
 	log.Init(&buf, "debug", "json")
 	defer func() {
-		_, _ = sdk.NewLogWriter(sdk.LogConfig{Level: "info"})
+		_, _ = sdklog.NewLogWriter(sdklog.LogConfig{Level: "info"})
 		log.Init(io.Discard, "error", "text")
 	}()
 

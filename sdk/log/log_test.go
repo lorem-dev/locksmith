@@ -1,4 +1,4 @@
-package sdk_test
+package log_test
 
 import (
 	"os"
@@ -6,11 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lorem-dev/locksmith/sdk"
+	sdklog "github.com/lorem-dev/locksmith/sdk/log"
 )
 
 func TestNewLogWriter_Stdout(t *testing.T) {
-	w, err := sdk.NewLogWriter(sdk.LogConfig{Level: "info", Format: "text"})
+	w, err := sdklog.NewLogWriter(sdklog.LogConfig{Level: "info", Format: "text"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -20,26 +20,26 @@ func TestNewLogWriter_Stdout(t *testing.T) {
 }
 
 func TestNewLogWriter_SetsDebugFalse(t *testing.T) {
-	_, _ = sdk.NewLogWriter(sdk.LogConfig{Level: "info"})
-	if sdk.IsDebug() {
+	_, _ = sdklog.NewLogWriter(sdklog.LogConfig{Level: "info"})
+	if sdklog.IsDebug() {
 		t.Error("IsDebug should be false after NewLogWriter with level=info")
 	}
 }
 
 func TestNewLogWriter_SetsDebugTrue(t *testing.T) {
-	_, _ = sdk.NewLogWriter(sdk.LogConfig{Level: "debug"})
-	if !sdk.IsDebug() {
+	_, _ = sdklog.NewLogWriter(sdklog.LogConfig{Level: "debug"})
+	if !sdklog.IsDebug() {
 		t.Error("IsDebug should be true after NewLogWriter with level=debug")
 	}
 	// Reset
-	_, _ = sdk.NewLogWriter(sdk.LogConfig{Level: "info"})
+	_, _ = sdklog.NewLogWriter(sdklog.LogConfig{Level: "info"})
 }
 
 func TestNewLogWriter_CreatesFileWriter(t *testing.T) {
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "logs", "daemon.log")
 
-	w, err := sdk.NewLogWriter(sdk.LogConfig{Level: "info", File: logPath})
+	w, err := sdklog.NewLogWriter(sdklog.LogConfig{Level: "info", File: logPath})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestNewLogWriter_CreatesParentDirectory(t *testing.T) {
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "a", "b", "c", "daemon.log")
 
-	_, err := sdk.NewLogWriter(sdk.LogConfig{Level: "info", File: logPath})
+	_, err := sdklog.NewLogWriter(sdklog.LogConfig{Level: "info", File: logPath})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -70,14 +70,13 @@ func TestNewLogWriter_ExpandsTilde(t *testing.T) {
 		t.Skip("no home directory available")
 	}
 	dir := t.TempDir()
-	// Build a path relative to the real home dir so the tilde expands correctly.
 	rel, err := filepath.Rel(home, filepath.Join(dir, "daemon.log"))
 	if err != nil {
 		t.Fatalf("failed to build relative path: %v", err)
 	}
 	tilded := "~/" + rel
 
-	w, err := sdk.NewLogWriter(sdk.LogConfig{Level: "info", File: tilded})
+	w, err := sdklog.NewLogWriter(sdklog.LogConfig{Level: "info", File: tilded})
 	if err != nil {
 		t.Fatalf("unexpected error with tilde path: %v", err)
 	}
@@ -88,7 +87,7 @@ func TestNewLogWriter_ExpandsTilde(t *testing.T) {
 
 func TestExpandTilde_NoPrefix(t *testing.T) {
 	path := "/absolute/path/file.log"
-	got := sdk.ExpandTilde(path, "/home/user")
+	got := sdklog.ExpandTilde(path, "/home/user")
 	if got != path {
 		t.Errorf("expected %q unchanged, got %q", path, got)
 	}
@@ -96,14 +95,14 @@ func TestExpandTilde_NoPrefix(t *testing.T) {
 
 func TestExpandTilde_EmptyHome(t *testing.T) {
 	path := "~/logs/daemon.log"
-	got := sdk.ExpandTilde(path, "")
+	got := sdklog.ExpandTilde(path, "")
 	if got != path {
 		t.Errorf("expected path returned unchanged when home is empty, got %q", got)
 	}
 }
 
 func TestExpandTilde_HappyPath(t *testing.T) {
-	got := sdk.ExpandTilde("~/logs/daemon.log", "/home/user")
+	got := sdklog.ExpandTilde("~/logs/daemon.log", "/home/user")
 	if !strings.HasPrefix(got, "/home/user") {
 		t.Errorf("expected path under /home/user, got %q", got)
 	}

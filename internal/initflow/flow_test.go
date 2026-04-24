@@ -14,14 +14,14 @@ import (
 // mockPrompter is a test double for initflow.Prompter that returns configured
 // canned responses, allowing RunInit to be exercised without a real TTY.
 type mockPrompter struct {
-	configDir         string
-	configErr         error
-	vaults            []string
-	vaultErr          error
-	agents            []initflow.DetectedAgent
-	agentErr          error
-	sandbox           bool
-	sandboxErr        error
+	configDir            string
+	configErr            error
+	vaults               []string
+	vaultErr             error
+	agents               []initflow.DetectedAgent
+	agentErr             error
+	sandbox              bool
+	sandboxErr           error
 	summaryConfirm       bool
 	summaryErr           error
 	gpgPinentry          bool

@@ -2,6 +2,19 @@
 
 ## Development
 
+- Refactored `sdk/` into subpackages: `sdk/vault`, `sdk/errors`, `sdk/log`,
+  `sdk/session`, `sdk/platform`. The old flat `sdk` package is removed; all
+  consumers updated to use the new import paths.
+- Added `sdk/platform` constants (`platform.Darwin`, `platform.Linux`) used by
+  plugins and initflow instead of bare string literals.
+- Added `internal/config` vault-type constants (`config.VaultKeychain`, etc.)
+  and updated initflow and config validation to use them.
+- Moved pinentry logic (`assuan.go`, `ui*.go`) from `cmd/locksmith-pinentry/` to
+  `internal/pinentry/`; `cmd/locksmith-pinentry/main.go` is now a one-liner.
+- Renamed all CLI command files in `internal/cli/` to `<command>_cmd.go` and
+  split `coverage_test.go` into per-command `_cmd_test.go` files.
+- Added `TestAutostart_ZombieReaping` to verify that short-lived child processes
+  spawned by `_autostart` are reaped and do not become zombies.
 - Added `make tidy` to run `go mod tidy` across all workspace modules via `.scripts/tidy/main.go`.
 - Fixed zombie process leak in `_autostart`: added `go c.Wait()` goroutine
   so the spawned `serve` child is reaped if it exits before the parent.

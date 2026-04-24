@@ -1,5 +1,5 @@
 package main
 
-import sdk "github.com/lorem-dev/locksmith/sdk"
+import "github.com/lorem-dev/locksmith/sdk/vault"
 
-func main() { sdk.Serve(&KeychainProvider{}) }
+func main() { vault.Serve(&KeychainProvider{}) }

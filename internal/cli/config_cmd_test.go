@@ -16,4 +16,3 @@ func TestConfigCheck_DefaultPath(t *testing.T) {
 	// Will fail (no config), but covers the DefaultConfigPath() branch.
 	_ = root.Execute()
 }
-

@@ -9,7 +9,7 @@ import (
 	"github.com/lorem-dev/locksmith/internal/config"
 	"github.com/lorem-dev/locksmith/internal/daemon"
 	"github.com/lorem-dev/locksmith/internal/log"
-	"github.com/lorem-dev/locksmith/sdk"
+	sdklog "github.com/lorem-dev/locksmith/sdk/log"
 )
 
 // newServeCmd returns the `locksmith serve` command.
@@ -27,7 +27,7 @@ func newServeCmd(cfgFile *string) *cobra.Command {
 				return fmt.Errorf("loading config: %w", err)
 			}
 
-			w, err := sdk.NewLogWriter(sdk.LogConfig{
+			w, err := sdklog.NewLogWriter(sdklog.LogConfig{
 				Level:  cfg.Logging.Level,
 				Format: cfg.Logging.Format,
 				File:   cfg.Logging.File,
@@ -36,7 +36,7 @@ func newServeCmd(cfgFile *string) *cobra.Command {
 				return fmt.Errorf("log setup: %w", err)
 			}
 
-			if sdk.IsDebug() {
+			if sdklog.IsDebug() {
 				fmt.Fprintln(os.Stderr,
 					"WARNING: debug logging is enabled - session IDs will be written to logs "+
 						"in plaintext. Do not use debug level in production. "+

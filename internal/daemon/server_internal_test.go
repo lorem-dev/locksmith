@@ -7,19 +7,20 @@ import (
 
 	locksmithv1 "github.com/lorem-dev/locksmith/gen/proto/locksmith/v1"
 	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	sdk "github.com/lorem-dev/locksmith/sdk"
 	"github.com/lorem-dev/locksmith/internal/config"
 	"github.com/lorem-dev/locksmith/internal/session"
+	sdkerrors "github.com/lorem-dev/locksmith/sdk/errors"
+	"github.com/lorem-dev/locksmith/sdk/vault"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // mockRegistry implements pluginRegistry for testing.
 type mockRegistry struct {
-	providers map[string]sdk.Provider
+	providers map[string]vault.Provider
 }
 
-func (m *mockRegistry) Get(vaultType string) (sdk.Provider, error) {
+func (m *mockRegistry) Get(vaultType string) (vault.Provider, error) {
 	p, ok := m.providers[vaultType]
 	if !ok {
 		return nil, fmt.Errorf("no plugin for %q", vaultType)
@@ -35,7 +36,7 @@ func (m *mockRegistry) Types() []string {
 	return types
 }
 
-// mockProvider implements sdk.Provider for testing.
+// mockProvider implements vault.Provider for testing.
 type mockProvider struct {
 	secret      []byte
 	contentType string
@@ -67,7 +68,7 @@ func (p *mockProvider) Info(_ context.Context, _ *vaultv1.InfoRequest) (*vaultv1
 	return &vaultv1.InfoResponse{Version: p.version, Platforms: p.platforms}, nil
 }
 
-func newServerWithMock(providers map[string]sdk.Provider) *Server {
+func newServerWithMock(providers map[string]vault.Provider) *Server {
 	cfg := &config.Config{
 		Defaults: config.Defaults{SessionTTL: "1h"},
 		Vaults:   map[string]config.Vault{"keychain": {Type: "keychain"}},
@@ -78,7 +79,7 @@ func newServerWithMock(providers map[string]sdk.Provider) *Server {
 }
 
 func TestVaultList_WithPlugins(t *testing.T) {
-	srv := newServerWithMock(map[string]sdk.Provider{
+	srv := newServerWithMock(map[string]vault.Provider{
 		"keychain": &mockProvider{version: "1.0.0", platforms: []string{"darwin"}},
 	})
 	resp, err := srv.VaultList(context.Background(), &locksmithv1.VaultListRequest{})
@@ -97,7 +98,7 @@ func TestVaultList_WithPlugins(t *testing.T) {
 }
 
 func TestVaultHealth_WithPlugins(t *testing.T) {
-	srv := newServerWithMock(map[string]sdk.Provider{
+	srv := newServerWithMock(map[string]vault.Provider{
 		"keychain": &mockProvider{available: true},
 	})
 	resp, err := srv.VaultHealth(context.Background(), &locksmithv1.VaultHealthRequest{})
@@ -113,7 +114,7 @@ func TestVaultHealth_WithPlugins(t *testing.T) {
 }
 
 func TestVaultHealth_PluginError(t *testing.T) {
-	srv := newServerWithMock(map[string]sdk.Provider{
+	srv := newServerWithMock(map[string]vault.Provider{
 		"keychain": &mockProvider{healthErr: fmt.Errorf("vault unavailable")},
 	})
 	resp, err := srv.VaultHealth(context.Background(), &locksmithv1.VaultHealthRequest{})
@@ -129,7 +130,7 @@ func TestVaultHealth_PluginError(t *testing.T) {
 }
 
 func TestGetSecret_FromVault(t *testing.T) {
-	srv := newServerWithMock(map[string]sdk.Provider{
+	srv := newServerWithMock(map[string]vault.Provider{
 		"keychain": &mockProvider{secret: []byte("s3cr3t"), contentType: "text/plain"},
 	})
 	startResp, _ := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
@@ -147,7 +148,7 @@ func TestGetSecret_FromVault(t *testing.T) {
 
 func TestGetSecret_FromCache(t *testing.T) {
 	provider := &mockProvider{secret: []byte("s3cr3t"), contentType: "text/plain"}
-	srv := newServerWithMock(map[string]sdk.Provider{"keychain": provider})
+	srv := newServerWithMock(map[string]vault.Provider{"keychain": provider})
 	startResp, _ := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
 
 	// First call populates cache.
@@ -174,7 +175,7 @@ func TestGetSecret_FromCache(t *testing.T) {
 }
 
 func TestGetSecret_VaultError(t *testing.T) {
-	srv := newServerWithMock(map[string]sdk.Provider{
+	srv := newServerWithMock(map[string]vault.Provider{
 		"keychain": &mockProvider{getErr: fmt.Errorf("vault failure")},
 	})
 	startResp, _ := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
@@ -189,7 +190,7 @@ func TestGetSecret_VaultError(t *testing.T) {
 
 func TestGetSecret_UnknownVaultPlugin(t *testing.T) {
 	// Registry has no "keychain" plugin loaded despite config referencing it.
-	srv := newServerWithMock(map[string]sdk.Provider{})
+	srv := newServerWithMock(map[string]vault.Provider{})
 	startResp, _ := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
 	_, err := srv.GetSecret(context.Background(), &locksmithv1.GetSecretRequest{
 		SessionId: startResp.SessionId,
@@ -255,7 +256,7 @@ func TestGetSecret_WithStoreInOpts(t *testing.T) {
 		Keys:     map[string]config.Key{"mykey": {Vault: "myvault", Path: "some/path"}},
 	}
 	provider := &mockProvider{secret: []byte("value"), contentType: "text/plain"}
-	reg := &mockRegistry{providers: map[string]sdk.Provider{"keychain": provider}}
+	reg := &mockRegistry{providers: map[string]vault.Provider{"keychain": provider}}
 	srv := &Server{cfg: cfg, store: session.NewStore(), plugins: reg}
 
 	startResp, _ := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
@@ -279,7 +280,7 @@ func TestGetSecret_DirectVaultWithStore(t *testing.T) {
 		Keys:     map[string]config.Key{},
 	}
 	provider := &mockProvider{secret: []byte("direct"), contentType: "text/plain"}
-	reg := &mockRegistry{providers: map[string]sdk.Provider{"keychain": provider}}
+	reg := &mockRegistry{providers: map[string]vault.Provider{"keychain": provider}}
 	srv := &Server{cfg: cfg, store: session.NewStore(), plugins: reg}
 
 	startResp, _ := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
@@ -304,7 +305,7 @@ func TestGetSecret_DirectVaultNotInConfig(t *testing.T) {
 		Keys:     map[string]config.Key{},
 	}
 	provider := &mockProvider{secret: []byte("raw"), contentType: "text/plain"}
-	reg := &mockRegistry{providers: map[string]sdk.Provider{"rawvault": provider}}
+	reg := &mockRegistry{providers: map[string]vault.Provider{"rawvault": provider}}
 	srv := &Server{cfg: cfg, store: session.NewStore(), plugins: reg}
 
 	startResp, _ := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
@@ -325,7 +326,7 @@ func TestGetSecret_DirectVaultNotInConfig(t *testing.T) {
 // but Get() failing - exercises the VaultHealth manager.Get error branch.
 type failingMockRegistry struct{}
 
-func (f *failingMockRegistry) Get(_ string) (sdk.Provider, error) {
+func (f *failingMockRegistry) Get(_ string) (vault.Provider, error) {
 	return nil, fmt.Errorf("get failed")
 }
 
@@ -358,8 +359,8 @@ func TestGetSecret_PreservesVaultErrorCode(t *testing.T) {
 		Vaults:   map[string]config.Vault{"keychain": {Type: "keychain"}},
 		Keys:     map[string]config.Key{"notion": {Vault: "keychain", Path: "notion"}},
 	}
-	provider := &mockProvider{getErr: sdk.NotFoundError("keychain: item not found")}
-	reg := &mockRegistry{providers: map[string]sdk.Provider{"keychain": provider}}
+	provider := &mockProvider{getErr: sdkerrors.NotFoundError("keychain: item not found")}
+	reg := &mockRegistry{providers: map[string]vault.Provider{"keychain": provider}}
 	srv := NewServerWithRegistry(cfg, session.NewStore(), reg)
 
 	startResp, _ := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
@@ -386,7 +387,7 @@ func TestResolveKey_PassesServiceOpt(t *testing.T) {
 		Keys:     map[string]config.Key{"mykey": {Vault: "keychain", Path: "myaccount"}},
 	}
 	provider := &mockProvider{secret: []byte("secret"), contentType: "text/plain"}
-	reg := &mockRegistry{providers: map[string]sdk.Provider{"keychain": provider}}
+	reg := &mockRegistry{providers: map[string]vault.Provider{"keychain": provider}}
 	srv := NewServerWithRegistry(cfg, session.NewStore(), reg)
 
 	startResp, _ := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
@@ -412,7 +413,7 @@ func TestResolveKey_DirectVault_PassesServiceOpt(t *testing.T) {
 		Keys:     map[string]config.Key{},
 	}
 	provider := &mockProvider{secret: []byte("secret"), contentType: "text/plain"}
-	reg := &mockRegistry{providers: map[string]sdk.Provider{"keychain": provider}}
+	reg := &mockRegistry{providers: map[string]vault.Provider{"keychain": provider}}
 	srv := NewServerWithRegistry(cfg, session.NewStore(), reg)
 
 	startResp, _ := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})

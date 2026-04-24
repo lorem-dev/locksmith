@@ -6,6 +6,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+
+	"github.com/lorem-dev/locksmith/internal/config"
+	"github.com/lorem-dev/locksmith/sdk/platform"
 )
 
 // DetectedAgent describes an AI agent installation found on the system.
@@ -59,22 +62,22 @@ func DetectAgents(homeDir string) []DetectedAgent {
 // installation status for the current system.
 func DetectVaults() []DetectedVault {
 	vaults := []DetectedVault{
-		{Type: "keychain", Available: runtime.GOOS == "darwin"},
-		{Type: "gopass", Available: true},
-		{Type: "1password", Available: true},
-		{Type: "gnome-keyring", Available: runtime.GOOS == "linux"},
+		{Type: config.VaultKeychain, Available: runtime.GOOS == platform.Darwin},
+		{Type: config.VaultGopass, Available: true},
+		{Type: config.VaultOnePassword, Available: true},
+		{Type: config.VaultGnomeKeyring, Available: runtime.GOOS == platform.Linux},
 	}
 
 	for i := range vaults {
 		v := &vaults[i]
 		switch v.Type {
-		case "keychain":
-			v.Detected = runtime.GOOS == "darwin"
-		case "gopass":
+		case config.VaultKeychain:
+			v.Detected = runtime.GOOS == platform.Darwin
+		case config.VaultGopass:
 			v.Detected = binaryExists("gopass")
-		case "1password":
+		case config.VaultOnePassword:
 			v.Detected = binaryExists("op")
-		case "gnome-keyring":
+		case config.VaultGnomeKeyring:
 			v.Detected = binaryExists("secret-tool")
 		}
 	}

@@ -1,4 +1,5 @@
-package sdk
+// Package log provides logging configuration helpers for locksmith SDK consumers.
+package log
 
 import (
 	"fmt"
@@ -24,7 +25,7 @@ var debugMode atomic.Bool
 // If cfg.File is non-empty, ~ is expanded and a lumberjack rotating file
 // writer is returned (MaxAge=3 days, MaxSize=50 MB).
 // If cfg.File is empty, os.Stdout is returned.
-// Records the debug state read by IsDebug and MaskSessionId.
+// Records the debug state read by IsDebug.
 func NewLogWriter(cfg LogConfig) (io.Writer, error) {
 	debugMode.Store(cfg.Level == "debug")
 	if cfg.File == "" {

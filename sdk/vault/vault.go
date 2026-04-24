@@ -1,7 +1,6 @@
-// Package sdk provides helpers for building locksmith vault plugins.
-// Plugin authors should implement the Provider interface and call Serve()
-// from their main function.
-package sdk
+// Package vault provides the Provider interface and gRPC adapters for building
+// locksmith vault plugins. Plugin authors implement Provider and call Serve().
+package vault
 
 import (
 	"context"
@@ -13,6 +12,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
+	sdkerrors "github.com/lorem-dev/locksmith/sdk/errors"
 )
 
 // Provider is the interface that vault plugin binaries must implement.
@@ -33,14 +33,14 @@ var Handshake = goplugin.HandshakeConfig{
 
 // PluginMap is the map passed to go-plugin. Key is the plugin type name.
 var PluginMap = map[string]goplugin.Plugin{
-	"vault": &VaultGRPCPlugin{},
+	"vault": &GRPCPlugin{},
 }
 
 // Serve starts the plugin gRPC server. Call this from the plugin's main().
 func Serve(provider Provider) {
 	goplugin.Serve(&goplugin.ServeConfig{
 		HandshakeConfig: Handshake,
-		Plugins:         map[string]goplugin.Plugin{"vault": &VaultGRPCPlugin{Impl: provider}},
+		Plugins:         map[string]goplugin.Plugin{"vault": &GRPCPlugin{Impl: provider}},
 		GRPCServer:      goplugin.DefaultGRPCServer,
 	})
 }
@@ -55,72 +55,72 @@ func NewClientConfig(binaryPath string) *goplugin.ClientConfig {
 	}
 }
 
-// VaultGRPCPlugin implements goplugin.GRPCPlugin.
-type VaultGRPCPlugin struct {
+// GRPCPlugin implements goplugin.GRPCPlugin.
+type GRPCPlugin struct {
 	goplugin.NetRPCUnsupportedPlugin
 	Impl Provider
 }
 
-// NewVaultGRPCPlugin creates a VaultGRPCPlugin with the given Provider implementation.
-func NewVaultGRPCPlugin(impl Provider) *VaultGRPCPlugin {
-	return &VaultGRPCPlugin{Impl: impl}
+// NewGRPCPlugin creates a GRPCPlugin with the given Provider implementation.
+func NewGRPCPlugin(impl Provider) *GRPCPlugin {
+	return &GRPCPlugin{Impl: impl}
 }
 
 // GRPCServer registers the VaultProvider gRPC server with the go-plugin broker.
-func (p *VaultGRPCPlugin) GRPCServer(broker *goplugin.GRPCBroker, s *grpc.Server) error {
+func (p *GRPCPlugin) GRPCServer(broker *goplugin.GRPCBroker, s *grpc.Server) error {
 	vaultv1.RegisterVaultProviderServiceServer(s, NewGRPCServer(p.Impl))
 	return nil
 }
 
 // GRPCClient creates a client-side adapter for the plugin.
-func (p *VaultGRPCPlugin) GRPCClient(ctx context.Context, broker *goplugin.GRPCBroker, c *grpc.ClientConn) (interface{}, error) {
+func (p *GRPCPlugin) GRPCClient(ctx context.Context, broker *goplugin.GRPCBroker, c *grpc.ClientConn) (interface{}, error) {
 	return NewGRPCClient(c), nil
 }
 
-// VaultGRPCServer is the server-side adapter that bridges go-plugin gRPC to Provider.
-type VaultGRPCServer struct {
+// GRPCServer is the server-side adapter that bridges go-plugin gRPC to Provider.
+type GRPCServer struct {
 	vaultv1.UnimplementedVaultProviderServiceServer
 	impl Provider
 }
 
 // NewGRPCServer wraps a Provider into a VaultProvider gRPC server.
-func NewGRPCServer(impl Provider) *VaultGRPCServer {
-	return &VaultGRPCServer{impl: impl}
+func NewGRPCServer(impl Provider) *GRPCServer {
+	return &GRPCServer{impl: impl}
 }
 
 // GetSecret delegates to the underlying Provider implementation.
-func (s *VaultGRPCServer) GetSecret(ctx context.Context, req *vaultv1.GetSecretRequest) (*vaultv1.GetSecretResponse, error) {
+func (s *GRPCServer) GetSecret(ctx context.Context, req *vaultv1.GetSecretRequest) (*vaultv1.GetSecretResponse, error) {
 	return s.impl.GetSecret(ctx, req)
 }
 
 // HealthCheck delegates to the underlying Provider implementation.
-func (s *VaultGRPCServer) HealthCheck(ctx context.Context, req *vaultv1.HealthCheckRequest) (*vaultv1.HealthCheckResponse, error) {
+func (s *GRPCServer) HealthCheck(ctx context.Context, req *vaultv1.HealthCheckRequest) (*vaultv1.HealthCheckResponse, error) {
 	return s.impl.HealthCheck(ctx, req)
 }
 
 // Info delegates to the underlying Provider implementation.
-func (s *VaultGRPCServer) Info(ctx context.Context, req *vaultv1.InfoRequest) (*vaultv1.InfoResponse, error) {
+func (s *GRPCServer) Info(ctx context.Context, req *vaultv1.InfoRequest) (*vaultv1.InfoResponse, error) {
 	return s.impl.Info(ctx, req)
 }
 
-// VaultGRPCClient is the client-side adapter used by the daemon's plugin manager.
-type VaultGRPCClient struct {
+// GRPCClient is the client-side adapter used by the daemon's plugin manager.
+type GRPCClient struct {
 	client vaultv1.VaultProviderServiceClient
 }
 
 // NewGRPCClient wraps a gRPC client connection into a Provider.
 func NewGRPCClient(conn *grpc.ClientConn) Provider {
-	return &VaultGRPCClient{client: vaultv1.NewVaultProviderServiceClient(conn)}
+	return &GRPCClient{client: vaultv1.NewVaultProviderServiceClient(conn)}
 }
 
 // GetSecret calls the remote plugin's GetSecret over gRPC and unwraps any
 // gRPC status error into a *VaultError so the status code survives the
 // second gRPC boundary (plugin -> daemon -> CLI).
-func (c *VaultGRPCClient) GetSecret(ctx context.Context, req *vaultv1.GetSecretRequest) (*vaultv1.GetSecretResponse, error) {
+func (c *GRPCClient) GetSecret(ctx context.Context, req *vaultv1.GetSecretRequest) (*vaultv1.GetSecretResponse, error) {
 	resp, err := c.client.GetSecret(ctx, req)
 	if err != nil {
 		if s, ok := status.FromError(err); ok && s.Code() != codes.OK {
-			return nil, &VaultError{Code: s.Code(), Message: s.Message()}
+			return nil, &sdkerrors.VaultError{Code: s.Code(), Message: s.Message()}
 		}
 		return nil, err
 	}
@@ -128,11 +128,11 @@ func (c *VaultGRPCClient) GetSecret(ctx context.Context, req *vaultv1.GetSecretR
 }
 
 // HealthCheck calls the remote plugin's HealthCheck over gRPC.
-func (c *VaultGRPCClient) HealthCheck(ctx context.Context, req *vaultv1.HealthCheckRequest) (*vaultv1.HealthCheckResponse, error) {
+func (c *GRPCClient) HealthCheck(ctx context.Context, req *vaultv1.HealthCheckRequest) (*vaultv1.HealthCheckResponse, error) {
 	return c.client.HealthCheck(ctx, req)
 }
 
 // Info calls the remote plugin's Info over gRPC.
-func (c *VaultGRPCClient) Info(ctx context.Context, req *vaultv1.InfoRequest) (*vaultv1.InfoResponse, error) {
+func (c *GRPCClient) Info(ctx context.Context, req *vaultv1.InfoRequest) (*vaultv1.InfoResponse, error) {
 	return c.client.Info(ctx, req)
 }

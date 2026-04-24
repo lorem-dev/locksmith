@@ -1,4 +1,5 @@
-package sdk
+// Package errors provides vault error types for locksmith SDK consumers.
+package errors
 
 import (
 	"google.golang.org/grpc/codes"
@@ -7,7 +8,7 @@ import (
 
 // VaultError is a vault error that carries a gRPC status code.
 // Implementing GRPCStatus() causes the go-plugin gRPC server to use this code
-// when serializing the error, preventing double-wrapping.
+// when serialising the error, preventing double-wrapping.
 type VaultError struct {
 	Code    codes.Code
 	Message string

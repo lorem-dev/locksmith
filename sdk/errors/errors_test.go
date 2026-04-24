@@ -1,22 +1,22 @@
-package sdk_test
+package errors_test
 
 import (
 	"testing"
 
-	sdk "github.com/lorem-dev/locksmith/sdk"
+	sdkerrors "github.com/lorem-dev/locksmith/sdk/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 func TestVaultError_Error(t *testing.T) {
-	err := sdk.NotFoundError("item not found")
+	err := sdkerrors.NotFoundError("item not found")
 	if err.Error() != "item not found" {
 		t.Errorf("Error() = %q, want %q", err.Error(), "item not found")
 	}
 }
 
 func TestVaultError_GRPCStatus(t *testing.T) {
-	err := sdk.NotFoundError("item not found")
+	err := sdkerrors.NotFoundError("item not found")
 	s, ok := status.FromError(err)
 	if !ok {
 		t.Fatal("status.FromError() returned ok=false for VaultError")
@@ -36,11 +36,11 @@ func TestVaultError_Constructors(t *testing.T) {
 		code codes.Code
 		msg  string
 	}{
-		{"NotFound", sdk.NotFoundError("item missing"), codes.NotFound, "item missing"},
-		{"PermissionDenied", sdk.PermissionDeniedError("access denied"), codes.PermissionDenied, "access denied"},
-		{"Unavailable", sdk.UnavailableError("plugin down"), codes.Unavailable, "plugin down"},
-		{"Unauthenticated", sdk.UnauthenticatedError("no passphrase"), codes.Unauthenticated, "no passphrase"},
-		{"Internal", sdk.InternalError("unexpected"), codes.Internal, "unexpected"},
+		{"NotFound", sdkerrors.NotFoundError("item missing"), codes.NotFound, "item missing"},
+		{"PermissionDenied", sdkerrors.PermissionDeniedError("access denied"), codes.PermissionDenied, "access denied"},
+		{"Unavailable", sdkerrors.UnavailableError("plugin down"), codes.Unavailable, "plugin down"},
+		{"Unauthenticated", sdkerrors.UnauthenticatedError("no passphrase"), codes.Unauthenticated, "no passphrase"},
+		{"Internal", sdkerrors.InternalError("unexpected"), codes.Internal, "unexpected"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

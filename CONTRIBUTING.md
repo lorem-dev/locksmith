@@ -89,3 +89,7 @@ chore: update golangci-lint to v1.57
 - Follow `golangci-lint` rules defined in `.golangci.yml`
 - All exported symbols must have godoc comments
 - Complex unexported logic must have inline comments
+- CLI command files in `internal/cli/` must be named `<command>_cmd.go`
+  (e.g. `get_cmd.go`, `serve_cmd.go`). Non-command files (`root.go`,
+  `client.go`, `color.go`, `errors.go`) are exempt. Tests go in
+  `<command>_cmd_test.go`.

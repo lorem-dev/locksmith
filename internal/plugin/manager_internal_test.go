@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	goplugin "github.com/hashicorp/go-plugin"
-	sdk "github.com/lorem-dev/locksmith/sdk"
-	"github.com/lorem-dev/locksmith/internal/log"
 	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
+	"github.com/lorem-dev/locksmith/internal/log"
+	"github.com/lorem-dev/locksmith/sdk/vault"
 )
 
 func init() {
@@ -116,7 +116,7 @@ func TestLaunch_NotProvider(t *testing.T) {
 
 func TestLaunch_Success(t *testing.T) {
 	m := NewManager()
-	var provider sdk.Provider = &stubProvider{}
+	var provider vault.Provider = &stubProvider{}
 	m.clientFactory = func(_ string) pluginClient {
 		return &stubClient{
 			clientFn: func() (goplugin.ClientProtocol, error) {
@@ -142,7 +142,7 @@ func TestLaunch_Success(t *testing.T) {
 
 func TestLaunch_AlreadyRunning(t *testing.T) {
 	m := NewManager()
-	var provider sdk.Provider = &stubProvider{}
+	var provider vault.Provider = &stubProvider{}
 	m.clientFactory = func(_ string) pluginClient {
 		return &stubClient{
 			clientFn: func() (goplugin.ClientProtocol, error) {
@@ -165,7 +165,7 @@ func TestLaunch_AlreadyRunning(t *testing.T) {
 
 func TestManager_Types_WithPlugin(t *testing.T) {
 	m := NewManager()
-	var provider sdk.Provider = &stubProvider{}
+	var provider vault.Provider = &stubProvider{}
 	m.plugins["myvault"] = &runningPlugin{client: &stubClient{}, provider: provider}
 
 	types := m.Types()
@@ -177,7 +177,7 @@ func TestManager_Types_WithPlugin(t *testing.T) {
 func TestManager_Kill_WithPlugin(t *testing.T) {
 	m := NewManager()
 	sc := &stubClient{}
-	var provider sdk.Provider = &stubProvider{}
+	var provider vault.Provider = &stubProvider{}
 	m.plugins["myvault"] = &runningPlugin{client: sc, provider: provider}
 
 	m.Kill()

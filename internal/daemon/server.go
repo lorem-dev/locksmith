@@ -16,13 +16,14 @@ import (
 	"github.com/lorem-dev/locksmith/internal/log"
 	pluginpkg "github.com/lorem-dev/locksmith/internal/plugin"
 	"github.com/lorem-dev/locksmith/internal/session"
-	sdk "github.com/lorem-dev/locksmith/sdk"
+	sdksession "github.com/lorem-dev/locksmith/sdk/session"
+	"github.com/lorem-dev/locksmith/sdk/vault"
 )
 
 // pluginRegistry is the subset of plugin.Manager used by Server.
 // It is satisfied by *plugin.Manager and can be replaced by a test double.
 type pluginRegistry interface {
-	Get(vaultType string) (sdk.Provider, error)
+	Get(vaultType string) (vault.Provider, error)
 	Types() []string
 }
 
@@ -60,7 +61,7 @@ func (s *Server) SessionStart(_ context.Context, req *locksmithv1.SessionStartRe
 	if err != nil {
 		return nil, fmt.Errorf("creating session: %w", err)
 	}
-	log.Info().Str("session_id", sdk.MaskSessionId(sess.ID)).Dur("ttl", ttl).Msg("session started")
+	log.Info().Str("session_id", sdksession.MaskSessionId(sess.ID)).Dur("ttl", ttl).Msg("session started")
 	return &locksmithv1.SessionStartResponse{
 		SessionId: sess.ID,
 		ExpiresAt: sess.ExpiresAt.Format(time.RFC3339),
@@ -73,7 +74,7 @@ func (s *Server) SessionEnd(_ context.Context, req *locksmithv1.SessionEndReques
 	if err != nil {
 		return nil, err
 	}
-	log.Info().Str("session_id", sdk.MaskSessionId(*sessionId)).Msg("session ended")
+	log.Info().Str("session_id", sdksession.MaskSessionId(*sessionId)).Msg("session ended")
 	return &locksmithv1.SessionEndResponse{SessionId: *sessionId}, nil
 }
 
@@ -83,7 +84,7 @@ func (s *Server) SessionList(_ context.Context, _ *locksmithv1.SessionListReques
 	infos := make([]*locksmithv1.SessionInfo, len(sessions))
 	for i, sess := range sessions {
 		infos[i] = &locksmithv1.SessionInfo{
-			SessionId:   sdk.HideSessionId(sess.ID),
+			SessionId:   sdksession.HideSessionId(sess.ID),
 			CreatedAt:   sess.CreatedAt.Format(time.RFC3339),
 			ExpiresAt:   sess.ExpiresAt.Format(time.RFC3339),
 			AllowedKeys: sess.AllowedKeys,
@@ -106,7 +107,7 @@ func (s *Server) GetSecret(ctx context.Context, req *locksmithv1.GetSecretReques
 
 	cacheKey := vaultType + ":" + path
 	if cached, ok := s.store.GetCachedSecret(req.SessionId, cacheKey); ok {
-		log.Debug().Str("session_id", sdk.MaskSessionId(req.SessionId)).Str("key", cacheKey).Msg("serving secret from cache")
+		log.Debug().Str("session_id", sdksession.MaskSessionId(req.SessionId)).Str("key", cacheKey).Msg("serving secret from cache")
 		return &locksmithv1.GetSecretResponse{Secret: cached, ContentType: "text/plain"}, nil
 	}
 
@@ -127,7 +128,7 @@ func (s *Server) GetSecret(ctx context.Context, req *locksmithv1.GetSecretReques
 	}
 
 	s.store.CacheSecret(req.SessionId, cacheKey, resp.Secret)
-	log.Info().Str("session_id", sdk.MaskSessionId(req.SessionId)).Str("vault", vaultType).Str("path", path).Msg("secret retrieved and cached")
+	log.Info().Str("session_id", sdksession.MaskSessionId(req.SessionId)).Str("vault", vaultType).Str("path", path).Msg("secret retrieved and cached")
 
 	return &locksmithv1.GetSecretResponse{Secret: resp.Secret, ContentType: resp.ContentType}, nil
 }

@@ -14,8 +14,15 @@ When conversing with the user, always respond in the user's language.
 
 ## Project Structure
 - `cmd/locksmith/` - CLI + daemon entry point
+- `cmd/locksmith-pinentry/` - pinentry helper binary (main.go only; logic lives in internal/pinentry)
 - `internal/` - daemon internals (not importable externally)
-- `sdk/` - public SDK for vault plugin authors
+- `internal/pinentry/` - Assuan/pinentry protocol implementation
+- `sdk/` - public SDK for vault plugin authors (split into subpackages)
+  - `sdk/vault` - Provider interface, Serve(), plugin wiring
+  - `sdk/errors` - VaultError type and constructors
+  - `sdk/log` - LogConfig, NewLogWriter, IsDebug
+  - `sdk/session` - HideSessionId, MaskSessionId
+  - `sdk/platform` - Platform string constants (Darwin, Linux)
 - `plugins/` - default vault plugins (each is a standalone Go module)
 - `proto/` - protobuf definitions
 - `gen/proto/` - generated code (do not edit manually, gitignored)
@@ -80,12 +87,20 @@ Do not mention GPG during the session - only check at the very end, after all ot
 | `make test-coverage`    | Coverage report (HTML + summary table in .reports/)  |
 | `make test-integration` | Integration tests (require running daemon + plugins) |
 | `make proto`            | Regenerate protobuf Go code from .proto files        |
+| `make tidy`             | Run `go mod tidy` across all workspace modules       |
 | `make install-tools`    | Install pinned tool versions into $GOPATH/bin        |
 
 ## Dependency Changes
 **Whenever a dependency is added or removed, run the `check-licenses` skill.**
 This audits third-party Go dependencies for license compatibility with Apache 2.0.
 Run it before committing any change to `go.mod` / `go.sum`.
+
+## Code Conventions
+
+### CLI command files (`internal/cli/`)
+Each Cobra subcommand lives in its own file named `<command>_cmd.go` (e.g. `get_cmd.go`,
+`serve_cmd.go`). Files that do not define a command (e.g. `root.go`, `client.go`,
+`color.go`, `errors.go`) are exempt. Tests for a command go in `<command>_cmd_test.go`.
 
 ## Logging
 Use `internal/log` (zerolog). Never use `fmt.Print*` in daemon/plugin code.

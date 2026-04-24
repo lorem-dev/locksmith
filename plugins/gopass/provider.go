@@ -10,8 +10,8 @@ import (
 	"os/exec"
 	"strings"
 
-	sdk "github.com/lorem-dev/locksmith/sdk"
 	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
+	sdkerrors "github.com/lorem-dev/locksmith/sdk/errors"
 )
 
 // GopassProvider retrieves secrets from a gopass password store.
@@ -83,7 +83,7 @@ func (p *GopassProvider) GetSecret(ctx context.Context, req *vaultv1.GetSecretRe
 	if err := cmd.Run(); err != nil {
 		stderrStr := strings.TrimSpace(stderr.String())
 		if strings.Contains(stderrStr, "Inappropriate ioctl for device") {
-			return nil, sdk.UnauthenticatedError(
+			return nil, sdkerrors.UnauthenticatedError(
 				"GPG passphrase required but no UI available - see docs/configuration.md#gpg-pinentry")
 		}
 		return nil, fmt.Errorf("gopass show %q: %s: %w", secretPath, stderrStr, err)

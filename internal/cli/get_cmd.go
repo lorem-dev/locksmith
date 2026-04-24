@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	locksmithv1 "github.com/lorem-dev/locksmith/gen/proto/locksmith/v1"
-	"github.com/lorem-dev/locksmith/sdk"
+	sdksession "github.com/lorem-dev/locksmith/sdk/session"
 )
 
 // newGetCmd returns the `locksmith get` command.
@@ -41,7 +41,7 @@ func newGetCmd() *cobra.Command {
 				}
 				sessionID = startResp.SessionId
 				fmt.Fprintf(os.Stderr, "locksmith: session started (expires %s)\n  export LOCKSMITH_SESSION=%s\n",
-					startResp.ExpiresAt, color.New(color.FgCyan, color.Bold).Sprint(sdk.HideSessionId(sessionID)),
+					startResp.ExpiresAt, color.New(color.FgCyan, color.Bold).Sprint(sdksession.HideSessionId(sessionID)),
 				)
 			}
 

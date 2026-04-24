@@ -11,8 +11,8 @@ import (
 	"sync"
 
 	goplugin "github.com/hashicorp/go-plugin"
-	sdk "github.com/lorem-dev/locksmith/sdk"
 	"github.com/lorem-dev/locksmith/internal/log"
+	"github.com/lorem-dev/locksmith/sdk/vault"
 )
 
 const pluginPrefix = "locksmith-plugin-"
@@ -28,7 +28,7 @@ type pluginClient interface {
 type clientFactory func(binaryPath string) pluginClient
 
 func defaultClientFactory(binaryPath string) pluginClient {
-	return goplugin.NewClient(sdk.NewClientConfig(binaryPath))
+	return goplugin.NewClient(vault.NewClientConfig(binaryPath))
 }
 
 // Manager owns the set of running vault plugin processes.
@@ -40,7 +40,7 @@ type Manager struct {
 
 type runningPlugin struct {
 	client   pluginClient
-	provider sdk.Provider
+	provider vault.Provider
 }
 
 // NewManager creates a new, empty plugin manager.
@@ -118,7 +118,7 @@ func (m *Manager) Launch(vaultType, binaryPath string) error {
 		return fmt.Errorf("dispensing plugin %q: %w", vaultType, err)
 	}
 
-	provider, ok := raw.(sdk.Provider)
+	provider, ok := raw.(vault.Provider)
 	if !ok {
 		client.Kill()
 		return fmt.Errorf("plugin %q does not implement Provider", vaultType)
@@ -130,7 +130,7 @@ func (m *Manager) Launch(vaultType, binaryPath string) error {
 }
 
 // Get returns the Provider for a vault type, or an error if not loaded.
-func (m *Manager) Get(vaultType string) (sdk.Provider, error) {
+func (m *Manager) Get(vaultType string) (vault.Provider, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	rp, ok := m.plugins[vaultType]

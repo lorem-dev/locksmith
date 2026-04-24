@@ -71,8 +71,9 @@ import (
 	"strings"
 	"unsafe"
 
-	sdk "github.com/lorem-dev/locksmith/sdk"
 	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
+	sdkerrors "github.com/lorem-dev/locksmith/sdk/errors"
+	"github.com/lorem-dev/locksmith/sdk/platform"
 )
 
 // KeychainProvider retrieves secrets from the macOS Keychain using the Security framework.
@@ -99,16 +100,16 @@ var keychainGetPasswordFunc = func(service, account string) ([]byte, error) {
 	return secret, nil
 }
 
-// keychainError maps an OSStatus code to a typed sdk.VaultError.
+// keychainError maps an OSStatus code to a typed sdkerrors.VaultError.
 func keychainError(code int, msg string) error {
 	full := fmt.Sprintf("keychain: %s", msg)
 	switch code {
 	case -25300: // errSecItemNotFound
-		return sdk.NotFoundError(full)
+		return sdkerrors.NotFoundError(full)
 	case -25293, -25308: // errSecAuthFailed, errSecInteractionNotAllowed
-		return sdk.PermissionDeniedError(full)
+		return sdkerrors.PermissionDeniedError(full)
 	default:
-		return sdk.InternalError(full)
+		return sdkerrors.InternalError(full)
 	}
 }
 
@@ -144,5 +145,5 @@ func (p *KeychainProvider) HealthCheck(_ context.Context, _ *vaultv1.HealthCheck
 
 // Info returns plugin metadata.
 func (p *KeychainProvider) Info(_ context.Context, _ *vaultv1.InfoRequest) (*vaultv1.InfoResponse, error) {
-	return &vaultv1.InfoResponse{Name: "keychain", Version: "0.1.0", Platforms: []string{"darwin"}}, nil
+	return &vaultv1.InfoResponse{Name: "keychain", Version: "0.1.0", Platforms: []string{platform.Darwin}}, nil
 }

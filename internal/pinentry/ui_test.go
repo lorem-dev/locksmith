@@ -105,4 +105,3 @@ func TestGetPassword_NoTTY(t *testing.T) {
 		t.Errorf("err = %v, want errCancelled", err)
 	}
 }
-

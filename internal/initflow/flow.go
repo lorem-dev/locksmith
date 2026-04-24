@@ -58,10 +58,10 @@ type InitOptions struct {
 
 // InitResult holds the resolved configuration from the init wizard.
 type InitResult struct {
-	ConfigPath            string
-	SelectedVaults        []string
-	SelectedAgents        []DetectedAgent
-	SandboxEnabled        bool
+	ConfigPath              string
+	SelectedVaults          []string
+	SelectedAgents          []DetectedAgent
+	SandboxEnabled          bool
 	GPGPinentryConfigured   bool            // true if the user opted to configure locksmith-pinentry
 	ConfigPreexisted        bool            // true when an existing config was found and kept
 	ShellHookInstall        bool            // true if user agreed (or --auto) to install
@@ -148,7 +148,7 @@ func RunInit(opts InitOptions) (*InitResult, error) {
 	if !opts.Auto {
 		gopassSelected := false
 		for _, v := range result.SelectedVaults {
-			if v == "gopass" {
+			if v == config.VaultGopass {
 				gopassSelected = true
 				break
 			}
