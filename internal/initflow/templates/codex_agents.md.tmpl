@@ -1,9 +1,28 @@
 ## Locksmith Integration
 
-Secrets are managed by Locksmith. Use `locksmith get --key <alias>` to retrieve them.
+Secrets are managed by Locksmith.
 
-- If `LOCKSMITH_SESSION` is not set, `locksmith get` auto-starts a session and prints
-  the session ID to stderr. Sessions expire by TTL automatically.
-- Export the session ID to reuse it across calls and avoid repeated vault authorization:
-  `export LOCKSMITH_SESSION=$(locksmith session start | jq -r .session_id)`
+**Session protocol:**
+
+1. Check if `LOCKSMITH_SESSION` is set in the environment. If yes, use it.
+2. If not set, run before accessing any secret:
+   ```bash
+   export LOCKSMITH_SESSION=$(locksmith session ensure --quiet)
+   ```
+   If this fails (daemon not running), continue without secrets.
+
+**Retrieving secrets:**
+
+Use `--key` when the alias is configured in `~/.config/locksmith/config.yaml`:
+
+    locksmith get --key openai_api_key
+    locksmith get --key github_token
+
+Use `--path` + `--vault` to access a secret directly by its path in the vault
+(no alias needed):
+
+    locksmith get --vault gopass --path work/aws/access-key-id
+    locksmith get --vault keychain --path "My API Token"
+
+- Export the session ID to reuse it: `export LOCKSMITH_SESSION=$(locksmith session start | jq -r .session_id)`
 - Pass `LOCKSMITH_SESSION` to sub-agents so they share the parent session.

@@ -1,11 +1,28 @@
 # Locksmith - Agent Instructions
 
+## Session Protocol
+
+Before accessing any secret, ensure a Locksmith session is active:
+
+1. Check if `LOCKSMITH_SESSION` is set in the environment. If yes, use it.
+2. If not set, run:
+   ```bash
+   export LOCKSMITH_SESSION=$(locksmith session ensure --quiet)
+   ```
+   If this fails (daemon not running), continue without secrets.
+
 ## Retrieving Secrets
 
-Use `locksmith get --key <alias>` to retrieve secrets from configured vaults.
+Use `--key` when the alias is configured in `~/.config/locksmith/config.yaml`:
 
-If `LOCKSMITH_SESSION` is not set, `locksmith get` automatically starts a session
-using the default TTL from config and prints the session ID to stderr.
+    locksmith get --key openai_api_key
+    locksmith get --key github_token
+
+Use `--path` + `--vault` to access a secret directly by its path in the vault
+(no alias needed):
+
+    locksmith get --vault gopass --path work/aws/access-key-id
+    locksmith get --vault keychain --path "My API Token"
 
 ## Session Management
 

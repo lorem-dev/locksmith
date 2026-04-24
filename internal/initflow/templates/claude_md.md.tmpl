@@ -1,8 +1,28 @@
 ## Locksmith Integration
 
-This environment uses [Locksmith](https://github.com/lorem-dev/locksmith) for secure MCP secret management.
+This environment uses [Locksmith](https://github.com/lorem-dev/locksmith) for
+secure MCP secret management.
 
-- Retrieve secrets: `locksmith get --key <alias>` (auto-starts a session if none is active)
-- To reuse a session: export the session ID printed to stderr as `LOCKSMITH_SESSION`
+**Session protocol:**
+
+1. Check if `LOCKSMITH_SESSION` is already set in the environment. If it is,
+   use it directly.
+2. If not set, run before accessing any secret:
+   ```bash
+   export LOCKSMITH_SESSION=$(locksmith session ensure --quiet)
+   ```
+   If this fails (daemon not running), continue without secrets.
+3. Retrieve secrets:
+
+**Using a configured alias** (`~/.config/locksmith/config.yaml`):
+
+    locksmith get --key openai_api_key
+    locksmith get --key github_token
+
+**Using a direct vault path** (no alias required):
+
+    locksmith get --vault gopass --path work/aws/access-key-id
+    locksmith get --vault keychain --path "My API Token"
+
 - Sessions expire automatically by TTL - no need to end them manually
 - Pass `LOCKSMITH_SESSION` to sub-agents so they share the parent session

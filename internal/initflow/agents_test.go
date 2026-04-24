@@ -263,3 +263,69 @@ func TestInstallSandboxPermissions_UnknownAgent_NoOp(t *testing.T) {
 		t.Errorf("InstallSandboxPermissions() unexpected error: %v", err)
 	}
 }
+
+// --- Template content tests ---
+
+func TestInstall_ClaudeCode_SkillContainsBothGetSyntaxes(t *testing.T) {
+	home := t.TempDir()
+	claudeDir := filepath.Join(home, ".claude")
+	os.MkdirAll(claudeDir, 0o755)
+
+	agent := initflow.DetectedAgent{Name: "Claude Code", Detected: true, ConfigDir: claudeDir}
+	writer := initflow.NewAgentWriter(home)
+	if err := writer.Install(agent); err != nil {
+		t.Fatalf("Install() error: %v", err)
+	}
+
+	skill, _ := os.ReadFile(filepath.Join(claudeDir, "skills", "locksmith.md"))
+	if !strings.Contains(string(skill), "--vault") {
+		t.Error("claude_skill template missing --vault syntax")
+	}
+	if !strings.Contains(string(skill), "--path") {
+		t.Error("claude_skill template missing --path syntax")
+	}
+
+	claudeMd, _ := os.ReadFile(filepath.Join(claudeDir, "CLAUDE.md"))
+	if !strings.Contains(string(claudeMd), "--vault") {
+		t.Error("claude_md template missing --vault syntax")
+	}
+	if !strings.Contains(string(claudeMd), "--path") {
+		t.Error("claude_md template missing --path syntax")
+	}
+}
+
+func TestInstall_Codex_AgentsMdContainsBothGetSyntaxes(t *testing.T) {
+	home := t.TempDir()
+	codexDir := filepath.Join(home, ".codex")
+	agent := initflow.DetectedAgent{Name: "Codex", Detected: true, ConfigDir: codexDir}
+	writer := initflow.NewAgentWriter(home)
+	if err := writer.Install(agent); err != nil {
+		t.Fatalf("Install() error: %v", err)
+	}
+
+	content, _ := os.ReadFile(filepath.Join(codexDir, "AGENTS.md"))
+	if !strings.Contains(string(content), "--vault") {
+		t.Error("codex_agents template missing --vault syntax")
+	}
+	if !strings.Contains(string(content), "--path") {
+		t.Error("codex_agents template missing --path syntax")
+	}
+}
+
+func TestInstall_OpenCode_InstructionsContainsBothGetSyntaxes(t *testing.T) {
+	home := t.TempDir()
+	openCodeDir := filepath.Join(home, ".config", "opencode")
+	agent := initflow.DetectedAgent{Name: "OpenCode", Detected: true, ConfigDir: openCodeDir}
+	writer := initflow.NewAgentWriter(home)
+	if err := writer.Install(agent); err != nil {
+		t.Fatalf("Install() error: %v", err)
+	}
+
+	content, _ := os.ReadFile(filepath.Join(openCodeDir, "instructions.md"))
+	if !strings.Contains(string(content), "--vault") {
+		t.Error("agent_instructions template missing --vault syntax")
+	}
+	if !strings.Contains(string(content), "--path") {
+		t.Error("agent_instructions template missing --path syntax")
+	}
+}

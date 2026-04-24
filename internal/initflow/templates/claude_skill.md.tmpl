@@ -1,13 +1,28 @@
 ---
 name: locksmith-auth
-description: Use when MCP server requires authentication headers
+description: Use when MCP server requires authentication headers or secrets from vaults
 ---
 
-Use `locksmith get --key <alias>` to retrieve secrets from configured vaults.
+Use `locksmith get` to retrieve secrets from configured vaults.
 
 If `LOCKSMITH_SESSION` is not set in the environment, `locksmith get` automatically
 starts a session using the default TTL from config and prints the session ID to stderr.
 Sessions expire by TTL automatically - no manual cleanup needed.
+
+## Retrieving Secrets
+
+Use `--key` when the alias is configured in `~/.config/locksmith/config.yaml`:
+
+    locksmith get --key openai_api_key
+    locksmith get --key github_token
+
+Use `--path` + `--vault` to access a secret directly by its path in the vault
+(no alias needed):
+
+    locksmith get --vault gopass --path work/aws/access-key-id
+    locksmith get --vault keychain --path "My API Token"
+
+## Session Reuse
 
 To reuse the same session across multiple calls (avoids repeated vault authorization):
 1. Run `locksmith session start` once and export the token:
