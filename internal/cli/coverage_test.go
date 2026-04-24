@@ -9,20 +9,21 @@ import (
 )
 
 // TestConfigCheck_DefaultPath covers the cfgPath == "" branch in config_cmd.go.
-// The default path typically doesn't exist, so we expect an error.
+// HOME is redirected so DefaultConfigPath() returns a nonexistent path.
 func TestConfigCheck_DefaultPath(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	root := cli.NewRootCmd()
 	// Do NOT pass --config so that cfgPath == "" and DefaultConfigPath() is called.
 	root.SetArgs([]string{"config", "check"})
-	// This will fail because the default config doesn't exist in the test environment.
-	// We don't care about the outcome - we care that the branch is covered.
+	// Will fail (no config), but covers the DefaultConfigPath() branch.
 	_ = root.Execute()
 }
 
 // TestServeCmd_DefaultPath covers the cfgPath == "" branch in serve.go.
-// The default config path typically doesn't exist, so serve fails fast with a
-// "loading config" error - covering the DefaultConfigPath() call.
+// HOME is redirected to a temp dir so DefaultConfigPath() returns a path that
+// does not exist, causing serve to fail fast with a "loading config" error.
 func TestServeCmd_DefaultPath(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	root := cli.NewRootCmd()
 	// Do NOT pass --config so cfgPath == "" and DefaultConfigPath() is called.
 	root.SetArgs([]string{"serve"})
