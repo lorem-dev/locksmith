@@ -27,8 +27,19 @@ this gracefully (secrets will be unavailable, but work should continue).
 
 **Step 3 - Retrieve secrets**
 
+Use `--key` when the alias is configured in `~/.config/locksmith/config.yaml`:
+
 ```bash
-locksmith get --key <alias>
+locksmith get --key openai_api_key
+locksmith get --key github_token
+```
+
+Use `--path` + `--vault` to access a secret directly by its path in the vault
+(no alias needed):
+
+```bash
+locksmith get --vault gopass --path work/aws/access-key-id
+locksmith get --vault keychain --path "My API Token"
 ```
 
 The session is reused automatically for subsequent calls within the same session
@@ -51,47 +62,50 @@ each sub-agent must obtain its own session independently.
 
 | Platform | Session automation | Sub-agent passing | Notes |
 |----------|--------------------|-------------------|-------|
-| Claude Code | Hook (automatic) | Via instructions | See hook setup below |
-| Gemini CLI | Via instructions | Via instructions | See `docs/hooks/GEMINI.md` |
-| Cursor | Via instructions | Via instructions | See `docs/hooks/AGENTS.md` |
-| Copilot CLI | Via instructions | Via instructions | See `docs/hooks/AGENTS.md` |
-| Codex | Via instructions | Via instructions | See `docs/hooks/AGENTS.md` |
+| Claude Code | Hook (auto-installed by `locksmith init`) | Via instructions | Restart Claude Code after `init` |
+| Gemini CLI | Via instructions | Via instructions | |
+| Cursor | Via instructions | Via instructions | |
+| Copilot CLI | Via instructions | Via instructions | |
+| Codex | Via instructions | Via instructions | |
 
 ## Claude Code Hook Setup
 
-For Claude Code, a `UserPromptSubmit` hook automatically ensures a session
-exists before each prompt - no manual session management needed.
+Run `locksmith init` - the hook is installed automatically when Claude Code is
+detected. It registers a `UserPromptSubmit` hook in `~/.claude/settings.json`
+that injects `LOCKSMITH_SESSION` before each prompt.
 
-**1. Copy the hook script to a stable location:**
+After installation, restart Claude Code for the hook to take effect.
 
-```bash
-cp docs/hooks/locksmith-session.sh ~/.config/locksmith/agent-hook.sh
-chmod +x ~/.config/locksmith/agent-hook.sh
-```
+### Manual setup
 
-**2. Register it in `~/.claude/settings.json`:**
+If you prefer to install the hook without using `init`:
 
-```json
-{
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.config/locksmith/agent-hook.sh"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
+1. Run `locksmith init --agent claude` to write the hook script to
+   `~/.config/locksmith/agent-hook.sh` without going through the full wizard.
 
-The hook injects `LOCKSMITH_SESSION` into the Claude Code environment before
-each prompt. If the daemon is not running, the hook exits silently and work
-continues without Locksmith.
+2. Add to `~/.claude/settings.json` (merge with existing content, do not
+   overwrite):
+
+   ```json
+   {
+     "hooks": {
+       "UserPromptSubmit": [
+         {
+           "matcher": "",
+           "hooks": [
+             {
+               "type": "command",
+               "command": "/Users/<you>/.config/locksmith/agent-hook.sh"
+             }
+           ]
+         }
+       ]
+     }
+   }
+   ```
+
+The hook exits silently if the Locksmith daemon is not running, so it never
+blocks agent work.
 
 ## Locksmith Config Reference
 
