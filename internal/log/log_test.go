@@ -7,8 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lorem-dev/locksmith/internal/log"
 	"github.com/rs/zerolog"
+
+	"github.com/lorem-dev/locksmith/internal/log"
 )
 
 func TestInit_TextFormat(t *testing.T) {

@@ -31,7 +31,10 @@ type mockServer struct {
 	vaultHealthErr   error
 }
 
-func (m *mockServer) GetSecret(_ context.Context, _ *locksmithv1.GetSecretRequest) (*locksmithv1.GetSecretResponse, error) {
+func (m *mockServer) GetSecret(
+	_ context.Context,
+	_ *locksmithv1.GetSecretRequest,
+) (*locksmithv1.GetSecretResponse, error) {
 	if m.getSecretErr != nil {
 		return nil, m.getSecretErr
 	}
@@ -41,7 +44,10 @@ func (m *mockServer) GetSecret(_ context.Context, _ *locksmithv1.GetSecretReques
 	return &locksmithv1.GetSecretResponse{Secret: []byte("mysecret")}, nil
 }
 
-func (m *mockServer) SessionStart(_ context.Context, _ *locksmithv1.SessionStartRequest) (*locksmithv1.SessionStartResponse, error) {
+func (m *mockServer) SessionStart(
+	_ context.Context,
+	_ *locksmithv1.SessionStartRequest,
+) (*locksmithv1.SessionStartResponse, error) {
 	if m.sessionStartErr != nil {
 		return nil, m.sessionStartErr
 	}
@@ -54,14 +60,20 @@ func (m *mockServer) SessionStart(_ context.Context, _ *locksmithv1.SessionStart
 	}, nil
 }
 
-func (m *mockServer) SessionEnd(_ context.Context, _ *locksmithv1.SessionEndRequest) (*locksmithv1.SessionEndResponse, error) {
+func (m *mockServer) SessionEnd(
+	_ context.Context,
+	_ *locksmithv1.SessionEndRequest,
+) (*locksmithv1.SessionEndResponse, error) {
 	if m.sessionEndErr != nil {
 		return nil, m.sessionEndErr
 	}
 	return &locksmithv1.SessionEndResponse{}, nil
 }
 
-func (m *mockServer) SessionList(_ context.Context, _ *locksmithv1.SessionListRequest) (*locksmithv1.SessionListResponse, error) {
+func (m *mockServer) SessionList(
+	_ context.Context,
+	_ *locksmithv1.SessionListRequest,
+) (*locksmithv1.SessionListResponse, error) {
 	if m.sessionListErr != nil {
 		return nil, m.sessionListErr
 	}
@@ -71,7 +83,10 @@ func (m *mockServer) SessionList(_ context.Context, _ *locksmithv1.SessionListRe
 	return &locksmithv1.SessionListResponse{}, nil
 }
 
-func (m *mockServer) VaultList(_ context.Context, _ *locksmithv1.VaultListRequest) (*locksmithv1.VaultListResponse, error) {
+func (m *mockServer) VaultList(
+	_ context.Context,
+	_ *locksmithv1.VaultListRequest,
+) (*locksmithv1.VaultListResponse, error) {
 	if m.vaultListErr != nil {
 		return nil, m.vaultListErr
 	}
@@ -81,7 +96,10 @@ func (m *mockServer) VaultList(_ context.Context, _ *locksmithv1.VaultListReques
 	return &locksmithv1.VaultListResponse{}, nil
 }
 
-func (m *mockServer) VaultHealth(_ context.Context, _ *locksmithv1.VaultHealthRequest) (*locksmithv1.VaultHealthResponse, error) {
+func (m *mockServer) VaultHealth(
+	_ context.Context,
+	_ *locksmithv1.VaultHealthRequest,
+) (*locksmithv1.VaultHealthResponse, error) {
 	if m.vaultHealthErr != nil {
 		return nil, m.vaultHealthErr
 	}
@@ -335,7 +353,7 @@ keys:
     vault: keychain
     path: /mypath
 `
-	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0600); err != nil {
+	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 

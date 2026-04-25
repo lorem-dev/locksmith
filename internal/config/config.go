@@ -72,7 +72,7 @@ type Key struct {
 
 // Load reads and validates the config file at path.
 func Load(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // G304: path is user-provided config file path
 	if err != nil {
 		return nil, fmt.Errorf("reading config %s: %w", path, err)
 	}
@@ -117,7 +117,11 @@ func (c *Config) Validate() error {
 		}
 		// Keychain paths support "service/account" shorthand but not deeper nesting.
 		if vaultDef.Type == VaultKeychain && strings.Count(key.Path, "/") > 1 {
-			return fmt.Errorf("key %q: keychain path %q has too many segments (use \"service/account\" or \"account\")", name, key.Path)
+			return fmt.Errorf(
+				"key %q: keychain path %q has too many segments (use \"service/account\" or \"account\")",
+				name,
+				key.Path,
+			)
 		}
 	}
 

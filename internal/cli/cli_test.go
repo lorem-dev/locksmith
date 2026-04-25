@@ -35,7 +35,7 @@ func TestNewRootCmd_Help(t *testing.T) {
 	root.SetErr(&buf)
 	root.SetArgs([]string{"--help"})
 	// Execute returns an error for --help (exits with 0 but cobra returns it)
-	root.Execute() //nolint:errcheck
+	_ = root.Execute()
 	if buf.Len() == 0 {
 		t.Error("expected help output")
 	}

@@ -2,6 +2,14 @@
 
 ## Development
 
+- Updated linting to golangci-lint v2 (v2.11.4) with stricter settings: `errcheck`
+  with `check-blank` and `check-type-assertions`, `wrapcheck`, `unparam`, `mnd`,
+  `embeddedstructfieldcheck`, `gocritic`, `errorlint`, and others. Fixed all
+  resulting issues across the codebase: proper error wrapping, named return
+  values for defer-captured errors, removed unused nolint directives, renamed
+  variables to avoid shadowing, and extracted helper functions to reduce
+  cognitive complexity.
+
 - `init` now automatically installs the Claude Code `UserPromptSubmit` hook
   into `~/.claude/settings.json` when Claude Code is detected; prompts for
   confirmation (skipped in `--auto` mode), merges idempotently without

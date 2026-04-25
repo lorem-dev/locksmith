@@ -98,7 +98,11 @@ func TestInstall_OpenCode(t *testing.T) {
 
 func TestInstall_Generic(t *testing.T) {
 	home := t.TempDir()
-	agent := initflow.DetectedAgent{Name: "SomeOtherAgent", Detected: true, ConfigDir: filepath.Join(home, ".someagent")}
+	agent := initflow.DetectedAgent{
+		Name:      "SomeOtherAgent",
+		Detected:  true,
+		ConfigDir: filepath.Join(home, ".someagent"),
+	}
 	writer := initflow.NewAgentWriter(home)
 	if err := writer.Install(agent); err != nil {
 		t.Fatalf("Install() error: %v", err)

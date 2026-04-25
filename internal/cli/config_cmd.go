@@ -68,6 +68,7 @@ Requires locksmith-pinentry to be installed (run 'make init' once after cloning)
 		},
 	}
 	cmd.Flags().BoolVar(&auto, "auto", false, "configure without prompting")
-	cmd.Flags().BoolVar(&noTUI, "no-tui", false, "use plain-text prompts (also auto-enabled when TERM=dumb or non-TTY stdin)")
+	cmd.Flags().
+		BoolVar(&noTUI, "no-tui", false, "use plain-text prompts (also auto-enabled when TERM=dumb or non-TTY stdin)")
 	return cmd
 }

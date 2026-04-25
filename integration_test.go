@@ -12,9 +12,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	locksmithv1 "github.com/lorem-dev/locksmith/gen/proto/locksmith/v1"
 	"github.com/lorem-dev/locksmith/internal/config"
 	"github.com/lorem-dev/locksmith/internal/daemon"
-	locksmithv1 "github.com/lorem-dev/locksmith/gen/proto/locksmith/v1"
 	ilog "github.com/lorem-dev/locksmith/internal/log"
 )
 

@@ -32,18 +32,23 @@ func InstallSandboxPermissions(agent DetectedAgent) error {
 func installClaudeSandbox(agent DetectedAgent) error {
 	settingsPath := filepath.Join(agent.ConfigDir, "settings.json")
 	var settings map[string]interface{}
-	if data, err := os.ReadFile(settingsPath); err == nil {
-		json.Unmarshal(data, &settings) //nolint:errcheck
+	if data, err := os.ReadFile(settingsPath); err == nil { //nolint:gosec // G304: path is under agent config dir
+		if jsonErr := json.Unmarshal(data, &settings); jsonErr != nil {
+			settings = nil // treat malformed JSON as absent
+		}
 	}
 	if settings == nil {
 		settings = make(map[string]interface{})
 	}
 
-	perms, _ := settings["permissions"].(map[string]interface{})
-	if perms == nil {
+	perms, ok := settings["permissions"].(map[string]interface{})
+	if !ok {
 		perms = make(map[string]interface{})
 	}
-	allowList, _ := perms["allow"].([]interface{})
+	var allowList []interface{}
+	if raw, ok := perms["allow"].([]interface{}); ok {
+		allowList = raw
+	}
 
 	existing := make(map[string]bool)
 	for _, item := range allowList {
@@ -63,7 +68,14 @@ func installClaudeSandbox(agent DetectedAgent) error {
 	if err != nil {
 		return fmt.Errorf("marshaling settings: %w", err)
 	}
-	return os.WriteFile(settingsPath, out, 0o644)
+	if err := os.WriteFile( //nolint:gosec // G306: settings.json is user-readable config
+		settingsPath,
+		out,
+		0o644,
+	); err != nil {
+		return fmt.Errorf("writing settings: %w", err)
+	}
+	return nil
 }
 
 func installCodexSandbox(agent DetectedAgent) error {

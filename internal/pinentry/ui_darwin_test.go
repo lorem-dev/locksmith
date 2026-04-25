@@ -3,6 +3,7 @@
 package pinentry
 
 import (
+	"errors"
 	"os/exec"
 	"testing"
 )
@@ -47,7 +48,7 @@ func TestTryGUI_ExecFails(t *testing.T) {
 	pin, err := tryGUIWithCmd("desc", "Prompt", func(script string) ([]byte, error) {
 		return nil, &exec.ExitError{}
 	})
-	if err != errCancelled {
+	if !errors.Is(err, errCancelled) {
 		t.Errorf("err = %v, want errCancelled", err)
 	}
 	if pin != "" {
@@ -60,7 +61,7 @@ func TestTryGUI_MalformedOutput(t *testing.T) {
 	pin, err := tryGUIWithCmd("desc", "Prompt", func(script string) ([]byte, error) {
 		return []byte("something unexpected\n"), nil
 	})
-	if err != errCancelled {
+	if !errors.Is(err, errCancelled) {
 		t.Errorf("err = %v, want errCancelled", err)
 	}
 	if pin != "" {

@@ -155,7 +155,7 @@ func TestClaudeHookInstaller_Install_MergesExistingSettings(t *testing.T) {
 
 	data, _ = os.ReadFile(filepath.Join(claudeDir, "settings.json"))
 	var settings map[string]any
-	json.Unmarshal(data, &settings) //nolint:errcheck
+	json.Unmarshal(data, &settings)
 
 	if settings["theme"] != "dark" {
 		t.Error("existing theme setting was lost")
@@ -183,12 +183,12 @@ func TestClaudeHookInstaller_Install_Idempotent(t *testing.T) {
 	lsDir := filepath.Join(home, ".config", "locksmith")
 	hookCmd := filepath.Join(lsDir, "agent-hook.sh")
 
-	installer.Install() //nolint:errcheck
-	installer.Install() //nolint:errcheck
+	installer.Install()
+	installer.Install()
 
 	data, _ := os.ReadFile(filepath.Join(claudeDir, "settings.json"))
 	var settings map[string]any
-	json.Unmarshal(data, &settings) //nolint:errcheck
+	json.Unmarshal(data, &settings)
 	hooks, _ := settings["hooks"].(map[string]any)
 	ups, _ := hooks["UserPromptSubmit"].([]any)
 

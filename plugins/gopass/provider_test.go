@@ -7,9 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
 )
 
 func TestGopassProvider_Info(t *testing.T) {

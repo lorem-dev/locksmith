@@ -27,11 +27,11 @@ func newSessionStartCmd() *cobra.Command {
 		Use:   "start",
 		Short: "Start a new agent session",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, conn, err := dialDaemon("")
+			client, conn, err := dialDaemon()
 			if err != nil {
 				return err
 			}
-			defer conn.Close()
+			defer conn.Close() //nolint:errcheck // gRPC connection close; error not actionable in defer
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			resp, err := client.SessionStart(ctx, &locksmithv1.SessionStartRequest{
@@ -40,10 +40,13 @@ func newSessionStartCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("starting session: %w", err)
 			}
-			out, _ := json.MarshalIndent(map[string]string{
+			out, err := json.MarshalIndent(map[string]string{
 				"session_id": resp.SessionId,
 				"expires_at": resp.ExpiresAt,
 			}, "", "  ")
+			if err != nil {
+				return fmt.Errorf("marshaling session: %w", err)
+			}
 			fmt.Println(string(out))
 			return nil
 		},
@@ -66,14 +69,17 @@ func newSessionEndCmd() *cobra.Command {
 			if sessionIDPrefix == "" {
 				return fmt.Errorf("session ID prefix required: use --session or set LOCKSMITH_SESSION")
 			}
-			client, conn, err := dialDaemon("")
+			client, conn, err := dialDaemon()
 			if err != nil {
 				return err
 			}
-			defer conn.Close()
+			defer conn.Close() //nolint:errcheck // gRPC connection close; error not actionable in defer
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			if _, err := client.SessionEnd(ctx, &locksmithv1.SessionEndRequest{SessionIdPrefix: sessionIDPrefix}); err != nil {
+			if _, err := client.SessionEnd(
+				ctx,
+				&locksmithv1.SessionEndRequest{SessionIdPrefix: sessionIDPrefix},
+			); err != nil {
 				return fmt.Errorf("ending session: %w", err)
 			}
 			fmt.Println("session ended")
@@ -94,22 +100,22 @@ func newSessionEnsureCmd() *cobra.Command {
 		Use:   "ensure",
 		Short: "Ensure a valid session exists, reusing or creating one",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, conn, err := dialDaemon("")
+			client, conn, err := dialDaemon()
 			if err != nil {
 				return err
 			}
-			defer conn.Close()
+			defer conn.Close() //nolint:errcheck // gRPC connection close; error not actionable in defer
 
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
 			// Try to reuse the session from environment.
 			if existing := os.Getenv("LOCKSMITH_SESSION"); existing != "" {
-				resp, err := client.SessionList(ctx, &locksmithv1.SessionListRequest{})
-				if err == nil {
-					for _, s := range resp.Sessions {
+				listResp, listErr := client.SessionList(ctx, &locksmithv1.SessionListRequest{})
+				if listErr == nil {
+					for _, s := range listResp.Sessions {
 						if s.SessionId == existing {
-							fmt.Fprintln(cmd.OutOrStdout(), existing)
+							fmt.Fprintln(cmd.OutOrStdout(), existing) //nolint:errcheck // writing to stdout
 							return nil
 						}
 					}
@@ -123,12 +129,13 @@ func newSessionEnsureCmd() *cobra.Command {
 			}
 
 			if quiet {
-				fmt.Fprintln(cmd.OutOrStdout(), resp.SessionId)
+				fmt.Fprintln(cmd.OutOrStdout(), resp.SessionId) //nolint:errcheck // writing to stdout
 			} else {
-				fmt.Fprintf(cmd.ErrOrStderr(),
+				fmt.Fprintf( //nolint:errcheck // writing to stderr
+					cmd.ErrOrStderr(),
 					"locksmith: session started (expires %s)\n  export LOCKSMITH_SESSION=%s\n",
 					resp.ExpiresAt, resp.SessionId)
-				fmt.Fprintln(cmd.OutOrStdout(), resp.SessionId)
+				fmt.Fprintln(cmd.OutOrStdout(), resp.SessionId) //nolint:errcheck // writing to stdout
 			}
 			return nil
 		},
@@ -143,11 +150,11 @@ func newSessionListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List active sessions",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, conn, err := dialDaemon("")
+			client, conn, err := dialDaemon()
 			if err != nil {
 				return err
 			}
-			defer conn.Close()
+			defer conn.Close() //nolint:errcheck // gRPC connection close; error not actionable in defer
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			resp, err := client.SessionList(ctx, &locksmithv1.SessionListRequest{})
@@ -158,7 +165,10 @@ func newSessionListCmd() *cobra.Command {
 				fmt.Println("no active sessions")
 				return nil
 			}
-			out, _ := json.MarshalIndent(resp.Sessions, "", "  ")
+			out, err := json.MarshalIndent(resp.Sessions, "", "  ")
+			if err != nil {
+				return fmt.Errorf("marshaling sessions: %w", err)
+			}
 			fmt.Println(string(out))
 			return nil
 		},

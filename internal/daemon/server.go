@@ -30,6 +30,7 @@ type pluginRegistry interface {
 // Server is the gRPC implementation of LocksmithService.
 type Server struct {
 	locksmithv1.UnimplementedLocksmithServiceServer
+
 	cfg     *config.Config
 	store   *session.Store
 	plugins pluginRegistry
@@ -52,7 +53,10 @@ func NewServerWithRegistry(cfg *config.Config, store *session.Store, reg pluginR
 }
 
 // SessionStart creates a new agent session with the requested TTL and key restrictions.
-func (s *Server) SessionStart(_ context.Context, req *locksmithv1.SessionStartRequest) (*locksmithv1.SessionStartResponse, error) {
+func (s *Server) SessionStart(
+	_ context.Context,
+	req *locksmithv1.SessionStartRequest,
+) (*locksmithv1.SessionStartResponse, error) {
 	ttl, err := parseTTL(req.Ttl, s.cfg.Defaults.SessionTTL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid TTL: %w", err)
@@ -69,17 +73,23 @@ func (s *Server) SessionStart(_ context.Context, req *locksmithv1.SessionStartRe
 }
 
 // SessionEnd invalidates a session and wipes its cached secrets.
-func (s *Server) SessionEnd(_ context.Context, req *locksmithv1.SessionEndRequest) (*locksmithv1.SessionEndResponse, error) {
-	sessionId, err := s.store.Delete(req.SessionIdPrefix)
+func (s *Server) SessionEnd(
+	_ context.Context,
+	req *locksmithv1.SessionEndRequest,
+) (*locksmithv1.SessionEndResponse, error) {
+	sessionID, err := s.store.Delete(req.SessionIdPrefix)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("deleting session: %w", err)
 	}
-	log.Info().Str("session_id", sdksession.MaskSessionId(*sessionId)).Msg("session ended")
-	return &locksmithv1.SessionEndResponse{SessionId: *sessionId}, nil
+	log.Info().Str("session_id", sdksession.MaskSessionId(*sessionID)).Msg("session ended")
+	return &locksmithv1.SessionEndResponse{SessionId: *sessionID}, nil
 }
 
 // SessionList returns metadata for all active sessions.
-func (s *Server) SessionList(_ context.Context, _ *locksmithv1.SessionListRequest) (*locksmithv1.SessionListResponse, error) {
+func (s *Server) SessionList(
+	_ context.Context,
+	_ *locksmithv1.SessionListRequest,
+) (*locksmithv1.SessionListResponse, error) {
 	sessions := s.store.List()
 	infos := make([]*locksmithv1.SessionInfo, len(sessions))
 	for i, sess := range sessions {
@@ -95,7 +105,10 @@ func (s *Server) SessionList(_ context.Context, _ *locksmithv1.SessionListReques
 
 // GetSecret retrieves a secret from the appropriate vault plugin, serving from
 // the session cache when possible to avoid repeated vault authorization prompts.
-func (s *Server) GetSecret(ctx context.Context, req *locksmithv1.GetSecretRequest) (*locksmithv1.GetSecretResponse, error) {
+func (s *Server) GetSecret(
+	ctx context.Context,
+	req *locksmithv1.GetSecretRequest,
+) (*locksmithv1.GetSecretResponse, error) {
 	if _, err := s.store.Get(req.SessionId); err != nil {
 		return nil, fmt.Errorf("invalid session: %w", err)
 	}
@@ -107,7 +120,10 @@ func (s *Server) GetSecret(ctx context.Context, req *locksmithv1.GetSecretReques
 
 	cacheKey := vaultType + ":" + path
 	if cached, ok := s.store.GetCachedSecret(req.SessionId, cacheKey); ok {
-		log.Debug().Str("session_id", sdksession.MaskSessionId(req.SessionId)).Str("key", cacheKey).Msg("serving secret from cache")
+		log.Debug().
+			Str("session_id", sdksession.MaskSessionId(req.SessionId)).
+			Str("key", cacheKey).
+			Msg("serving secret from cache")
 		return &locksmithv1.GetSecretResponse{Secret: cached, ContentType: "text/plain"}, nil
 	}
 
@@ -128,7 +144,11 @@ func (s *Server) GetSecret(ctx context.Context, req *locksmithv1.GetSecretReques
 	}
 
 	s.store.CacheSecret(req.SessionId, cacheKey, resp.Secret)
-	log.Info().Str("session_id", sdksession.MaskSessionId(req.SessionId)).Str("vault", vaultType).Str("path", path).Msg("secret retrieved and cached")
+	log.Info().
+		Str("session_id", sdksession.MaskSessionId(req.SessionId)).
+		Str("vault", vaultType).
+		Str("path", path).
+		Msg("secret retrieved and cached")
 
 	return &locksmithv1.GetSecretResponse{Secret: resp.Secret, ContentType: resp.ContentType}, nil
 }
@@ -155,7 +175,10 @@ func (s *Server) VaultList(_ context.Context, _ *locksmithv1.VaultListRequest) (
 }
 
 // VaultHealth returns availability status for all loaded vault plugins.
-func (s *Server) VaultHealth(_ context.Context, _ *locksmithv1.VaultHealthRequest) (*locksmithv1.VaultHealthResponse, error) {
+func (s *Server) VaultHealth(
+	_ context.Context,
+	_ *locksmithv1.VaultHealthRequest,
+) (*locksmithv1.VaultHealthResponse, error) {
 	if s.plugins == nil {
 		return &locksmithv1.VaultHealthResponse{}, nil
 	}
@@ -181,7 +204,9 @@ func (s *Server) VaultHealth(_ context.Context, _ *locksmithv1.VaultHealthReques
 
 // resolveKey returns vault type, secret path, and extra opts for a GetSecret request.
 // Supports both key alias lookup and direct vault+path fallback.
-func (s *Server) resolveKey(req *locksmithv1.GetSecretRequest) (vaultType, path string, opts map[string]string, err error) {
+func (s *Server) resolveKey(
+	req *locksmithv1.GetSecretRequest,
+) (vaultType, path string, opts map[string]string, err error) {
 	opts = make(map[string]string)
 	if req.KeyAlias != "" {
 		keyDef, ok := s.cfg.Keys[req.KeyAlias]
@@ -221,5 +246,9 @@ func parseTTL(requested, defaultTTL string) (time.Duration, error) {
 	if ttlStr == "" {
 		ttlStr = defaultTTL
 	}
-	return time.ParseDuration(ttlStr)
+	d, err := time.ParseDuration(ttlStr)
+	if err != nil {
+		return 0, fmt.Errorf("parsing duration %q: %w", ttlStr, err)
+	}
+	return d, nil
 }

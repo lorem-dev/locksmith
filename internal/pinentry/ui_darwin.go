@@ -11,7 +11,7 @@ import (
 // tryGUI shows a native macOS password dialog via osascript.
 func tryGUI(desc, prompt string) (string, error) {
 	return tryGUIWithCmd(desc, prompt, func(script string) ([]byte, error) {
-		return exec.Command("osascript", "-e", script).Output()
+		return exec.Command("osascript", "-e", script).Output() //nolint:gosec // G204: variable script arg
 	})
 }
 

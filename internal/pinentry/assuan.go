@@ -14,6 +14,8 @@ var errCancelled = errors.New("operation cancelled")
 // run implements the Assuan pinentry protocol over r/w.
 // getPassword is called on GETPIN with (description, prompt) and must return
 // the passphrase or errCancelled.
+//
+//nolint:errcheck // Assuan protocol writes: if w is broken the scanner loop ends naturally.
 func run(r io.Reader, w io.Writer, getPassword func(desc, prompt string) (string, error)) {
 	fmt.Fprintln(w, "OK Pleased to meet you")
 
@@ -77,7 +79,7 @@ func decodePercent(s string) string {
 			hi := hexVal(s[i+1])
 			lo := hexVal(s[i+2])
 			if hi >= 0 && lo >= 0 {
-				b.WriteByte(byte(hi<<4 | lo))
+				b.WriteByte(byte(hi<<4 | lo)) //nolint:gosec // G115: hi/lo are 0-15 from hexVal, value 0-255
 				i += 3
 				continue
 			}
@@ -88,14 +90,17 @@ func decodePercent(s string) string {
 	return b.String()
 }
 
+// hexLetterOffset is the decimal value of hex digit 'a'/'A' (10).
+const hexLetterOffset = 10
+
 func hexVal(c byte) int {
 	switch {
 	case c >= '0' && c <= '9':
 		return int(c - '0')
 	case c >= 'a' && c <= 'f':
-		return int(c-'a') + 10
+		return int(c-'a') + hexLetterOffset
 	case c >= 'A' && c <= 'F':
-		return int(c-'A') + 10
+		return int(c-'A') + hexLetterOffset
 	}
 	return -1
 }

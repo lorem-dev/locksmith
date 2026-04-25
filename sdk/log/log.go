@@ -33,7 +33,7 @@ func NewLogWriter(cfg LogConfig) (io.Writer, error) {
 	}
 	home, _ := os.UserHomeDir()
 	expanded := expandTilde(cfg.File, home)
-	if err := os.MkdirAll(filepath.Dir(expanded), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(expanded), 0o700); err != nil {
 		return nil, fmt.Errorf("creating log directory: %w", err)
 	}
 	return &lumberjack.Logger{

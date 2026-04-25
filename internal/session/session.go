@@ -63,10 +63,10 @@ func (s *Store) Get(id string) (*Session, error) {
 		// Acquire write lock to delete expired session.
 		s.mu.Lock()
 		// Re-check under write lock (another goroutine may have deleted it).
-		if sess, stillPresent := s.sessions[id]; stillPresent {
-			for key, secret := range sess.secrets {
+		if expiredSess, stillPresent := s.sessions[id]; stillPresent {
+			for key, secret := range expiredSess.secrets {
 				wipeBytes(secret)
-				delete(sess.secrets, key)
+				delete(expiredSess.secrets, key)
 			}
 			delete(s.sessions, id)
 		}
@@ -79,19 +79,19 @@ func (s *Store) Get(id string) (*Session, error) {
 // getByMask returns all sessions whose ID matches the id prefix.
 func (s *Store) getByMask(idPrefix string) []*Session {
 	prefix := strings.ToLower(idPrefix)
-	foundSessionIds := make([]*Session, 0, 1)
+	foundSessionIDs := make([]*Session, 0, 1)
 
 	for _, session := range s.sessions {
-		sessionId := strings.ToLower(session.ID)
-		if strings.HasPrefix(sessionId, prefix) {
-			foundSessionIds = append(foundSessionIds, session)
-			if len(sessionId) == len(prefix) {
+		sessionID := strings.ToLower(session.ID)
+		if strings.HasPrefix(sessionID, prefix) {
+			foundSessionIDs = append(foundSessionIDs, session)
+			if len(sessionID) == len(prefix) {
 				break
 			}
 		}
 	}
 
-	return foundSessionIds
+	return foundSessionIDs
 }
 
 // Delete invalidates a session and wipes all cached secrets from memory.
@@ -194,10 +194,13 @@ func (sess *Session) isKeyAllowed(keyName string) bool {
 	return false
 }
 
+// sessionIDBytes is the number of random bytes used to generate a session ID.
+const sessionIDBytes = 32
+
 func generateID() (string, error) {
-	b := make([]byte, 32)
+	b := make([]byte, sessionIDBytes)
 	if _, err := rand.Read(b); err != nil {
-		return "", err
+		return "", fmt.Errorf("reading random bytes: %w", err)
 	}
 	return "ls_" + hex.EncodeToString(b), nil
 }

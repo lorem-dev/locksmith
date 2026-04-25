@@ -1,23 +1,188 @@
-run:
-  timeout: 5m
+version: "2"
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 30
+
+formatters:
+  enable:
+    - gci
+    - gofumpt
+    - goimports
+    - golines
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/lorem-dev)
+    gofumpt:
+      extra-rules: true
+    goimports:
+      local-prefixes:
+        - github.com/lorem-dev
+    golines:
+      max-len: 120
 
 linters:
+  default: standard
   enable:
+    - asasalint
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - canonicalheader
+    - copyloopvar
+    - cyclop
+    - embeddedstructfieldcheck
     - errcheck
-    - govet
-    - staticcheck
-    - unused
-    - gosimple
-    - ineffassign
-    - typecheck
-    - gofmt
-    - goimports
-    - misspell
-    - unconvert
+    - errname
+    - errorlint
+    - exptostd
+    - fatcontext
+    - gocognit
     - gocritic
+    - gocyclo
+    - godot
+    - goprintffuncname
+    - gosec
+    - govet
+    - iface
+    - ineffassign
+    - staticcheck
+    - wrapcheck
+    - unparam
+    - prealloc
+    - thelper
+    - nolintlint
+    - misspell
+    - mnd
+    - unused
+    - wastedassign
+    - whitespace
+  disable:
+    - revive
+  exclusions:
+    rules:
+      - source: "TODO"
+        linters: [godot]
+      - text: "should have a package comment"
+        linters: [revive]
+      - text: 'exported \S+ \S+ should have comment( \(or a comment on this block\))? or be unexported'
+        linters: [revive]
+      - text: 'package comment should be of the form ".+"'
+        source: "// ?(nolint|TODO)"
+        linters: [revive]
+      - text: 'comment on exported \S+ \S+ should be of the form ".+"'
+        source: "// ?(nolint|TODO)"
+        linters: [revive, staticcheck]
+      - path: '_test\.go'
+        linters:
+          - bodyclose
+          - dupl
+          - errcheck
+          - funlen
+          - goconst
+          - gosec
+          - noctx
+          - wrapcheck
+      - path: '.*_test\.go$'
+        linters:
+          - errcheck
+          - gosec
+          - wrapcheck
+          - cyclop
+      - path: 'internal/cli/.*\.go$'
+        linters:
+          - wrapcheck
+      - path: internal/server/docs
+        linters:
+          - godot
+  settings:
+    cyclop:
+      max-complexity: 30
+      package-average: 10.0
+    embeddedstructfieldcheck:
+      forbid-mutex: true
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+    gocognit:
+      min-complexity: 30
+    gocritic:
+      settings:
+        captLocal:
+          paramsOnly: false
+        underef:
+          skipRecvDeref: false
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+    gosec:
+      excludes:
+        - G101
+        - G104
+      severity: medium
+      confidence: medium
+    mnd:
+      ignored-functions:
+        - args.Error
+        - flag.Arg
+        - flag.Duration.*
+        - flag.Float.*
+        - flag.Int.*
+        - flag.Uint.*
+        - os.Chmod
+        - os.Mkdir.*
+        - os.OpenFile
+        - os.WriteFile
+        - prometheus.ExponentialBuckets.*
+        - prometheus.LinearBuckets
+        - context.WithTimeout
+        - time.Sleep
+        - time.NewTicker
+    revive:
+      # noinspection YAMLSchemaValidation
+      ignore-generated-header: true
+      severity: warning
+    wrapcheck:
+      ignore-sigs:
+        - "fmt.Errorf("
+        - "errors.New("
+        - "errors.Join("
+        - "pkg/errors.Wrap("
+        - "pkg/errors.Wrapf("
+        - "pkg/errors.WithMessage("
+        - "pkg/errors.WithStack("
+        - "google.golang.org/grpc/status.Errorf("
+        - "google.golang.org/grpc/status.Error("
+    staticcheck:
+      checks:
+        - all
+        # Incorrect or missing package comment.
+        # https://staticcheck.dev/docs/checks/#ST1000
+        - -ST1000
+        # Use consistent method receiver names.
+        # https://staticcheck.dev/docs/checks/#ST1016
+        - -ST1016
+        # Omit embedded fields from a selector expression.
+        # https://staticcheck.dev/docs/checks/#QF1008
+        - -QF1008
 
-linters-settings:
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - style
+run:
+  timeout: 5m
+  tests: true
+  allow-parallel-runners: true
+  relative-path-mode: gitroot
+
+output:
+  formats:
+    colored-line-number:
+      path: stdout
+  print-linter-name: true
+  print-issued-lines: true
+  show-stats: true
+
+severity:
+  default: ""

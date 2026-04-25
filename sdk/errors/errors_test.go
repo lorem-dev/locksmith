@@ -3,9 +3,10 @@ package errors_test
 import (
 	"testing"
 
-	sdkerrors "github.com/lorem-dev/locksmith/sdk/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	sdkerrors "github.com/lorem-dev/locksmith/sdk/errors"
 )
 
 func TestVaultError_Error(t *testing.T) {

@@ -21,11 +21,11 @@ func newGetCmd() *cobra.Command {
 		Use:   "get",
 		Short: "Retrieve a secret from a vault provider",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, conn, err := dialDaemon("")
+			client, conn, err := dialDaemon()
 			if err != nil {
 				return err
 			}
-			defer conn.Close()
+			defer conn.Close() //nolint:errcheck // gRPC connection close; error not actionable in defer
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
@@ -35,13 +35,16 @@ func newGetCmd() *cobra.Command {
 				// No active session: auto-start one using the default TTL from config.
 				// Print the token to stderr so the caller can optionally export it to
 				// reuse across subsequent calls (avoids repeated vault authorization).
-				startResp, err := client.SessionStart(ctx, &locksmithv1.SessionStartRequest{})
-				if err != nil {
-					return err
+				startResp, startErr := client.SessionStart(ctx, &locksmithv1.SessionStartRequest{})
+				if startErr != nil {
+					return startErr
 				}
 				sessionID = startResp.SessionId
-				fmt.Fprintf(os.Stderr, "locksmith: session started (expires %s)\n  export LOCKSMITH_SESSION=%s\n",
-					startResp.ExpiresAt, color.New(color.FgCyan, color.Bold).Sprint(sdksession.HideSessionId(sessionID)),
+				fmt.Fprintf(
+					os.Stderr,
+					"locksmith: session started (expires %s)\n  export LOCKSMITH_SESSION=%s\n",
+					startResp.ExpiresAt,
+					color.New(color.FgCyan, color.Bold).Sprint(sdksession.HideSessionId(sessionID)),
 				)
 			}
 

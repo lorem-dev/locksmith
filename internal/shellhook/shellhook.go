@@ -88,12 +88,12 @@ func Snippet(s Shell) string {
 // IsInstalled reports whether the marker is already present in rcFile.
 // Returns false (not an error) if the file does not exist.
 func IsInstalled(rcFile string) (bool, error) {
-	data, err := os.ReadFile(rcFile)
+	data, err := os.ReadFile(rcFile) //nolint:gosec // G304: rcFile is derived from user home dir
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
 	}
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("reading %s: %w", rcFile, err)
 	}
 	return strings.Contains(string(data), marker), nil
 }
@@ -101,11 +101,13 @@ func IsInstalled(rcFile string) (bool, error) {
 // Install appends the shell-appropriate snippet to rcFile, preceded by a blank
 // line. The caller must check IsInstalled first; Install does not de-duplicate.
 func Install(rcFile string, s Shell) error {
-	f, err := os.OpenFile(rcFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(rcFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644) //nolint:gosec // G304
 	if err != nil {
-		return err
+		return fmt.Errorf("opening %s: %w", rcFile, err)
 	}
-	defer f.Close()
-	_, err = fmt.Fprintf(f, "\n%s\n", Snippet(s))
-	return err
+	defer f.Close() //nolint:errcheck // close of append-only file; write error already captured
+	if _, err = fmt.Fprintf(f, "\n%s\n", Snippet(s)); err != nil {
+		return fmt.Errorf("writing to %s: %w", rcFile, err)
+	}
+	return nil
 }

@@ -15,13 +15,10 @@ import (
 // dialDaemon connects to the locksmith daemon Unix socket and returns a client.
 // Returns an error with a helpful hint if the daemon is not running.
 // The LOCKSMITH_SOCKET environment variable overrides the default socket path.
-func dialDaemon(socketPath string) (locksmithv1.LocksmithServiceClient, *grpc.ClientConn, error) {
-	if socketPath == "" {
-		if envSocket := os.Getenv("LOCKSMITH_SOCKET"); envSocket != "" {
-			socketPath = envSocket
-		} else {
-			socketPath = config.ExpandPath("~/.config/locksmith/locksmith.sock")
-		}
+func dialDaemon() (locksmithv1.LocksmithServiceClient, *grpc.ClientConn, error) {
+	socketPath := config.ExpandPath("~/.config/locksmith/locksmith.sock")
+	if envSocket := os.Getenv("LOCKSMITH_SOCKET"); envSocket != "" {
+		socketPath = envSocket
 	}
 	conn, err := grpc.NewClient(
 		"unix://"+socketPath,

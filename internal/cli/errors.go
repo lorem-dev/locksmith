@@ -29,7 +29,7 @@ func FormatErrorParts(err error) (msg, hint string) {
 	if s, ok := status.FromError(err); ok && s.Code() != codes.OK {
 		msg = s.Message()
 		hint = hints[s.Code()]
-		return
+		return msg, hint
 	}
 	return err.Error(), ""
 }
@@ -41,6 +41,11 @@ func PrintError(err error) {
 
 	fmt.Fprintf(os.Stderr, "%s %s\n", color.New(color.FgRed, color.Bold).Sprint("Error:"), msg)
 	if hint != "" {
-		fmt.Fprintf(os.Stderr, "%s %s\n", color.New(color.FgYellow, color.Bold).Sprint("Hint:"), color.New(color.FgHiBlack).Sprint(hint))
+		fmt.Fprintf(
+			os.Stderr,
+			"%s %s\n",
+			color.New(color.FgYellow, color.Bold).Sprint("Hint:"),
+			color.New(color.FgHiBlack).Sprint(hint),
+		)
 	}
 }

@@ -9,9 +9,7 @@ import (
 
 // readPasswordFn is the function used to read a password from a file descriptor.
 // It is a variable so tests can replace it without a real TTY.
-var readPasswordFn = func(fd int) ([]byte, error) {
-	return term.ReadPassword(fd)
-}
+var readPasswordFn = term.ReadPassword
 
 // openTTYFn opens /dev/tty for interactive prompting.
 // It is a variable so tests can inject a fake writer without a real terminal.
@@ -48,11 +46,11 @@ func getPassword(
 	if err != nil {
 		return "", errCancelled
 	}
-	defer tty.Close()
+	defer tty.Close() //nolint:errcheck // TTY close error not actionable after prompt
 
-	fmt.Fprintf(tty, "%s: ", prompt)
-	pin, err := readFn(int(tty.Fd()))
-	fmt.Fprintln(tty)
+	fmt.Fprintf(tty, "%s: ", prompt)  //nolint:errcheck // writing prompt to TTY; error not recoverable
+	pin, err := readFn(int(tty.Fd())) //nolint:gosec // G115: fd is a valid file descriptor, never overflows int
+	fmt.Fprintln(tty)                 //nolint:errcheck // newline after password input; error not recoverable
 	if err != nil {
 		return "", errCancelled
 	}

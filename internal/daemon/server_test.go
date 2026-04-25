@@ -61,7 +61,10 @@ func TestSessionStart_DefaultTTL(t *testing.T) {
 func TestSessionEnd(t *testing.T) {
 	srv := newTestServer()
 	startResp, _ := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
-	endResp, err := srv.SessionEnd(context.Background(), &locksmithv1.SessionEndRequest{SessionIdPrefix: startResp.SessionId})
+	endResp, err := srv.SessionEnd(
+		context.Background(),
+		&locksmithv1.SessionEndRequest{SessionIdPrefix: startResp.SessionId},
+	)
 	if err != nil {
 		t.Fatalf("SessionEnd() error: %v", err)
 	}
@@ -77,7 +80,10 @@ func TestSessionEnd(t *testing.T) {
 func TestSessionEnd_Prefix(t *testing.T) {
 	srv := newTestServer()
 	startResp, _ := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
-	endResp, err := srv.SessionEnd(context.Background(), &locksmithv1.SessionEndRequest{SessionIdPrefix: startResp.SessionId[:5]})
+	endResp, err := srv.SessionEnd(
+		context.Background(),
+		&locksmithv1.SessionEndRequest{SessionIdPrefix: startResp.SessionId[:5]},
+	)
 	if err != nil {
 		t.Fatalf("SessionEnd() error: %v", err)
 	}
@@ -89,7 +95,7 @@ func TestSessionEnd_Prefix(t *testing.T) {
 func TestSessionEnd_NotFound(t *testing.T) {
 	srv := newTestServer()
 	_, err := srv.SessionEnd(context.Background(), &locksmithv1.SessionEndRequest{SessionIdPrefix: "ls_nonexistent"})
-	want := `session for prefix "ls_nonexistent" not found`
+	want := `deleting session: session for prefix "ls_nonexistent" not found`
 	if err == nil || err.Error() != want {
 		t.Fatalf("SessionEnd() error = %v, want '%s'", err, want)
 	}
@@ -100,7 +106,7 @@ func TestSessionEnd_Multiple(t *testing.T) {
 	srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
 	srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
 	_, err := srv.SessionEnd(context.Background(), &locksmithv1.SessionEndRequest{SessionIdPrefix: "ls_"})
-	want := `multiple sessions found for prefix "ls_"`
+	want := `deleting session: multiple sessions found for prefix "ls_"`
 	if err == nil || err.Error() != want {
 		t.Fatalf("SessionEnd() error = %v, want '%s'", err, want)
 	}
@@ -234,12 +240,12 @@ func TestSessionStart_LogsMaskedSessionId(t *testing.T) {
 	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &entry); err != nil {
 		t.Fatalf("log output is not valid JSON: %v — output: %q", err, buf.String())
 	}
-	sessionId, ok := entry["session_id"].(string)
+	sessionID, ok := entry["session_id"].(string)
 	if !ok {
 		t.Fatalf("log entry missing session_id field, got: %v", entry)
 	}
-	if !strings.Contains(sessionId, "****") {
-		t.Errorf("session_id in log is not masked at info level: %q", sessionId)
+	if !strings.Contains(sessionID, "****") {
+		t.Errorf("session_id in log is not masked at info level: %q", sessionID)
 	}
 }
 
@@ -274,11 +280,11 @@ func TestSessionStart_LogsFullSessionIdInDebug(t *testing.T) {
 	if entry == nil {
 		t.Fatalf("no 'session started' log entry found in output: %q", buf.String())
 	}
-	sessionId, ok := entry["session_id"].(string)
+	sessionID, ok := entry["session_id"].(string)
 	if !ok {
 		t.Fatalf("log entry missing session_id field: %v", entry)
 	}
-	if sessionId != resp.SessionId {
-		t.Errorf("session_id in debug log should be full ID\ngot:  %q\nwant: %q", sessionId, resp.SessionId)
+	if sessionID != resp.SessionId {
+		t.Errorf("session_id in debug log should be full ID\ngot:  %q\nwant: %q", sessionID, resp.SessionId)
 	}
 }

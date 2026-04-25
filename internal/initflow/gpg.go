@@ -10,7 +10,9 @@ import (
 // ReadExistingPinentry returns the path from the current `pinentry-program` line
 // in gnupgDir/gpg-agent.conf, or "" if none is set or the file does not exist.
 func ReadExistingPinentry(gnupgDir string) string {
-	data, err := os.ReadFile(filepath.Join(gnupgDir, "gpg-agent.conf"))
+	data, err := os.ReadFile( //nolint:gosec // G304: path is under user home .gnupg
+		filepath.Join(gnupgDir, "gpg-agent.conf"),
+	)
 	if err != nil {
 		return ""
 	}
@@ -34,7 +36,7 @@ func ApplyGPGPinentry(gnupgDir, pinentryPath string) (replaced string, err error
 	confPath := filepath.Join(gnupgDir, "gpg-agent.conf")
 
 	var lines []string
-	if data, readErr := os.ReadFile(confPath); readErr == nil {
+	if data, readErr := os.ReadFile(confPath); readErr == nil { //nolint:gosec // G304: path is under user home .gnupg
 		for _, line := range strings.Split(string(data), "\n") {
 			trimmed := strings.TrimSpace(line)
 			if strings.HasPrefix(trimmed, "pinentry-program ") {
@@ -54,7 +56,9 @@ func ApplyGPGPinentry(gnupgDir, pinentryPath string) (replaced string, err error
 	lines = append(lines, "pinentry-program "+pinentryPath)
 	content := strings.Join(lines, "\n") + "\n"
 
-	if err := os.WriteFile(confPath, []byte(content), 0o600); err != nil {
+	if err := os.WriteFile( //nolint:gosec // G703: safe path (gnupgDir + fixed filename)
+		confPath, []byte(content), 0o600,
+	); err != nil {
 		return "", fmt.Errorf("writing gpg-agent.conf: %w", err)
 	}
 	return replaced, nil

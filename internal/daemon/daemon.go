@@ -64,7 +64,7 @@ func (d *Daemon) Start() error {
 	}
 
 	if err := os.Chmod(socketPath, 0o600); err != nil {
-		listener.Close()
+		listener.Close() //nolint:errcheck // cleanup; original error takes precedence
 		return fmt.Errorf("setting socket permissions: %w", err)
 	}
 
@@ -79,7 +79,10 @@ func (d *Daemon) Start() error {
 	go d.cleanupLoop()
 
 	log.Info().Str("socket", socketPath).Msg("locksmith daemon listening")
-	return srv.Serve(listener)
+	if err := srv.Serve(listener); err != nil {
+		return fmt.Errorf("gRPC serve: %w", err)
+	}
+	return nil
 }
 
 // Stop gracefully shuts down the gRPC server and kills plugin processes.
@@ -95,7 +98,7 @@ func (d *Daemon) Stop() {
 		srv.GracefulStop()
 	}
 	if ln != nil {
-		ln.Close()
+		ln.Close() //nolint:errcheck // shutdown cleanup; error not actionable
 	}
 	d.plugins.Kill()
 	log.Info().Msg("locksmith daemon stopped")

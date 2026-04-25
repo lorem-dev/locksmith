@@ -13,6 +13,9 @@ import (
 	"github.com/lorem-dev/locksmith/internal/config"
 )
 
+// daemonProbeTimeout is how long _autostart waits when probing the daemon socket.
+const daemonProbeTimeout = 200 * time.Millisecond
+
 // newAutostartCmd returns the hidden locksmith _autostart command.
 // It is called from shell rc files: it starts the daemon only if it is not
 // already running, and always exits 0 so shell sessions never fail because
@@ -29,10 +32,12 @@ func newAutostartCmd() *cobra.Command {
 			}
 
 			// Probe the socket. If the dial succeeds the daemon is alive.
-			conn, err := net.DialTimeout("unix", socketPath, 200*time.Millisecond)
+			conn, err := net.DialTimeout( //nolint:gosec // G704: local Unix socket, not a network SSRF
+				"unix", socketPath, daemonProbeTimeout,
+			)
 			if err == nil {
-				conn.Close()
-				return nil // daemon already running
+				conn.Close() //nolint:errcheck // probe connection; error not actionable
+				return nil   // daemon already running
 			}
 
 			// Daemon not running: spawn it in the background.
@@ -57,7 +62,7 @@ func newAutostartCmd() *cobra.Command {
 			// In normal operation the daemon outlives _autostart and is adopted by
 			// init, which reaps it. If it exits early (e.g. config error), this
 			// goroutine collects the exit status before _autostart itself exits.
-			go func() { _ = c.Wait() }()
+			go func() { _ = c.Wait() }() //nolint:errcheck // daemon exit status not actionable here
 			// Give the daemon a moment to bind its socket before the shell continues.
 			time.Sleep(50 * time.Millisecond)
 			return nil

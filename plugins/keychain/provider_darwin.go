@@ -127,7 +127,10 @@ func parseKeychainPath(path, vaultService string) (service, account string) {
 }
 
 // GetSecret retrieves a secret from the macOS Keychain.
-func (p *KeychainProvider) GetSecret(_ context.Context, req *vaultv1.GetSecretRequest) (*vaultv1.GetSecretResponse, error) {
+func (p *KeychainProvider) GetSecret(
+	_ context.Context,
+	req *vaultv1.GetSecretRequest,
+) (*vaultv1.GetSecretResponse, error) {
 	vaultService := req.Opts["service"]
 	service, account := parseKeychainPath(req.Path, vaultService)
 
@@ -139,7 +142,10 @@ func (p *KeychainProvider) GetSecret(_ context.Context, req *vaultv1.GetSecretRe
 }
 
 // HealthCheck confirms the macOS Keychain is accessible.
-func (p *KeychainProvider) HealthCheck(_ context.Context, _ *vaultv1.HealthCheckRequest) (*vaultv1.HealthCheckResponse, error) {
+func (p *KeychainProvider) HealthCheck(
+	_ context.Context,
+	_ *vaultv1.HealthCheckRequest,
+) (*vaultv1.HealthCheckResponse, error) {
 	return &vaultv1.HealthCheckResponse{Available: true, Message: "macOS Keychain available"}, nil
 }
 

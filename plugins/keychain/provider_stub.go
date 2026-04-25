@@ -17,12 +17,18 @@ import (
 type KeychainProvider struct{}
 
 // GetSecret returns an error on non-macOS platforms.
-func (p *KeychainProvider) GetSecret(_ context.Context, _ *vaultv1.GetSecretRequest) (*vaultv1.GetSecretResponse, error) {
+func (p *KeychainProvider) GetSecret(
+	_ context.Context,
+	_ *vaultv1.GetSecretRequest,
+) (*vaultv1.GetSecretResponse, error) {
 	return nil, fmt.Errorf("keychain is only available on macOS (current OS: %s)", runtime.GOOS)
 }
 
 // HealthCheck reports the keychain as unavailable on non-macOS platforms.
-func (p *KeychainProvider) HealthCheck(_ context.Context, _ *vaultv1.HealthCheckRequest) (*vaultv1.HealthCheckResponse, error) {
+func (p *KeychainProvider) HealthCheck(
+	_ context.Context,
+	_ *vaultv1.HealthCheckRequest,
+) (*vaultv1.HealthCheckResponse, error) {
 	return &vaultv1.HealthCheckResponse{
 		Available: false,
 		Message:   fmt.Sprintf("keychain is only available on macOS (current OS: %s)", runtime.GOOS),

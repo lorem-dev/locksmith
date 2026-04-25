@@ -67,7 +67,10 @@ func buildGopassEnv() []string {
 
 // GetSecret fetches a secret from gopass by path. Optionally uses a named store
 // via opts["store"]. Authorization (GPG passphrase / Touch ID) is handled by gopass.
-func (p *GopassProvider) GetSecret(ctx context.Context, req *vaultv1.GetSecretRequest) (*vaultv1.GetSecretResponse, error) {
+func (p *GopassProvider) GetSecret(
+	ctx context.Context,
+	req *vaultv1.GetSecretRequest,
+) (*vaultv1.GetSecretResponse, error) {
 	secretPath := req.Path
 	if store, ok := req.Opts["store"]; ok && store != "" {
 		secretPath = store + "/" + req.Path
@@ -96,7 +99,10 @@ func (p *GopassProvider) GetSecret(ctx context.Context, req *vaultv1.GetSecretRe
 }
 
 // HealthCheck verifies that gopass is installed and the store is initialized.
-func (p *GopassProvider) HealthCheck(_ context.Context, _ *vaultv1.HealthCheckRequest) (*vaultv1.HealthCheckResponse, error) {
+func (p *GopassProvider) HealthCheck(
+	_ context.Context,
+	_ *vaultv1.HealthCheckRequest,
+) (*vaultv1.HealthCheckResponse, error) {
 	lookPath := p.resolveLookPath()
 	runCmd := p.resolveRunCmd()
 

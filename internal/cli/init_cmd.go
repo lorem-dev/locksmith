@@ -36,7 +36,8 @@ func newInitCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&noTUI, "no-tui", false, "use plain-text prompts (also auto-enabled when TERM=dumb or non-TTY stdin)")
+	cmd.Flags().
+		BoolVar(&noTUI, "no-tui", false, "use plain-text prompts (also auto-enabled when TERM=dumb or non-TTY stdin)")
 	cmd.Flags().BoolVar(&auto, "auto", false, "auto-detect everything, apply defaults without prompts")
 	cmd.Flags().StringVar(&agentOnly, "agent", "", "install for one specific agent only")
 	cmd.Flags().BoolVar(&skipAgents, "skip-agents", false, "skip agent setup")

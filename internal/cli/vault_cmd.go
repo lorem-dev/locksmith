@@ -19,11 +19,11 @@ func newVaultCmd() *cobra.Command {
 			Use:   "list",
 			Short: "List available vault providers",
 			RunE: func(cmd *cobra.Command, args []string) error {
-				client, conn, err := dialDaemon("")
+				client, conn, err := dialDaemon()
 				if err != nil {
 					return err
 				}
-				defer conn.Close()
+				defer conn.Close() //nolint:errcheck // gRPC connection close; error not actionable in defer
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
 				resp, err := client.VaultList(ctx, &locksmithv1.VaultListRequest{})
@@ -34,7 +34,10 @@ func newVaultCmd() *cobra.Command {
 					fmt.Println("no vault providers loaded")
 					return nil
 				}
-				out, _ := json.MarshalIndent(resp.Vaults, "", "  ")
+				out, err := json.MarshalIndent(resp.Vaults, "", "  ")
+				if err != nil {
+					return fmt.Errorf("marshaling vaults: %w", err)
+				}
 				fmt.Println(string(out))
 				return nil
 			},
@@ -43,11 +46,11 @@ func newVaultCmd() *cobra.Command {
 			Use:   "health",
 			Short: "Check health of vault providers",
 			RunE: func(cmd *cobra.Command, args []string) error {
-				client, conn, err := dialDaemon("")
+				client, conn, err := dialDaemon()
 				if err != nil {
 					return err
 				}
-				defer conn.Close()
+				defer conn.Close() //nolint:errcheck // gRPC connection close; error not actionable in defer
 				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cancel()
 				resp, err := client.VaultHealth(ctx, &locksmithv1.VaultHealthRequest{})

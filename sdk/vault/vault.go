@@ -73,7 +73,11 @@ func (p *GRPCPlugin) GRPCServer(broker *goplugin.GRPCBroker, s *grpc.Server) err
 }
 
 // GRPCClient creates a client-side adapter for the plugin.
-func (p *GRPCPlugin) GRPCClient(ctx context.Context, broker *goplugin.GRPCBroker, c *grpc.ClientConn) (interface{}, error) {
+func (p *GRPCPlugin) GRPCClient(
+	ctx context.Context,
+	broker *goplugin.GRPCBroker,
+	c *grpc.ClientConn,
+) (interface{}, error) {
 	return NewGRPCClient(c), nil
 }
 
@@ -94,7 +98,10 @@ func (s *GRPCServer) GetSecret(ctx context.Context, req *vaultv1.GetSecretReques
 }
 
 // HealthCheck delegates to the underlying Provider implementation.
-func (s *GRPCServer) HealthCheck(ctx context.Context, req *vaultv1.HealthCheckRequest) (*vaultv1.HealthCheckResponse, error) {
+func (s *GRPCServer) HealthCheck(
+	ctx context.Context,
+	req *vaultv1.HealthCheckRequest,
+) (*vaultv1.HealthCheckResponse, error) {
 	return s.impl.HealthCheck(ctx, req)
 }
 
@@ -128,7 +135,10 @@ func (c *GRPCClient) GetSecret(ctx context.Context, req *vaultv1.GetSecretReques
 }
 
 // HealthCheck calls the remote plugin's HealthCheck over gRPC.
-func (c *GRPCClient) HealthCheck(ctx context.Context, req *vaultv1.HealthCheckRequest) (*vaultv1.HealthCheckResponse, error) {
+func (c *GRPCClient) HealthCheck(
+	ctx context.Context,
+	req *vaultv1.HealthCheckRequest,
+) (*vaultv1.HealthCheckResponse, error) {
 	return c.client.HealthCheck(ctx, req)
 }
 

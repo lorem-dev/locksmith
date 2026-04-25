@@ -193,8 +193,8 @@ func TestRunInit_Auto_InstallsClaudeHook(t *testing.T) {
 	}
 
 	scriptPath := filepath.Join(home, ".config", "locksmith", "agent-hook.sh")
-	if _, err := os.Stat(scriptPath); err != nil {
-		t.Errorf("hook script not written to %s: %v", scriptPath, err)
+	if _, statErr := os.Stat(scriptPath); statErr != nil {
+		t.Errorf("hook script not written to %s: %v", scriptPath, statErr)
 	}
 
 	data, err := os.ReadFile(filepath.Join(home, ".claude", "settings.json"))

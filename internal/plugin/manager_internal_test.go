@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	goplugin "github.com/hashicorp/go-plugin"
+
 	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
 	"github.com/lorem-dev/locksmith/internal/log"
 	"github.com/lorem-dev/locksmith/sdk/vault"
@@ -52,9 +53,14 @@ type stubProvider struct{}
 func (p *stubProvider) GetSecret(_ context.Context, _ *vaultv1.GetSecretRequest) (*vaultv1.GetSecretResponse, error) {
 	return nil, nil
 }
-func (p *stubProvider) HealthCheck(_ context.Context, _ *vaultv1.HealthCheckRequest) (*vaultv1.HealthCheckResponse, error) {
+
+func (p *stubProvider) HealthCheck(
+	_ context.Context,
+	_ *vaultv1.HealthCheckRequest,
+) (*vaultv1.HealthCheckResponse, error) {
 	return nil, nil
 }
+
 func (p *stubProvider) Info(_ context.Context, _ *vaultv1.InfoRequest) (*vaultv1.InfoResponse, error) {
 	return nil, nil
 }

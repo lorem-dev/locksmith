@@ -92,7 +92,7 @@ func TestGetPassword_TTYSuccess(t *testing.T) {
 func TestGetPassword_TTYReadError(t *testing.T) {
 	mockRead := func(_ int) ([]byte, error) { return nil, errors.New("read error") }
 	_, err := getPassword("desc", "Prompt", noGUI, fakeTTY(t), mockRead)
-	if err != errCancelled {
+	if !errors.Is(err, errCancelled) {
 		t.Errorf("err = %v, want errCancelled", err)
 	}
 }
@@ -101,7 +101,7 @@ func TestGetPassword_TTYReadError(t *testing.T) {
 // cannot be opened (both GUI and TTY unavailable).
 func TestGetPassword_NoTTY(t *testing.T) {
 	_, err := getPassword("desc", "Prompt", noGUI, brokenTTY(), nil)
-	if err != errCancelled {
+	if !errors.Is(err, errCancelled) {
 		t.Errorf("err = %v, want errCancelled", err)
 	}
 }

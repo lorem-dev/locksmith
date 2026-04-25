@@ -161,7 +161,11 @@ func TestIsInstalled_False_NoMarker(t *testing.T) {
 
 func TestIsInstalled_True(t *testing.T) {
 	f := filepath.Join(t.TempDir(), ".zshrc")
-	if err := os.WriteFile(f, []byte("# locksmith daemon autostart\nif command -v locksmith ...\n"), 0o644); err != nil {
+	if err := os.WriteFile(
+		f,
+		[]byte("# locksmith daemon autostart\nif command -v locksmith ...\n"),
+		0o644,
+	); err != nil {
 		t.Fatal(err)
 	}
 	ok, err := shellhook.IsInstalled(f)

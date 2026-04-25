@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	goplugin "github.com/hashicorp/go-plugin"
+
 	"github.com/lorem-dev/locksmith/internal/log"
 	"github.com/lorem-dev/locksmith/sdk/vault"
 )

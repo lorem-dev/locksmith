@@ -5,14 +5,15 @@ import (
 	"fmt"
 	"testing"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	locksmithv1 "github.com/lorem-dev/locksmith/gen/proto/locksmith/v1"
 	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
 	"github.com/lorem-dev/locksmith/internal/config"
 	"github.com/lorem-dev/locksmith/internal/session"
 	sdkerrors "github.com/lorem-dev/locksmith/sdk/errors"
 	"github.com/lorem-dev/locksmith/sdk/vault"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // mockRegistry implements pluginRegistry for testing.
@@ -57,7 +58,10 @@ func (p *mockProvider) GetSecret(_ context.Context, req *vaultv1.GetSecretReques
 	return &vaultv1.GetSecretResponse{Secret: p.secret, ContentType: p.contentType}, nil
 }
 
-func (p *mockProvider) HealthCheck(_ context.Context, _ *vaultv1.HealthCheckRequest) (*vaultv1.HealthCheckResponse, error) {
+func (p *mockProvider) HealthCheck(
+	_ context.Context,
+	_ *vaultv1.HealthCheckRequest,
+) (*vaultv1.HealthCheckResponse, error) {
 	if p.healthErr != nil {
 		return nil, p.healthErr
 	}
@@ -235,7 +239,14 @@ func TestResolveKey_UnknownVault(t *testing.T) {
 		Keys:     map[string]config.Key{"orphan-key": {Vault: "missing-vault", Path: "p"}},
 	}
 	store := session.NewStore()
-	srvForSession := &Server{cfg: &config.Config{Defaults: config.Defaults{SessionTTL: "1h"}, Vaults: map[string]config.Vault{}, Keys: map[string]config.Key{}}, store: store}
+	srvForSession := &Server{
+		cfg: &config.Config{
+			Defaults: config.Defaults{SessionTTL: "1h"},
+			Vaults:   map[string]config.Vault{},
+			Keys:     map[string]config.Key{},
+		},
+		store: store,
+	}
 	startResp, _ := srvForSession.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
 
 	srv := &Server{cfg: cfg, store: store}

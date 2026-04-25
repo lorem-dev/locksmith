@@ -6,13 +6,14 @@ import (
 	"net"
 	"testing"
 
-	sdkerrors "github.com/lorem-dev/locksmith/sdk/errors"
-	"github.com/lorem-dev/locksmith/sdk/vault"
-	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
+
+	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
+	sdkerrors "github.com/lorem-dev/locksmith/sdk/errors"
+	"github.com/lorem-dev/locksmith/sdk/vault"
 )
 
 // mockProvider is a Provider that returns fixed responses.
@@ -22,7 +23,10 @@ func (m *mockProvider) GetSecret(_ context.Context, _ *vaultv1.GetSecretRequest)
 	return &vaultv1.GetSecretResponse{Secret: []byte("test-secret"), ContentType: "text/plain"}, nil
 }
 
-func (m *mockProvider) HealthCheck(_ context.Context, _ *vaultv1.HealthCheckRequest) (*vaultv1.HealthCheckResponse, error) {
+func (m *mockProvider) HealthCheck(
+	_ context.Context,
+	_ *vaultv1.HealthCheckRequest,
+) (*vaultv1.HealthCheckResponse, error) {
 	return &vaultv1.HealthCheckResponse{Available: true, Message: "ok"}, nil
 }
 
@@ -40,7 +44,10 @@ func (e *errorProvider) GetSecret(_ context.Context, _ *vaultv1.GetSecretRequest
 	return nil, status.Errorf(e.code, "%s", e.msg)
 }
 
-func (e *errorProvider) HealthCheck(_ context.Context, _ *vaultv1.HealthCheckRequest) (*vaultv1.HealthCheckResponse, error) {
+func (e *errorProvider) HealthCheck(
+	_ context.Context,
+	_ *vaultv1.HealthCheckRequest,
+) (*vaultv1.HealthCheckResponse, error) {
 	return &vaultv1.HealthCheckResponse{Available: true}, nil
 }
 

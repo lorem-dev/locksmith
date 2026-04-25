@@ -61,25 +61,27 @@ type InitOptions struct {
 
 // InitResult holds the resolved configuration from the init wizard.
 type InitResult struct {
-	ConfigPath              string
-	SelectedVaults          []string
-	SelectedAgents          []DetectedAgent
-	SandboxEnabled          bool
-	GPGPinentryConfigured   bool            // true if the user opted to configure locksmith-pinentry
-	ConfigPreexisted        bool            // true when an existing config was found and kept
-	ShellHookInstall        bool            // true if user agreed (or --auto) to install
-	ShellHookAlreadyPresent bool            // true if hook marker was already in rc file
-	ShellHookRCFile         string          // rc file path; empty when shell is unknown
-	ShellHookShell          shellhook.Shell // detected shell
-	ClaudeHookConfirmed     bool            // user approved (or --auto); set in RunInit before applyInit
-	ClaudeHookInstalled     bool            // hook was written successfully; set in applyInit
-	ClaudeHookAlreadyPresent bool           // hook was already in settings.json; install skipped
+	ConfigPath               string
+	SelectedVaults           []string
+	SelectedAgents           []DetectedAgent
+	SandboxEnabled           bool
+	GPGPinentryConfigured    bool            // true if the user opted to configure locksmith-pinentry
+	ConfigPreexisted         bool            // true when an existing config was found and kept
+	ShellHookInstall         bool            // true if user agreed (or --auto) to install
+	ShellHookAlreadyPresent  bool            // true if hook marker was already in rc file
+	ShellHookRCFile          string          // rc file path; empty when shell is unknown
+	ShellHookShell           shellhook.Shell // detected shell
+	ClaudeHookConfirmed      bool            // user approved (or --auto); set in RunInit before applyInit
+	ClaudeHookInstalled      bool            // hook was written successfully; set in applyInit
+	ClaudeHookAlreadyPresent bool            // hook was already in settings.json; install skipped
 }
 
 // RunInit runs the interactive setup wizard. In --auto mode all prompts are
 // skipped and detected defaults are applied. In --no-tui mode huh's accessible
 // mode is used (plain text prompts), which also activates automatically when
 // TERM=dumb or stdin is not a TTY.
+//
+//nolint:gocognit // orchestration function; complexity is inherent in the init wizard flow
 func RunInit(opts InitOptions) (*InitResult, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -104,7 +106,7 @@ func RunInit(opts InitOptions) (*InitResult, error) {
 	if !opts.Auto {
 		configDir, err = prompter.ConfigLocation(defaultConfigDir)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("selecting config location: %w", err)
 		}
 	}
 	result.ConfigPath = filepath.Join(configDir, "config.yaml")
@@ -122,7 +124,7 @@ func RunInit(opts InitOptions) (*InitResult, error) {
 		} else {
 			action, err = prompter.ExistingConfig(result.ConfigPath, validErr)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("prompting for existing config: %w", err)
 			}
 		}
 		switch action {
@@ -136,60 +138,21 @@ func RunInit(opts InitOptions) (*InitResult, error) {
 	}
 
 	// --- Vault selection ---
-	detectedVaults := DetectVaults()
-	if opts.Auto {
-		for _, v := range detectedVaults {
-			if v.Detected {
-				result.SelectedVaults = append(result.SelectedVaults, v.Type)
-			}
-		}
-	} else {
-		result.SelectedVaults, err = prompter.VaultSelection(detectedVaults)
-		if err != nil {
-			return nil, err
-		}
+	if err = selectVaults(result, opts, prompter); err != nil {
+		return nil, err
 	}
 
 	// --- GPG pinentry configuration (interactive only, when gopass is selected) ---
 	if !opts.Auto {
-		gopassSelected := false
-		for _, v := range result.SelectedVaults {
-			if v == config.VaultGopass {
-				gopassSelected = true
-				break
-			}
-		}
-		if gopassSelected {
-			gnupgDir := filepath.Join(homeDir, ".gnupg")
-			existing := ReadExistingPinentry(gnupgDir)
-			configure, err := prompter.GPGPinentry(existing)
-			if err != nil {
-				return nil, err
-			}
-			result.GPGPinentryConfigured = configure
+		if err = selectGPGPinentry(result, prompter, homeDir); err != nil {
+			return nil, err
 		}
 	}
 
 	// --- Agent selection ---
 	if !opts.SkipAgents {
-		detectedAgents := DetectAgents(homeDir)
-		if opts.AgentOnly != "" {
-			for _, a := range detectedAgents {
-				if AgentMatches(a.Name, opts.AgentOnly) {
-					result.SelectedAgents = append(result.SelectedAgents, a)
-				}
-			}
-		} else if opts.Auto {
-			for _, a := range detectedAgents {
-				if a.Detected {
-					result.SelectedAgents = append(result.SelectedAgents, a)
-				}
-			}
-		} else {
-			result.SelectedAgents, err = prompter.AgentSelection(detectedAgents)
-			if err != nil {
-				return nil, err
-			}
+		if err = selectAgents(result, opts, prompter, homeDir); err != nil {
+			return nil, err
 		}
 	}
 
@@ -200,44 +163,135 @@ func RunInit(opts InitOptions) (*InitResult, error) {
 		} else {
 			result.SandboxEnabled, err = prompter.Sandbox()
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("prompting for sandbox: %w", err)
 			}
 		}
 	}
 
 	// --- Summary + confirmation ---
 	if !opts.Auto {
-		if ok, err := prompter.Summary(result); err != nil || !ok {
-			if err != nil {
-				return nil, err
-			}
+		ok, summaryErr := prompter.Summary(result)
+		if summaryErr != nil {
+			return nil, fmt.Errorf("showing summary: %w", summaryErr)
+		}
+		if !ok {
 			return nil, fmt.Errorf("cancelled by user")
 		}
 	}
 
 	// Shell hook detection - determine whether to install the daemon autostart hook.
-	{
-		detectedShell := shellhook.DetectShell()
-		rcFile, shellKnown := shellhook.RCFile(detectedShell)
-		result.ShellHookShell = detectedShell
-		result.ShellHookRCFile = rcFile
-		if shellKnown {
-			alreadyInstalled, _ := shellhook.IsInstalled(rcFile) // error treated as not installed
-			if alreadyInstalled {
-				result.ShellHookAlreadyPresent = true
-			} else if opts.Auto {
-				result.ShellHookInstall = true
-			} else {
-				var hookErr error
-				result.ShellHookInstall, hookErr = prompter.ShellHook(rcFile)
-				if hookErr != nil {
-					return nil, hookErr
-				}
-			}
-		}
+	if err = detectShellHookConsent(result, opts, prompter); err != nil {
+		return nil, err
 	}
 
 	// --- Claude Code hook installation consent ---
+	if err = detectClaudeHookConsent(result, opts, prompter, homeDir); err != nil {
+		return nil, err
+	}
+
+	if err := applyInit(result, homeDir); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// selectVaults fills result.SelectedVaults based on detection and prompting.
+func selectVaults(result *InitResult, opts InitOptions, prompter Prompter) error {
+	detectedVaults := DetectVaults()
+	if opts.Auto {
+		for _, v := range detectedVaults {
+			if v.Detected {
+				result.SelectedVaults = append(result.SelectedVaults, v.Type)
+			}
+		}
+		return nil
+	}
+	var err error
+	result.SelectedVaults, err = prompter.VaultSelection(detectedVaults)
+	if err != nil {
+		return fmt.Errorf("selecting vaults: %w", err)
+	}
+	return nil
+}
+
+// selectGPGPinentry prompts for GPG pinentry configuration when gopass is selected.
+func selectGPGPinentry(result *InitResult, prompter Prompter, homeDir string) error {
+	gopassSelected := false
+	for _, v := range result.SelectedVaults {
+		if v == config.VaultGopass {
+			gopassSelected = true
+			break
+		}
+	}
+	if !gopassSelected {
+		return nil
+	}
+	gnupgDir := filepath.Join(homeDir, ".gnupg")
+	existing := ReadExistingPinentry(gnupgDir)
+	configure, err := prompter.GPGPinentry(existing)
+	if err != nil {
+		return fmt.Errorf("prompting for GPG pinentry: %w", err)
+	}
+	result.GPGPinentryConfigured = configure
+	return nil
+}
+
+// selectAgents fills result.SelectedAgents based on detection, auto mode, or prompting.
+func selectAgents(result *InitResult, opts InitOptions, prompter Prompter, homeDir string) error {
+	detectedAgents := DetectAgents(homeDir)
+	switch {
+	case opts.AgentOnly != "":
+		for _, a := range detectedAgents {
+			if AgentMatches(a.Name, opts.AgentOnly) {
+				result.SelectedAgents = append(result.SelectedAgents, a)
+			}
+		}
+	case opts.Auto:
+		for _, a := range detectedAgents {
+			if a.Detected {
+				result.SelectedAgents = append(result.SelectedAgents, a)
+			}
+		}
+	default:
+		var err error
+		result.SelectedAgents, err = prompter.AgentSelection(detectedAgents)
+		if err != nil {
+			return fmt.Errorf("selecting agents: %w", err)
+		}
+	}
+	return nil
+}
+
+// detectShellHookConsent determines whether to install the daemon autostart hook.
+func detectShellHookConsent(result *InitResult, opts InitOptions, prompter Prompter) error {
+	detectedShell := shellhook.DetectShell()
+	rcFile, shellKnown := shellhook.RCFile(detectedShell)
+	result.ShellHookShell = detectedShell
+	result.ShellHookRCFile = rcFile
+	if !shellKnown {
+		return nil
+	}
+	alreadyInstalled := false
+	if ok, isInstalledErr := shellhook.IsInstalled(rcFile); isInstalledErr == nil {
+		alreadyInstalled = ok
+	}
+	switch {
+	case alreadyInstalled:
+		result.ShellHookAlreadyPresent = true
+	case opts.Auto:
+		result.ShellHookInstall = true
+	default:
+		var err error
+		result.ShellHookInstall, err = prompter.ShellHook(rcFile)
+		if err != nil {
+			return fmt.Errorf("prompting for shell hook: %w", err)
+		}
+	}
+	return nil
+}
+
+// detectClaudeHookConsent checks if Claude Code is selected and asks for hook install consent.
+func detectClaudeHookConsent(result *InitResult, opts InitOptions, prompter Prompter, homeDir string) error {
 	claudeSettingsPath := filepath.Join(homeDir, ".claude", "settings.json")
 	for _, agent := range result.SelectedAgents {
 		if agent.Name != "Claude Code" {
@@ -247,70 +301,30 @@ func RunInit(opts InitOptions) (*InitResult, error) {
 			filepath.Join(homeDir, ".config", "locksmith"),
 			filepath.Join(homeDir, ".claude"),
 		)
-		if installer.IsInstalled() {
+		switch {
+		case installer.IsInstalled():
 			result.ClaudeHookAlreadyPresent = true
-		} else if opts.Auto {
+		case opts.Auto:
 			result.ClaudeHookConfirmed = true
-		} else {
+		default:
+			var err error
 			result.ClaudeHookConfirmed, err = prompter.ClaudeHook(claudeSettingsPath)
 			if err != nil {
-				return nil, err
+				return fmt.Errorf("prompting for Claude hook: %w", err)
 			}
 		}
 		break // only one Claude Code entry possible
 	}
-
-	if err := applyInit(result, homeDir); err != nil {
-		return nil, err
-	}
-	return result, nil
+	return nil
 }
 
 func applyInit(result *InitResult, homeDir string) error {
-	if err := os.MkdirAll(filepath.Dir(result.ConfigPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(result.ConfigPath), 0o755); err != nil { //nolint:gosec // G301: user config dir
 		return fmt.Errorf("creating config dir: %w", err)
 	}
 
-	if result.ConfigPreexisted {
-		fmt.Printf("  config kept at %s\n", result.ConfigPath)
-	} else {
-		cfg := config.Config{
-			Defaults: config.Defaults{SessionTTL: "3h", SocketPath: "~/.config/locksmith/locksmith.sock"},
-			Logging:  config.Logging{Level: "info", Format: "text"},
-			Vaults:   make(map[string]config.Vault),
-			Keys:     make(map[string]config.Key),
-		}
-		for _, vt := range result.SelectedVaults {
-			cfg.Vaults[vt] = config.Vault{Type: vt}
-		}
-		data, err := yaml.Marshal(&cfg)
-		if err != nil {
-			return fmt.Errorf("marshaling config: %w", err)
-		}
-		if err := os.WriteFile(result.ConfigPath, data, 0o644); err != nil {
-			return fmt.Errorf("writing config: %w", err)
-		}
-		fmt.Printf("  config written to %s\n", result.ConfigPath)
-	}
-
-	// Apply GPG pinentry configuration if the user opted in.
-	if result.GPGPinentryConfigured {
-		pinentryPath, lookErr := exec.LookPath("locksmith-pinentry")
-		if lookErr != nil {
-			fmt.Println("  warning: locksmith-pinentry not found in PATH - run 'make init' first")
-		} else {
-			gnupgDir := filepath.Join(homeDir, ".gnupg")
-			replaced, applyErr := ApplyGPGPinentry(gnupgDir, pinentryPath)
-			if applyErr != nil {
-				fmt.Printf("  warning: could not update gpg-agent.conf: %v\n", applyErr)
-			} else {
-				if replaced != "" {
-					fmt.Printf("  gpg-agent: previous pinentry-program (%s) commented out\n", replaced)
-				}
-				fmt.Printf("  gpg-agent: pinentry-program set to %s\n", pinentryPath)
-				exec.Command("gpgconf", "--kill", "gpg-agent").Run() //nolint:errcheck
-			}
-		}
+	if err := writeConfigFile(result, homeDir); err != nil {
+		return err
 	}
 
 	writer := NewAgentWriter(homeDir)
@@ -327,43 +341,112 @@ func applyInit(result *InitResult, homeDir string) error {
 		}
 
 		if agent.Name == "Claude Code" {
-			installer := NewClaudeHookInstaller(
-				filepath.Join(homeDir, ".config", "locksmith"),
-				filepath.Join(homeDir, ".claude"),
-			)
-			if result.ClaudeHookAlreadyPresent {
-				fmt.Println("  Claude Code: hook already present in ~/.claude/settings.json")
-			} else if result.ClaudeHookConfirmed {
-				if err := installer.Install(); err != nil {
-					return fmt.Errorf("installing Claude Code hook: %w", err)
-				}
-				result.ClaudeHookInstalled = true
-				fmt.Println("  Claude Code: hook installed in ~/.claude/settings.json")
-				fmt.Println("  Restart Claude Code for the hook to take effect.")
-			} else {
-				hookCmd := filepath.Join(homeDir, ".config", "locksmith", "agent-hook.sh")
-				fmt.Printf("\n  To install the Claude Code hook manually:\n")
-				fmt.Printf("  1. Run: locksmith init --agent claude\n")
-				fmt.Printf("  2. Add to ~/.claude/settings.json:\n")
-				fmt.Printf("     {\"hooks\":{\"UserPromptSubmit\":[{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":%q}]}]}}\n", hookCmd)
+			if err := applyClaudeHook(result, homeDir); err != nil {
+				return err
 			}
 		}
 	}
 
-	// Apply shell hook.
-	if result.ShellHookAlreadyPresent {
+	applyShellHook(result)
+	return nil
+}
+
+// writeConfigFile writes the YAML config or skips if it pre-existed.
+func writeConfigFile(result *InitResult, homeDir string) error {
+	if result.ConfigPreexisted {
+		fmt.Printf("  config kept at %s\n", result.ConfigPath)
+		return nil
+	}
+
+	cfg := config.Config{
+		Defaults: config.Defaults{SessionTTL: "3h", SocketPath: "~/.config/locksmith/locksmith.sock"},
+		Logging:  config.Logging{Level: "info", Format: "text"},
+		Vaults:   make(map[string]config.Vault),
+		Keys:     make(map[string]config.Key),
+	}
+	for _, vt := range result.SelectedVaults {
+		cfg.Vaults[vt] = config.Vault{Type: vt}
+	}
+	data, err := yaml.Marshal(&cfg)
+	if err != nil {
+		return fmt.Errorf("marshaling config: %w", err)
+	}
+	if err := os.WriteFile(result.ConfigPath, data, 0o644); err != nil { //nolint:gosec // G306: user config file
+		return fmt.Errorf("writing config: %w", err)
+	}
+	fmt.Printf("  config written to %s\n", result.ConfigPath)
+
+	// Apply GPG pinentry configuration if the user opted in.
+	if result.GPGPinentryConfigured {
+		applyGPGPinentryConfig(homeDir)
+	}
+	return nil
+}
+
+// applyGPGPinentryConfig runs the gpg-agent pinentry configuration steps.
+func applyGPGPinentryConfig(homeDir string) {
+	pinentryPath, lookErr := exec.LookPath("locksmith-pinentry")
+	if lookErr != nil {
+		fmt.Println("  warning: locksmith-pinentry not found in PATH - run 'make init' first")
+		return
+	}
+	gnupgDir := filepath.Join(homeDir, ".gnupg")
+	replaced, applyErr := ApplyGPGPinentry(gnupgDir, pinentryPath)
+	if applyErr != nil {
+		fmt.Printf("  warning: could not update gpg-agent.conf: %v\n", applyErr)
+		return
+	}
+	if replaced != "" {
+		fmt.Printf("  gpg-agent: previous pinentry-program (%s) commented out\n", replaced)
+	}
+	fmt.Printf("  gpg-agent: pinentry-program set to %s\n", pinentryPath)
+	exec.Command("gpgconf", "--kill", "gpg-agent").Run() //nolint:errcheck
+}
+
+// applyClaudeHook installs or reports status of the Claude Code UserPromptSubmit hook.
+func applyClaudeHook(result *InitResult, homeDir string) error {
+	installer := NewClaudeHookInstaller(
+		filepath.Join(homeDir, ".config", "locksmith"),
+		filepath.Join(homeDir, ".claude"),
+	)
+	switch {
+	case result.ClaudeHookAlreadyPresent:
+		fmt.Println("  Claude Code: hook already present in ~/.claude/settings.json")
+	case result.ClaudeHookConfirmed:
+		if err := installer.Install(); err != nil {
+			return fmt.Errorf("installing Claude Code hook: %w", err)
+		}
+		result.ClaudeHookInstalled = true
+		fmt.Println("  Claude Code: hook installed in ~/.claude/settings.json")
+		fmt.Println("  Restart Claude Code for the hook to take effect.")
+	default:
+		hookCmd := filepath.Join(homeDir, ".config", "locksmith", "agent-hook.sh")
+		fmt.Printf("\n  To install the Claude Code hook manually:\n")
+		fmt.Printf("  1. Run: locksmith init --agent claude\n")
+		fmt.Printf("  2. Add to ~/.claude/settings.json:\n")
+		fmt.Printf(
+			"     {\"hooks\":{\"UserPromptSubmit\":[{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":%q}]}]}}\n",
+			hookCmd,
+		)
+	}
+	return nil
+}
+
+// applyShellHook installs or reports status of the shell daemon autostart hook.
+func applyShellHook(result *InitResult) {
+	switch {
+	case result.ShellHookAlreadyPresent:
 		fmt.Printf("  shell hook already installed (%s)\n", result.ShellHookRCFile)
-	} else if result.ShellHookInstall {
+	case result.ShellHookInstall:
 		if err := shellhook.Install(result.ShellHookRCFile, result.ShellHookShell); err != nil {
 			fmt.Printf("  warning: could not write to %s: %v\n", result.ShellHookRCFile, err)
 			printShellFallback(result.ShellHookShell, result.ShellHookRCFile)
 		} else {
 			fmt.Printf("  shell hook added to %s\n", result.ShellHookRCFile)
 		}
-	} else {
+	default:
 		printShellFallback(result.ShellHookShell, result.ShellHookRCFile)
 	}
-	return nil
 }
 
 // huhPrompter is the production Prompter that drives charmbracelet/huh TUI forms.
@@ -404,7 +487,7 @@ func (p *huhPrompter) ConfigLocation(defaultDir string) (string, error) {
 			).Value(&selected),
 	)))
 	if err := form.Run(); err != nil {
-		return "", err
+		return "", fmt.Errorf("selecting config location: %w", err)
 	}
 	if selected != "custom" {
 		return selected, nil
@@ -414,14 +497,14 @@ func (p *huhPrompter) ConfigLocation(defaultDir string) (string, error) {
 		huh.NewInput().Title("Config directory:").Value(&custom),
 	)))
 	if err := form2.Run(); err != nil {
-		return "", err
+		return "", fmt.Errorf("entering custom config path: %w", err)
 	}
 	return config.ExpandPath(custom), nil
 }
 
 // VaultSelection prompts for vault backend selection.
 func (p *huhPrompter) VaultSelection(vaults []DetectedVault) ([]string, error) {
-	var options []huh.Option[string]
+	options := make([]huh.Option[string], 0, len(vaults))
 	for _, v := range vaults {
 		label := v.Type
 		if v.Detected {
@@ -439,7 +522,7 @@ func (p *huhPrompter) VaultSelection(vaults []DetectedVault) ([]string, error) {
 			Options(options...).Value(&selected),
 	)))
 	if err := form.Run(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("selecting vaults: %w", err)
 	}
 	return selected, nil
 }
@@ -468,7 +551,7 @@ func (p *huhPrompter) AgentSelection(agents []DetectedAgent) ([]DetectedAgent, e
 			).Value(&selection),
 	)))
 	if err := form.Run(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("selecting agents: %w", err)
 	}
 
 	if selection == "skip" {
@@ -491,7 +574,7 @@ func (p *huhPrompter) AgentSelection(agents []DetectedAgent) ([]DetectedAgent, e
 		huh.NewMultiSelect[string]().Title("Select agents:").Options(options...).Value(&selectedNames),
 	)))
 	if err := form2.Run(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("selecting agents manually: %w", err)
 	}
 	var result []DetectedAgent
 	for _, a := range agents {
@@ -514,7 +597,7 @@ func (p *huhPrompter) Sandbox() (bool, error) {
 			Value(&enabled),
 	)))
 	if err := form.Run(); err != nil {
-		return false, err
+		return false, fmt.Errorf("prompting for sandbox: %w", err)
 	}
 	return enabled, nil
 }
@@ -525,7 +608,7 @@ func (p *huhPrompter) Summary(result *InitResult) (bool, error) {
 	for i, a := range result.SelectedAgents {
 		agentNames[i] = a.Name
 	}
-	fmt.Printf("\n── Summary ──────────────────────────\nConfig:  %s\nVaults:  %v\nAgents:  %v\nSandbox: %v\n",
+	fmt.Printf("\n-- Summary --\nConfig:  %s\nVaults:  %v\nAgents:  %v\nSandbox: %v\n",
 		result.ConfigPath, result.SelectedVaults, agentNames, result.SandboxEnabled)
 
 	var confirmed bool
@@ -533,7 +616,7 @@ func (p *huhPrompter) Summary(result *InitResult) (bool, error) {
 		huh.NewConfirm().Title("Apply?").Value(&confirmed),
 	)))
 	if err := form.Run(); err != nil {
-		return false, err
+		return false, fmt.Errorf("showing summary: %w", err)
 	}
 	return confirmed, nil
 }
@@ -562,7 +645,7 @@ func (p *huhPrompter) ExistingConfig(path string, validErr error) (ExistingConfi
 			).Value(&selected),
 	)))
 	if err := form.Run(); err != nil {
-		return ActionExit, err
+		return ActionExit, fmt.Errorf("prompting for existing config: %w", err)
 	}
 	return selected, nil
 }
@@ -577,7 +660,7 @@ func (p *huhPrompter) ShellHook(rcFile string) (bool, error) {
 			Value(&confirmed),
 	)))
 	if err := form.Run(); err != nil {
-		return false, err
+		return false, fmt.Errorf("prompting for shell hook: %w", err)
 	}
 	return confirmed, nil
 }
@@ -599,7 +682,7 @@ func (p *huhPrompter) GPGPinentry(existingPinentry string) (bool, error) {
 		huh.NewConfirm().Title(title).Description(desc).Value(&confirmed),
 	)))
 	if err := form.Run(); err != nil {
-		return false, err
+		return false, fmt.Errorf("prompting for GPG pinentry: %w", err)
 	}
 	return confirmed, nil
 }
@@ -619,7 +702,7 @@ func (p *huhPrompter) ClaudeHook(settingsPath string) (bool, error) {
 			Value(&confirmed),
 	)))
 	if err := form.Run(); err != nil {
-		return false, err
+		return false, fmt.Errorf("prompting for Claude hook: %w", err)
 	}
 	return confirmed, nil
 }
@@ -632,7 +715,7 @@ func AgentMatches(name, query string) bool {
 		for i := 0; i < len(s); i++ {
 			c := s[i]
 			if c >= 'A' && c <= 'Z' {
-				c += 32
+				c += 32 // ASCII offset from uppercase to lowercase
 			}
 			b[i] = c
 		}

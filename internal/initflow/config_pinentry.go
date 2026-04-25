@@ -57,7 +57,7 @@ func RunConfigPinentry(opts ConfigPinentryOptions) (*ConfigPinentryResult, error
 	} else {
 		configure, err = prompter.GPGPinentry(existing)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("prompting for GPG pinentry: %w", err)
 		}
 	}
 
