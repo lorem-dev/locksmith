@@ -43,6 +43,9 @@ type Prompter interface {
 	GPGPinentry(existingPinentry string) (bool, error)
 	// ShellHook asks whether to append the daemon autostart snippet to rcFile.
 	ShellHook(rcFile string) (bool, error)
+	// ClaudeHook asks whether to install the Locksmith UserPromptSubmit hook
+	// into settingsPath (~/.claude/settings.json). Shows what will be changed.
+	ClaudeHook(settingsPath string) (bool, error)
 }
 
 // InitOptions controls the behaviour of RunInit.
@@ -545,6 +548,26 @@ func (p *huhPrompter) GPGPinentry(existingPinentry string) (bool, error) {
 	var confirmed bool
 	form := p.formWith(huh.NewForm(huh.NewGroup(
 		huh.NewConfirm().Title(title).Description(desc).Value(&confirmed),
+	)))
+	if err := form.Run(); err != nil {
+		return false, err
+	}
+	return confirmed, nil
+}
+
+// ClaudeHook asks whether to install the Locksmith hook into settingsPath.
+func (p *huhPrompter) ClaudeHook(settingsPath string) (bool, error) {
+	var confirmed bool
+	form := p.formWith(huh.NewForm(huh.NewGroup(
+		huh.NewConfirm().
+			Title("Install Locksmith hook for Claude Code?").
+			Description(fmt.Sprintf(
+				"Adds a UserPromptSubmit hook to %s.\n"+
+					"The hook injects LOCKSMITH_SESSION before each prompt.\n"+
+					"Existing settings are preserved.",
+				settingsPath,
+			)).
+			Value(&confirmed),
 	)))
 	if err := form.Run(); err != nil {
 		return false, err

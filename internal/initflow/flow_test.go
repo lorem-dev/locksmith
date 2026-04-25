@@ -30,6 +30,8 @@ type mockPrompter struct {
 	existingConfigErr    error
 	shellHookInstall     bool
 	shellHookErr         error
+	claudeHook           bool
+	claudeHookErr        error
 }
 
 func (m *mockPrompter) ConfigLocation(_ string) (string, error) {
@@ -62,6 +64,10 @@ func (m *mockPrompter) ExistingConfig(_ string, _ error) (initflow.ExistingConfi
 
 func (m *mockPrompter) ShellHook(_ string) (bool, error) {
 	return m.shellHookInstall, m.shellHookErr
+}
+
+func (m *mockPrompter) ClaudeHook(_ string) (bool, error) {
+	return m.claudeHook, m.claudeHookErr
 }
 
 func TestAgentMatches_CaseInsensitive(t *testing.T) {
