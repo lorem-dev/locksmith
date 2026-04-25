@@ -71,6 +71,9 @@ type InitResult struct {
 	ShellHookAlreadyPresent bool            // true if hook marker was already in rc file
 	ShellHookRCFile         string          // rc file path; empty when shell is unknown
 	ShellHookShell          shellhook.Shell // detected shell
+	ClaudeHookConfirmed     bool            // user approved (or --auto); set in RunInit before applyInit
+	ClaudeHookInstalled     bool            // hook was written successfully; set in applyInit
+	ClaudeHookAlreadyPresent bool           // hook was already in settings.json; install skipped
 }
 
 // RunInit runs the interactive setup wizard. In --auto mode all prompts are
@@ -234,6 +237,29 @@ func RunInit(opts InitOptions) (*InitResult, error) {
 		}
 	}
 
+	// --- Claude Code hook installation consent ---
+	claudeSettingsPath := filepath.Join(homeDir, ".claude", "settings.json")
+	for _, agent := range result.SelectedAgents {
+		if agent.Name != "Claude Code" {
+			continue
+		}
+		installer := NewClaudeHookInstaller(
+			filepath.Join(homeDir, ".config", "locksmith"),
+			filepath.Join(homeDir, ".claude"),
+		)
+		if installer.IsInstalled() {
+			result.ClaudeHookAlreadyPresent = true
+		} else if opts.Auto {
+			result.ClaudeHookConfirmed = true
+		} else {
+			result.ClaudeHookConfirmed, err = prompter.ClaudeHook(claudeSettingsPath)
+			if err != nil {
+				return nil, err
+			}
+		}
+		break // only one Claude Code entry possible
+	}
+
 	if err := applyInit(result, homeDir); err != nil {
 		return nil, err
 	}
@@ -298,6 +324,29 @@ func applyInit(result *InitResult, homeDir string) error {
 				return fmt.Errorf("installing sandbox for %s: %w", agent.Name, err)
 			}
 			fmt.Printf("  %s: sandbox permissions configured\n", agent.Name)
+		}
+
+		if agent.Name == "Claude Code" {
+			installer := NewClaudeHookInstaller(
+				filepath.Join(homeDir, ".config", "locksmith"),
+				filepath.Join(homeDir, ".claude"),
+			)
+			if result.ClaudeHookAlreadyPresent {
+				fmt.Println("  Claude Code: hook already present in ~/.claude/settings.json")
+			} else if result.ClaudeHookConfirmed {
+				if err := installer.Install(); err != nil {
+					return fmt.Errorf("installing Claude Code hook: %w", err)
+				}
+				result.ClaudeHookInstalled = true
+				fmt.Println("  Claude Code: hook installed in ~/.claude/settings.json")
+				fmt.Println("  Restart Claude Code for the hook to take effect.")
+			} else {
+				hookCmd := filepath.Join(homeDir, ".config", "locksmith", "agent-hook.sh")
+				fmt.Printf("\n  To install the Claude Code hook manually:\n")
+				fmt.Printf("  1. Run: locksmith init --agent claude\n")
+				fmt.Printf("  2. Add to ~/.claude/settings.json:\n")
+				fmt.Printf("     {\"hooks\":{\"UserPromptSubmit\":[{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":%q}]}]}}\n", hookCmd)
+			}
 		}
 	}
 

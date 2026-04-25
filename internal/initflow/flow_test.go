@@ -1,6 +1,7 @@
 package initflow_test
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -164,6 +165,136 @@ func TestRunInit_AgentOnly(t *testing.T) {
 	}
 	if result.SelectedAgents[0].Name != "Claude Code" {
 		t.Errorf("expected Claude Code, got %s", result.SelectedAgents[0].Name)
+	}
+}
+
+func TestRunInit_Auto_InstallsClaudeHook(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	os.MkdirAll(filepath.Join(home, ".claude"), 0o755)
+
+	result, err := initflow.RunInit(initflow.InitOptions{Auto: true})
+	if err != nil {
+		t.Fatalf("RunInit() error: %v", err)
+	}
+
+	hasClaudeCode := false
+	for _, a := range result.SelectedAgents {
+		if a.Name == "Claude Code" {
+			hasClaudeCode = true
+		}
+	}
+	if !hasClaudeCode {
+		t.Skip("Claude Code not detected - skipping hook install test")
+	}
+
+	if !result.ClaudeHookInstalled && !result.ClaudeHookAlreadyPresent {
+		t.Error("expected ClaudeHookInstalled or ClaudeHookAlreadyPresent to be true in --auto mode")
+	}
+
+	scriptPath := filepath.Join(home, ".config", "locksmith", "agent-hook.sh")
+	if _, err := os.Stat(scriptPath); err != nil {
+		t.Errorf("hook script not written to %s: %v", scriptPath, err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(home, ".claude", "settings.json"))
+	if err != nil {
+		t.Fatalf("settings.json not created: %v", err)
+	}
+	if !strings.Contains(string(data), "agent-hook.sh") {
+		t.Error("settings.json does not reference agent-hook.sh")
+	}
+}
+
+func TestRunInit_NonAuto_HookConfirmed(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	claudeDir := filepath.Join(home, ".claude")
+	os.MkdirAll(claudeDir, 0o755)
+
+	prompter := &mockPrompter{
+		configDir:      filepath.Join(home, ".config", "locksmith"),
+		vaults:         []string{},
+		agents:         []initflow.DetectedAgent{{Name: "Claude Code", Detected: true, ConfigDir: claudeDir}},
+		sandbox:        false,
+		summaryConfirm: true,
+		claudeHook:     true,
+	}
+
+	result, err := initflow.RunInit(initflow.InitOptions{Prompter: prompter})
+	if err != nil {
+		t.Fatalf("RunInit() error: %v", err)
+	}
+	if !result.ClaudeHookInstalled {
+		t.Error("ClaudeHookInstalled = false, want true when user confirmed")
+	}
+}
+
+func TestRunInit_NonAuto_HookDeclined(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	claudeDir := filepath.Join(home, ".claude")
+	os.MkdirAll(claudeDir, 0o755)
+
+	prompter := &mockPrompter{
+		configDir:      filepath.Join(home, ".config", "locksmith"),
+		vaults:         []string{},
+		agents:         []initflow.DetectedAgent{{Name: "Claude Code", Detected: true, ConfigDir: claudeDir}},
+		sandbox:        false,
+		summaryConfirm: true,
+		claudeHook:     false,
+	}
+
+	result, err := initflow.RunInit(initflow.InitOptions{Prompter: prompter})
+	if err != nil {
+		t.Fatalf("RunInit() error: %v", err)
+	}
+	if result.ClaudeHookInstalled {
+		t.Error("ClaudeHookInstalled = true, want false when user declined")
+	}
+}
+
+func TestRunInit_HookAlreadyPresent(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	claudeDir := filepath.Join(home, ".claude")
+	lsDir := filepath.Join(home, ".config", "locksmith")
+	os.MkdirAll(claudeDir, 0o755)
+	os.MkdirAll(lsDir, 0o755)
+
+	hookCmd := filepath.Join(lsDir, "agent-hook.sh")
+	settings := map[string]any{
+		"hooks": map[string]any{
+			"UserPromptSubmit": []any{
+				map[string]any{
+					"matcher": "",
+					"hooks": []any{
+						map[string]any{"type": "command", "command": hookCmd},
+					},
+				},
+			},
+		},
+	}
+	data, _ := json.Marshal(settings)
+	os.WriteFile(filepath.Join(claudeDir, "settings.json"), data, 0o644)
+
+	prompter := &mockPrompter{
+		configDir:      lsDir,
+		vaults:         []string{},
+		agents:         []initflow.DetectedAgent{{Name: "Claude Code", Detected: true, ConfigDir: claudeDir}},
+		summaryConfirm: true,
+		claudeHook:     false, // should never be called
+	}
+
+	result, err := initflow.RunInit(initflow.InitOptions{Prompter: prompter})
+	if err != nil {
+		t.Fatalf("RunInit() error: %v", err)
+	}
+	if !result.ClaudeHookAlreadyPresent {
+		t.Error("ClaudeHookAlreadyPresent = false, want true when hook pre-installed")
+	}
+	if result.ClaudeHookInstalled {
+		t.Error("ClaudeHookInstalled = true, want false when hook already present")
 	}
 }
 
