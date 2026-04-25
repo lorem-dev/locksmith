@@ -224,3 +224,47 @@ func TestClaudeHookInstaller_Install_IsInstalledAfterInstall(t *testing.T) {
 		t.Error("IsInstalled() = false after Install()")
 	}
 }
+
+func TestClaudeHookInstaller_IsInstalled_MalformedEntries(t *testing.T) {
+	// Non-map entries in UserPromptSubmit and hooks arrays must not panic
+	// and must return false when the locksmith command is absent.
+	installer, home := makeHookInstaller(t)
+	claudeDir := filepath.Join(home, ".claude")
+	settings := map[string]any{
+		"hooks": map[string]any{
+			"UserPromptSubmit": []any{
+				"not-a-map", // non-map entry at the top level
+				map[string]any{
+					"matcher": "",
+					"hooks": []any{
+						"also-not-a-map", // non-map entry in inner hooks
+					},
+				},
+			},
+		},
+	}
+	data, _ := json.Marshal(settings)
+	os.WriteFile(filepath.Join(claudeDir, "settings.json"), data, 0o644)
+
+	if installer.IsInstalled() {
+		t.Error("IsInstalled() = true for malformed entries without locksmith command")
+	}
+}
+
+func TestClaudeHookInstaller_Install_WriteScriptError(t *testing.T) {
+	// If the locksmith config path exists as a regular file, MkdirAll fails
+	// and Install should return a wrapped error.
+	home := t.TempDir()
+	claudeDir := filepath.Join(home, ".claude")
+	os.MkdirAll(claudeDir, 0o755)
+	os.MkdirAll(filepath.Join(home, ".config"), 0o755)
+
+	// Create a file where MkdirAll would expect to create a directory.
+	lsConfigPath := filepath.Join(home, ".config", "locksmith")
+	os.WriteFile(lsConfigPath, []byte("not a directory"), 0o644)
+
+	installer := initflow.NewClaudeHookInstaller(lsConfigPath, claudeDir)
+	if err := installer.Install(); err == nil {
+		t.Error("Install() should fail when locksmith config dir path is a file")
+	}
+}

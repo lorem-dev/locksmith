@@ -2,6 +2,16 @@
 
 ## Development
 
+- `init` now automatically installs the Claude Code `UserPromptSubmit` hook
+  into `~/.claude/settings.json` when Claude Code is detected; prompts for
+  confirmation (skipped in `--auto` mode), merges idempotently without
+  touching existing settings, and reminds to restart Claude Code after
+  installation.
+- Hook script and agent instruction templates moved from `docs/hooks/` into
+  the embedded template set (`internal/initflow/templates/`); `docs/hooks/`
+  removed - the binary is now the single source of truth.
+- All agent templates updated with `--path/--vault` get syntax and two
+  examples per form, covering both alias-based and direct-path access.
 - Refactored `sdk/` into subpackages: `sdk/vault`, `sdk/errors`, `sdk/log`,
   `sdk/session`, `sdk/platform`. The old flat `sdk` package is removed; all
   consumers updated to use the new import paths.

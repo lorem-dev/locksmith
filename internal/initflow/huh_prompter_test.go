@@ -343,3 +343,47 @@ func TestHuhPrompter_ExistingConfig_InvalidOverwrite(t *testing.T) {
 		t.Errorf("ExistingConfig() = %v, want ActionOverwrite", got)
 	}
 }
+
+func TestHuhPrompter_ShellHook_Yes(t *testing.T) {
+	p := newHuhWithInput("y\n")
+	got, err := p.ShellHook("/home/user/.zshrc")
+	if err != nil {
+		t.Fatalf("ShellHook() error: %v", err)
+	}
+	if !got {
+		t.Error("ShellHook() = false, want true")
+	}
+}
+
+func TestHuhPrompter_ShellHook_No(t *testing.T) {
+	p := newHuhWithInput("n\n")
+	got, err := p.ShellHook("/home/user/.zshrc")
+	if err != nil {
+		t.Fatalf("ShellHook() error: %v", err)
+	}
+	if got {
+		t.Error("ShellHook() = true, want false")
+	}
+}
+
+func TestHuhPrompter_ClaudeHook_Yes(t *testing.T) {
+	p := newHuhWithInput("y\n")
+	got, err := p.ClaudeHook("/home/user/.claude/settings.json")
+	if err != nil {
+		t.Fatalf("ClaudeHook() error: %v", err)
+	}
+	if !got {
+		t.Error("ClaudeHook() = false, want true")
+	}
+}
+
+func TestHuhPrompter_ClaudeHook_No(t *testing.T) {
+	p := newHuhWithInput("n\n")
+	got, err := p.ClaudeHook("/home/user/.claude/settings.json")
+	if err != nil {
+		t.Fatalf("ClaudeHook() error: %v", err)
+	}
+	if got {
+		t.Error("ClaudeHook() = true, want false")
+	}
+}
