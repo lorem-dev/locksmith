@@ -46,14 +46,21 @@ Locksmith provides a session-aware CLI for AI agents. See
 platform-specific setup (Claude Code hooks, Gemini CLI, Cursor, Copilot,
 Codex).
 
+For Claude Code, run `locksmith init` - the `UserPromptSubmit` hook is
+installed automatically and injects `LOCKSMITH_SESSION` before each prompt.
+Restart Claude Code after running `init`.
+
 **Quick start:**
 
 ```bash
 # Ensure a valid session (reuses existing or creates new)
 export LOCKSMITH_SESSION=$(locksmith session ensure --quiet)
 
-# Retrieve a secret
+# Retrieve a secret by alias (configured in config.yaml)
 locksmith get --key my-api-key
+
+# Retrieve a secret directly by vault path (no alias needed)
+locksmith get --vault gopass --path work/aws/access-key-id
 
 # Sub-agents: pass the session in their environment
 LOCKSMITH_SESSION=$LOCKSMITH_SESSION some-subagent-tool
