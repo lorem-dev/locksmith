@@ -162,3 +162,17 @@ func (m *Manager) Kill() {
 		log.Debug().Str("vault", name).Msg("plugin killed")
 	}
 }
+
+// KillOne stops the plugin process for a single vault type.
+// It is a no-op if the vault type is not currently loaded.
+func (m *Manager) KillOne(vaultType string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	rp, ok := m.plugins[vaultType]
+	if !ok {
+		return
+	}
+	rp.client.Kill()
+	delete(m.plugins, vaultType)
+	log.Debug().Str("vault", vaultType).Msg("plugin killed")
+}

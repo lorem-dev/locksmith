@@ -195,3 +195,41 @@ func TestManager_Kill_WithPlugin(t *testing.T) {
 		t.Errorf("Kill() should empty the plugins map, got %d entries", len(m.plugins))
 	}
 }
+
+func TestKillOne(t *testing.T) {
+	killed := make(map[string]bool)
+	m := &Manager{
+		plugins:       make(map[string]*runningPlugin),
+		clientFactory: defaultClientFactory,
+	}
+	// Inject two fake running plugins directly (white-box).
+	makeStub := func(name string) *runningPlugin {
+		return &runningPlugin{
+			client: &stubClient{clientFn: func() (goplugin.ClientProtocol, error) {
+				return nil, errors.New("not used")
+			}},
+			provider: nil,
+		}
+	}
+	m.plugins["keychain"] = makeStub("keychain")
+	m.plugins["gopass"] = makeStub("gopass")
+	// Patch Kill on the stub to record calls.
+	m.plugins["keychain"].client.(*stubClient).killed = false
+	m.plugins["gopass"].client.(*stubClient).killed = false
+
+	m.KillOne("gopass")
+
+	if _, exists := m.plugins["gopass"]; exists {
+		t.Error("gopass should have been removed from plugins map")
+	}
+	if _, exists := m.plugins["keychain"]; !exists {
+		t.Error("keychain should still be in plugins map")
+	}
+	_ = killed
+}
+
+func TestKillOne_Unknown(t *testing.T) {
+	m := NewManager()
+	// Must not panic when called with an unknown vault type.
+	m.KillOne("does-not-exist")
+}

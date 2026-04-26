@@ -2,6 +2,10 @@
 
 ## Development
 
+- Added `KillOne(vaultType string)` to `plugin.Manager` for targeted plugin
+  shutdown - enables hot-reload to stop a single vault plugin process when its
+  vault type is removed from the config, without disrupting other running plugins.
+
 - Updated linting to golangci-lint v2 (v2.11.4) with stricter settings: `errcheck`
   with `check-blank` and `check-type-assertions`, `wrapcheck`, `unparam`, `mnd`,
   `embeddedstructfieldcheck`, `gocritic`, `errorlint`, and others. Fixed all
