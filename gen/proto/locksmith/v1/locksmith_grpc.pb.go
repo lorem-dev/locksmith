@@ -25,6 +25,7 @@ const (
 	LocksmithService_SessionList_FullMethodName  = "/locksmith.v1.LocksmithService/SessionList"
 	LocksmithService_VaultList_FullMethodName    = "/locksmith.v1.LocksmithService/VaultList"
 	LocksmithService_VaultHealth_FullMethodName  = "/locksmith.v1.LocksmithService/VaultHealth"
+	LocksmithService_ReloadConfig_FullMethodName = "/locksmith.v1.LocksmithService/ReloadConfig"
 )
 
 // LocksmithServiceClient is the client API for LocksmithService service.
@@ -40,6 +41,7 @@ type LocksmithServiceClient interface {
 	SessionList(ctx context.Context, in *SessionListRequest, opts ...grpc.CallOption) (*SessionListResponse, error)
 	VaultList(ctx context.Context, in *VaultListRequest, opts ...grpc.CallOption) (*VaultListResponse, error)
 	VaultHealth(ctx context.Context, in *VaultHealthRequest, opts ...grpc.CallOption) (*VaultHealthResponse, error)
+	ReloadConfig(ctx context.Context, in *ReloadConfigRequest, opts ...grpc.CallOption) (*ReloadConfigResponse, error)
 }
 
 type locksmithServiceClient struct {
@@ -110,6 +112,16 @@ func (c *locksmithServiceClient) VaultHealth(ctx context.Context, in *VaultHealt
 	return out, nil
 }
 
+func (c *locksmithServiceClient) ReloadConfig(ctx context.Context, in *ReloadConfigRequest, opts ...grpc.CallOption) (*ReloadConfigResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReloadConfigResponse)
+	err := c.cc.Invoke(ctx, LocksmithService_ReloadConfig_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // LocksmithServiceServer is the server API for LocksmithService service.
 // All implementations must embed UnimplementedLocksmithServiceServer
 // for forward compatibility.
@@ -123,6 +135,7 @@ type LocksmithServiceServer interface {
 	SessionList(context.Context, *SessionListRequest) (*SessionListResponse, error)
 	VaultList(context.Context, *VaultListRequest) (*VaultListResponse, error)
 	VaultHealth(context.Context, *VaultHealthRequest) (*VaultHealthResponse, error)
+	ReloadConfig(context.Context, *ReloadConfigRequest) (*ReloadConfigResponse, error)
 	mustEmbedUnimplementedLocksmithServiceServer()
 }
 
@@ -150,6 +163,9 @@ func (UnimplementedLocksmithServiceServer) VaultList(context.Context, *VaultList
 }
 func (UnimplementedLocksmithServiceServer) VaultHealth(context.Context, *VaultHealthRequest) (*VaultHealthResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method VaultHealth not implemented")
+}
+func (UnimplementedLocksmithServiceServer) ReloadConfig(context.Context, *ReloadConfigRequest) (*ReloadConfigResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReloadConfig not implemented")
 }
 func (UnimplementedLocksmithServiceServer) mustEmbedUnimplementedLocksmithServiceServer() {}
 func (UnimplementedLocksmithServiceServer) testEmbeddedByValue()                          {}
@@ -280,6 +296,24 @@ func _LocksmithService_VaultHealth_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _LocksmithService_ReloadConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReloadConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LocksmithServiceServer).ReloadConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LocksmithService_ReloadConfig_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LocksmithServiceServer).ReloadConfig(ctx, req.(*ReloadConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // LocksmithService_ServiceDesc is the grpc.ServiceDesc for LocksmithService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -310,6 +344,10 @@ var LocksmithService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VaultHealth",
 			Handler:    _LocksmithService_VaultHealth_Handler,
+		},
+		{
+			MethodName: "ReloadConfig",
+			Handler:    _LocksmithService_ReloadConfig_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

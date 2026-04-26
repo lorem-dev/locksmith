@@ -777,6 +777,86 @@ func (x *VaultHealthInfo) GetMessage() string {
 	return ""
 }
 
+type ReloadConfigRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReloadConfigRequest) Reset() {
+	*x = ReloadConfigRequest{}
+	mi := &file_locksmith_v1_locksmith_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReloadConfigRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReloadConfigRequest) ProtoMessage() {}
+
+func (x *ReloadConfigRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_locksmith_v1_locksmith_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReloadConfigRequest.ProtoReflect.Descriptor instead.
+func (*ReloadConfigRequest) Descriptor() ([]byte, []int) {
+	return file_locksmith_v1_locksmith_proto_rawDescGZIP(), []int{15}
+}
+
+type ReloadConfigResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Message       string                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReloadConfigResponse) Reset() {
+	*x = ReloadConfigResponse{}
+	mi := &file_locksmith_v1_locksmith_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReloadConfigResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReloadConfigResponse) ProtoMessage() {}
+
+func (x *ReloadConfigResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_locksmith_v1_locksmith_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReloadConfigResponse.ProtoReflect.Descriptor instead.
+func (*ReloadConfigResponse) Descriptor() ([]byte, []int) {
+	return file_locksmith_v1_locksmith_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *ReloadConfigResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
 var File_locksmith_v1_locksmith_proto protoreflect.FileDescriptor
 
 const file_locksmith_v1_locksmith_proto_rawDesc = "" +
@@ -831,7 +911,10 @@ const file_locksmith_v1_locksmith_proto_rawDesc = "" +
 	"\x0fVaultHealthInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
 	"\tavailable\x18\x02 \x01(\bR\tavailable\x12\x18\n" +
-	"\amessage\x18\x03 \x01(\tR\amessage2\xfe\x03\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\"\x15\n" +
+	"\x13ReloadConfigRequest\"0\n" +
+	"\x14ReloadConfigResponse\x12\x18\n" +
+	"\amessage\x18\x01 \x01(\tR\amessage2\xd5\x04\n" +
 	"\x10LocksmithService\x12L\n" +
 	"\tGetSecret\x12\x1e.locksmith.v1.GetSecretRequest\x1a\x1f.locksmith.v1.GetSecretResponse\x12U\n" +
 	"\fSessionStart\x12!.locksmith.v1.SessionStartRequest\x1a\".locksmith.v1.SessionStartResponse\x12O\n" +
@@ -839,7 +922,8 @@ const file_locksmith_v1_locksmith_proto_rawDesc = "" +
 	"SessionEnd\x12\x1f.locksmith.v1.SessionEndRequest\x1a .locksmith.v1.SessionEndResponse\x12R\n" +
 	"\vSessionList\x12 .locksmith.v1.SessionListRequest\x1a!.locksmith.v1.SessionListResponse\x12L\n" +
 	"\tVaultList\x12\x1e.locksmith.v1.VaultListRequest\x1a\x1f.locksmith.v1.VaultListResponse\x12R\n" +
-	"\vVaultHealth\x12 .locksmith.v1.VaultHealthRequest\x1a!.locksmith.v1.VaultHealthResponseBCZAgithub.com/lorem-dev/locksmith/gen/proto/locksmith/v1;locksmithv1b\x06proto3"
+	"\vVaultHealth\x12 .locksmith.v1.VaultHealthRequest\x1a!.locksmith.v1.VaultHealthResponse\x12U\n" +
+	"\fReloadConfig\x12!.locksmith.v1.ReloadConfigRequest\x1a\".locksmith.v1.ReloadConfigResponseBCZAgithub.com/lorem-dev/locksmith/gen/proto/locksmith/v1;locksmithv1b\x06proto3"
 
 var (
 	file_locksmith_v1_locksmith_proto_rawDescOnce sync.Once
@@ -853,7 +937,7 @@ func file_locksmith_v1_locksmith_proto_rawDescGZIP() []byte {
 	return file_locksmith_v1_locksmith_proto_rawDescData
 }
 
-var file_locksmith_v1_locksmith_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_locksmith_v1_locksmith_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_locksmith_v1_locksmith_proto_goTypes = []any{
 	(*GetSecretRequest)(nil),     // 0: locksmith.v1.GetSecretRequest
 	(*GetSecretResponse)(nil),    // 1: locksmith.v1.GetSecretResponse
@@ -870,6 +954,8 @@ var file_locksmith_v1_locksmith_proto_goTypes = []any{
 	(*VaultHealthRequest)(nil),   // 12: locksmith.v1.VaultHealthRequest
 	(*VaultHealthResponse)(nil),  // 13: locksmith.v1.VaultHealthResponse
 	(*VaultHealthInfo)(nil),      // 14: locksmith.v1.VaultHealthInfo
+	(*ReloadConfigRequest)(nil),  // 15: locksmith.v1.ReloadConfigRequest
+	(*ReloadConfigResponse)(nil), // 16: locksmith.v1.ReloadConfigResponse
 }
 var file_locksmith_v1_locksmith_proto_depIdxs = []int32{
 	8,  // 0: locksmith.v1.SessionListResponse.sessions:type_name -> locksmith.v1.SessionInfo
@@ -881,14 +967,16 @@ var file_locksmith_v1_locksmith_proto_depIdxs = []int32{
 	6,  // 6: locksmith.v1.LocksmithService.SessionList:input_type -> locksmith.v1.SessionListRequest
 	9,  // 7: locksmith.v1.LocksmithService.VaultList:input_type -> locksmith.v1.VaultListRequest
 	12, // 8: locksmith.v1.LocksmithService.VaultHealth:input_type -> locksmith.v1.VaultHealthRequest
-	1,  // 9: locksmith.v1.LocksmithService.GetSecret:output_type -> locksmith.v1.GetSecretResponse
-	3,  // 10: locksmith.v1.LocksmithService.SessionStart:output_type -> locksmith.v1.SessionStartResponse
-	5,  // 11: locksmith.v1.LocksmithService.SessionEnd:output_type -> locksmith.v1.SessionEndResponse
-	7,  // 12: locksmith.v1.LocksmithService.SessionList:output_type -> locksmith.v1.SessionListResponse
-	10, // 13: locksmith.v1.LocksmithService.VaultList:output_type -> locksmith.v1.VaultListResponse
-	13, // 14: locksmith.v1.LocksmithService.VaultHealth:output_type -> locksmith.v1.VaultHealthResponse
-	9,  // [9:15] is the sub-list for method output_type
-	3,  // [3:9] is the sub-list for method input_type
+	15, // 9: locksmith.v1.LocksmithService.ReloadConfig:input_type -> locksmith.v1.ReloadConfigRequest
+	1,  // 10: locksmith.v1.LocksmithService.GetSecret:output_type -> locksmith.v1.GetSecretResponse
+	3,  // 11: locksmith.v1.LocksmithService.SessionStart:output_type -> locksmith.v1.SessionStartResponse
+	5,  // 12: locksmith.v1.LocksmithService.SessionEnd:output_type -> locksmith.v1.SessionEndResponse
+	7,  // 13: locksmith.v1.LocksmithService.SessionList:output_type -> locksmith.v1.SessionListResponse
+	10, // 14: locksmith.v1.LocksmithService.VaultList:output_type -> locksmith.v1.VaultListResponse
+	13, // 15: locksmith.v1.LocksmithService.VaultHealth:output_type -> locksmith.v1.VaultHealthResponse
+	16, // 16: locksmith.v1.LocksmithService.ReloadConfig:output_type -> locksmith.v1.ReloadConfigResponse
+	10, // [10:17] is the sub-list for method output_type
+	3,  // [3:10] is the sub-list for method input_type
 	3,  // [3:3] is the sub-list for extension type_name
 	3,  // [3:3] is the sub-list for extension extendee
 	0,  // [0:3] is the sub-list for field type_name
@@ -905,7 +993,7 @@ func file_locksmith_v1_locksmith_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_locksmith_v1_locksmith_proto_rawDesc), len(file_locksmith_v1_locksmith_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   15,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

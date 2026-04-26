@@ -13,6 +13,7 @@ service LocksmithService {
   rpc SessionList(SessionListRequest) returns (SessionListResponse);
   rpc VaultList(VaultListRequest) returns (VaultListResponse);
   rpc VaultHealth(VaultHealthRequest) returns (VaultHealthResponse);
+  rpc ReloadConfig(ReloadConfigRequest) returns (ReloadConfigResponse);
 }
 
 message GetSecretRequest {
@@ -82,4 +83,10 @@ message VaultHealthInfo {
   string name = 1;
   bool available = 2;
   string message = 3;
+}
+
+message ReloadConfigRequest {}
+
+message ReloadConfigResponse {
+  string message = 1;
 }
