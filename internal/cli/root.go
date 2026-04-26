@@ -29,6 +29,7 @@ func NewRootCmd() *cobra.Command {
 		newConfigCmd(&cfgFile),
 		newInitCmd(),
 		newAutostartCmd(),
+		newReloadCmd(),
 	)
 	return root
 }

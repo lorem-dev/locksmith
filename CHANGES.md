@@ -17,6 +17,9 @@
   testable. `NewServer` and `NewServerWithRegistry` signatures updated
   accordingly.
 
+- Added `locksmith reload` CLI command that sends a `ReloadConfig` RPC to the
+  running daemon, allowing config changes to be applied without restarting.
+
 - Added `KillOne(vaultType string)` to `plugin.Manager` for targeted plugin
   shutdown - enables hot-reload to stop a single vault plugin process when its
   vault type is removed from the config, without disrupting other running plugins.
