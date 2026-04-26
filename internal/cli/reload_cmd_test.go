@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"net"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -35,7 +36,14 @@ func (r *reloadTestServer) ReloadConfig(
 
 func startReloadTestDaemon(t *testing.T, srv locksmithv1.LocksmithServiceServer) string {
 	t.Helper()
-	socketPath := filepath.Join(t.TempDir(), "test.sock")
+	// Use /tmp directly to keep paths short (macOS 104-char Unix socket limit).
+	dir, err := os.MkdirTemp("/tmp", "lks")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	socketPath := filepath.Join(dir, "r.sock")
+
 	l, err := net.Listen("unix", socketPath)
 	if err != nil {
 		t.Fatalf("listen: %v", err)
@@ -75,5 +83,15 @@ func TestReloadCmd_DaemonError(t *testing.T) {
 	err := root.Execute()
 	if err == nil {
 		t.Fatal("Execute() expected error when daemon returns Internal")
+	}
+}
+
+func TestReloadCmd_DaemonNotRunning(t *testing.T) {
+	t.Setenv("LOCKSMITH_SOCKET", "/tmp/locksmith-does-not-exist-reload-test.sock")
+	root := cli.NewRootCmd()
+	root.SetArgs([]string{"reload"})
+	err := root.Execute()
+	if err == nil {
+		t.Fatal("Execute() expected error when daemon is not running")
 	}
 }
