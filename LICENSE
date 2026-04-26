@@ -227,6 +227,12 @@ license.
 - Source: https://github.com/fatih/color
 - License text: https://github.com/fatih/color/blob/v1.13.0/LICENSE
 
+### github.com/fsnotify/fsnotify
+- Version: v1.9.0
+- License: BSD-3-Clause
+- Source: https://github.com/fsnotify/fsnotify
+- License text: https://github.com/fsnotify/fsnotify/blob/v1.9.0/LICENSE
+
 ### github.com/golangci/golangci-lint
 - Version: v1.64.8
 - License: GPL-3.0
