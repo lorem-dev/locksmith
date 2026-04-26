@@ -2,27 +2,14 @@
 
 ## Development
 
-- `Daemon` now stores config in `atomic.Pointer[config.Config]` for lock-free
-  reads. Added `Reload()` method that re-reads the config file, delta-syncs
-  plugins via `syncPlugins` (launching new vault types, killing removed ones),
-  and atomically swaps the active config - keeping the old config on any error.
-  `WaitForShutdown` handles `SIGHUP` to trigger live reloads. A background
-  `watchConfig` goroutine uses `fsnotify` to detect file changes and debounce
-  them into automatic reloads. Added `github.com/fsnotify/fsnotify` dependency.
-
-- `Server` now receives a `cfgFn func() *config.Config` instead of a plain
-  config pointer, so each gRPC handler reads the current config snapshot on
-  every call - required for hot-reload. Added `ReloadConfig` RPC handler that
-  delegates to an injected `reloader` interface, keeping `Server` independently
-  testable. `NewServer` and `NewServerWithRegistry` signatures updated
-  accordingly.
-
-- Added `locksmith reload` CLI command that sends a `ReloadConfig` RPC to the
-  running daemon, allowing config changes to be applied without restarting.
-
-- Added `KillOne(vaultType string)` to `plugin.Manager` for targeted plugin
-  shutdown - enables hot-reload to stop a single vault plugin process when its
-  vault type is removed from the config, without disrupting other running plugins.
+- Hot-reload config: the daemon now picks up changes to `config.yaml` without
+  restarting. Changes are applied via SIGHUP, `locksmith reload` CLI command, or
+  automatically when the file is saved (1-second debounce via fsnotify). Active
+  sessions and their secret caches are preserved; an invalid config is rejected and
+  the previous config remains active. Plugin processes are delta-synced on reload:
+  new vault types are launched, removed ones are killed cleanly with no zombie
+  processes. Config is stored in `atomic.Pointer[config.Config]` for lock-free reads
+  on the hot path.
 
 - Updated linting to golangci-lint v2 (v2.11.4) with stricter settings: `errcheck`
   with `check-blank` and `check-type-assertions`, `wrapcheck`, `unparam`, `mnd`,

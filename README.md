@@ -86,6 +86,24 @@ In your MCP server config:
 }
 ```
 
+### Reloading configuration
+
+Apply config changes (new vaults, keys, defaults) without restarting the daemon:
+
+```bash
+# Via CLI command
+locksmith reload
+
+# Via UNIX signal
+kill -HUP $(pgrep locksmith)
+```
+
+The daemon also watches `~/.config/locksmith/config.yaml` automatically and reloads
+within one second of a detected change - no manual action needed.
+
+Active sessions and their secret caches are preserved across reloads. If the new
+config file is invalid, the daemon keeps the previous configuration and logs an error.
+
 ## Supported Vaults
 
 | Vault | Platform | Auth | Status |

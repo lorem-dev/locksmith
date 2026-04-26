@@ -32,6 +32,24 @@ locksmith CLI  ──(gRPC/Unix socket)──▶  locksmith daemon
   then served from memory cache for subsequent calls
 - On session invalidation: explicit byte-zeroing of cached secrets (`memclr`)
 
+### Config Hot-Reload
+
+The daemon supports three reload triggers - all invoke the same `Daemon.Reload()` path:
+
+1. **SIGHUP** - `kill -HUP <daemon-pid>`
+2. **`locksmith reload` CLI** - connects to the Unix socket and calls the `ReloadConfig` gRPC method
+3. **File watcher** - `fsnotify` watches `~/.config/locksmith/` and fires after 1 second of quiet following a change to `config.yaml`
+
+`Daemon.Reload()` flow:
+1. Acquire `reloadMu` (serializes concurrent triggers)
+2. Parse and validate the new config; abort with the old config on any error
+3. Delta-sync plugin processes: launch new vault types, kill removed ones
+4. Atomically replace the active config via `atomic.Pointer[config.Config]`
+
+Each gRPC handler calls `cfgFn()` once at the start to get a consistent snapshot for
+its entire execution. In-flight requests see either the old or the new config entirely -
+never a mix.
+
 ### Plugin Manager (`internal/plugin`)
 
 - Discovers `locksmith-plugin-*` binaries in standard search paths
