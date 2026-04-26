@@ -37,6 +37,23 @@ When conversing with the user, always respond in the user's language.
 - Both directories are gitignored and MUST NOT be committed to git.
   Never use `git add -f` on these files. They are local working artifacts only.
 
+## Final Verification (mandatory last step in every superpowers plan)
+
+Every superpowers plan MUST end with a task that runs the `verification` skill.
+When writing a plan, the last numbered task must be:
+
+```
+### Task N: Final Verification
+- [ ] Run the `verification` skill
+```
+
+The skill runs `.scripts/verification.sh` which checks: lint, race tests,
+coverage >= 90% per package, build, GPG signatures on branch commits, docs
+updated alongside functional changes, and CHANGES.md has a ## Development entry.
+It then offers to compress CHANGES.md via the `changelog` skill if 5 or more
+entries have accumulated. Do not mark a feature branch done until this task
+passes with all gates green.
+
 ## Commits
 Follow Conventional Commits (see CONTRIBUTING.md).
 - No mentions of AI tools, agents, or assistants anywhere in commits.
@@ -86,6 +103,7 @@ Do not mention GPG during the session - only check at the very end, after all ot
 | `make test-race`        | Unit tests with race detector                        |
 | `make test-coverage`    | Coverage report (HTML + summary table in .reports/)  |
 | `make test-integration` | Integration tests (require running daemon + plugins) |
+| `make verify`           | Run all quality gates (lint, race, coverage, build, GPG, docs) |
 | `make proto`            | Regenerate protobuf Go code from .proto files        |
 | `make tidy`             | Run `go mod tidy` across all workspace modules       |
 | `make install-tools`    | Install pinned tool versions into $GOPATH/bin        |

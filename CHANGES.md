@@ -2,6 +2,14 @@
 
 ## Development
 
+- Added `verification` skill and `.scripts/verification.sh`: a single `make verify`
+  command now runs all quality gates (lint, race tests, coverage >= 90% per package,
+  build, GPG signature check on branch commits, docs-completeness check, CHANGES.md
+  check) and produces actionable output for any failures. The `verification` skill
+  wraps the script, interprets failures gate-by-gate, and offers to run the
+  `changelog` skill when five or more Development entries have accumulated. CLAUDE.md
+  updated to make verification the mandatory last task in every superpowers plan.
+
 - Hot-reload config: the daemon now picks up changes to `config.yaml` without
   restarting. Changes are applied via SIGHUP, `locksmith reload` CLI command, or
   automatically when the file is saved (1-second debounce via fsnotify). Active
