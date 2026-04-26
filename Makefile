@@ -1,4 +1,4 @@
-.PHONY: build build-plugins build-all lint test test-coverage test-race test-integration proto install-tools init clean tidy
+.PHONY: build build-plugins build-all lint test test-coverage test-race test-integration verify proto install-tools init clean tidy
 
 # Tool versions - bump here to upgrade everywhere
 BUF_VERSION ?= v1.68.1
@@ -58,6 +58,11 @@ test-coverage:
 # Run integration tests (require daemon + plugins)
 test-integration:
 	go test -tags=integration -v ./...
+
+# Run all quality gates: lint, race tests, coverage >= 90%, build, GPG signatures, docs.
+# Use this as the final step before merging a feature branch.
+verify:
+	./.scripts/verification.sh
 
 # Regenerate protobuf Go code and verify linting.
 # Installs pinned tool versions into GOPATH/bin on each run (no-op if already at correct version).
