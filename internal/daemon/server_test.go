@@ -159,7 +159,7 @@ func TestNewDaemon(t *testing.T) {
 		Vaults:   map[string]config.Vault{},
 		Keys:     map[string]config.Key{},
 	}
-	d := daemon.New(cfg)
+	d := daemon.New(cfg, "")
 	if d == nil {
 		t.Fatal("New() returned nil")
 	}
