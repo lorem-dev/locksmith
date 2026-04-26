@@ -352,7 +352,11 @@ func TestVaultHealth_GetError(t *testing.T) {
 		Vaults:   map[string]config.Vault{},
 		Keys:     map[string]config.Key{},
 	}
-	srv := &Server{cfgFn: func() *config.Config { return cfg }, store: session.NewStore(), plugins: &failingMockRegistry{}}
+	srv := &Server{
+		cfgFn:   func() *config.Config { return cfg },
+		store:   session.NewStore(),
+		plugins: &failingMockRegistry{},
+	}
 	resp, err := srv.VaultHealth(context.Background(), &locksmithv1.VaultHealthRequest{})
 	if err != nil {
 		t.Fatalf("VaultHealth() error: %v", err)

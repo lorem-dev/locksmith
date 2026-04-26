@@ -72,6 +72,9 @@ func (d *Daemon) loadedConfig() *config.Config {
 // replaces the active config. Returns an error if the new config is
 // invalid; the previous config remains active in that case.
 func (d *Daemon) Reload() error {
+	if d.cfgPath == "" {
+		return fmt.Errorf("cannot reload: no config path set")
+	}
 	d.reloadMu.Lock()
 	defer d.reloadMu.Unlock()
 
@@ -225,7 +228,7 @@ func (d *Daemon) watchConfig() {
 		log.Warn().Err(err).Msg("failed to create config file watcher")
 		return
 	}
-	defer watcher.Close()
+	defer watcher.Close() //nolint:errcheck // watcher cleanup on goroutine exit; error not actionable
 
 	cfgDir := filepath.Dir(d.cfgPath)
 	if err := watcher.Add(cfgDir); err != nil {

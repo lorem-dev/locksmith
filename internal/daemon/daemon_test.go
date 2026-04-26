@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -350,6 +351,7 @@ func newFakePluginManager(running ...string) *fakePluginManager {
 	return f
 }
 
+//nolint:unparam // content kept for readability at call sites
 func writeTempConfig(t *testing.T, dir, content string) string {
 	t.Helper()
 	path := filepath.Join(dir, "config.yaml")
@@ -514,4 +516,182 @@ func TestDaemon_syncPlugins_Launch(t *testing.T) {
 	if launched["keychain"] {
 		t.Error("keychain should not have been launched again")
 	}
+}
+
+func TestDaemon_WaitForShutdown_SIGHUP_Reloads(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeTempConfig(t, dir, baseConfigYAML)
+
+	cfg, _ := config.LoadFromBytes([]byte(baseConfigYAML))
+	d := New(cfg, cfgPath)
+
+	// Write updated config before SIGHUP.
+	updated := `
+defaults:
+  session_ttl: 2h
+vaults: {}
+keys: {}
+`
+	if err := os.WriteFile(cfgPath, []byte(updated), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		d.WaitForShutdown()
+		close(done)
+	}()
+	// Give signal handler time to register.
+	time.Sleep(20 * time.Millisecond)
+
+	// SIGHUP should reload, not stop.
+	if err := syscall.Kill(os.Getpid(), syscall.SIGHUP); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	if got := d.loadedConfig().Defaults.SessionTTL; got != "2h" {
+		t.Errorf("after SIGHUP SessionTTL = %s, want 2h", got)
+	}
+
+	// Daemon must still be running - send SIGINT to stop it.
+	if err := syscall.Kill(os.Getpid(), syscall.SIGINT); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("WaitForShutdown did not return after SIGINT")
+	}
+}
+
+func TestDaemon_watchConfig_Debounce(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeTempConfig(t, dir, baseConfigYAML)
+
+	cfg, _ := config.LoadFromBytes([]byte(baseConfigYAML))
+	d := New(cfg, cfgPath)
+	d.watchDebounce = 50 * time.Millisecond // speed up for test
+
+	go d.watchConfig()
+
+	// Write a new config three times quickly - should debounce to one reload.
+	updated := `
+defaults:
+  session_ttl: 3h
+vaults: {}
+keys: {}
+`
+	for i := 0; i < 3; i++ {
+		if err := os.WriteFile(cfgPath, []byte(updated), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// Wait for debounce to fire (50ms quiet + margin).
+	time.Sleep(200 * time.Millisecond)
+
+	if got := d.loadedConfig().Defaults.SessionTTL; got != "3h" {
+		t.Errorf("after file change SessionTTL = %s, want 3h", got)
+	}
+
+	// Stop the watcher goroutine cleanly.
+	d.stopOnce.Do(func() { close(d.stopCleanup) })
+}
+
+func TestDaemon_Reload_EmptyCfgPath(t *testing.T) {
+	cfg, _ := config.LoadFromBytes([]byte(baseConfigYAML))
+	d := New(cfg, "") // no config path
+	err := d.Reload()
+	if err == nil {
+		t.Fatal("Reload() expected error when cfgPath is empty")
+	}
+}
+
+func TestDaemon_Reload_SyncPluginsError(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeTempConfig(t, dir, baseConfigYAML)
+	cfg, _ := config.LoadFromBytes([]byte(baseConfigYAML))
+	d := New(cfg, cfgPath)
+
+	// Replace plugins with one that fails on Launch for new types.
+	d.plugins = &errorOnLaunchPluginManager{}
+
+	// Write config that adds a new vault type so syncPlugins tries to launch.
+	pluginDir := t.TempDir()
+	fakeBin := filepath.Join(pluginDir, "locksmith-plugin-errorvault")
+	if err := os.WriteFile(fakeBin, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", pluginDir+":"+os.Getenv("PATH"))
+
+	newCfgYAML := `
+defaults:
+  session_ttl: 1h
+vaults:
+  ev:
+    type: errorvault
+keys: {}
+`
+	if err := os.WriteFile(cfgPath, []byte(newCfgYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Reload(); err == nil {
+		t.Fatal("Reload() expected error when syncPlugins fails")
+	}
+}
+
+// errorOnLaunchPluginManager is a daemonPlugins stub that errors on Launch.
+type errorOnLaunchPluginManager struct {
+	fakePluginManager
+}
+
+func (e *errorOnLaunchPluginManager) Launch(_, _ string) error {
+	return fmt.Errorf("launch error (test stub)")
+}
+
+func TestDaemon_watchConfig_EmptyCfgPath(t *testing.T) {
+	cfg, _ := config.LoadFromBytes([]byte(baseConfigYAML))
+	d := New(cfg, "")
+	// watchConfig should return immediately when cfgPath is empty.
+	done := make(chan struct{})
+	go func() {
+		d.watchConfig()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("watchConfig did not return immediately for empty cfgPath")
+	}
+}
+
+func TestDaemon_watchConfig_InvalidDir(t *testing.T) {
+	cfg, _ := config.LoadFromBytes([]byte(baseConfigYAML))
+	// Point to a file inside a non-existent directory - watcher.Add will fail.
+	d := New(cfg, "/nonexistent/dir/config.yaml")
+	done := make(chan struct{})
+	go func() {
+		d.watchConfig()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("watchConfig did not return when watcher.Add fails")
+	}
+}
+
+func TestDaemon_cleanupLoop_Tick(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.Defaults{SessionTTL: "1h"},
+		Vaults:   map[string]config.Vault{},
+		Keys:     map[string]config.Key{},
+	}
+	d := New(cfg, "")
+	// Run cleanupLoop in background and stop it quickly.
+	go d.cleanupLoop()
+	time.Sleep(10 * time.Millisecond)
+	d.stopOnce.Do(func() { close(d.stopCleanup) })
 }
