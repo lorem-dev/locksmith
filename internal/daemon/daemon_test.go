@@ -5,12 +5,14 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/lorem-dev/locksmith/internal/config"
 	"github.com/lorem-dev/locksmith/internal/log"
+	vault "github.com/lorem-dev/locksmith/sdk/vault"
 )
 
 func init() {
@@ -55,7 +57,7 @@ func TestDaemon_StartStop(t *testing.T) {
 		Keys:   map[string]config.Key{},
 	}
 
-	d := New(cfg)
+	d := New(cfg, "")
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -108,7 +110,7 @@ func TestDaemon_Start_StaleSocket(t *testing.T) {
 		Keys:     map[string]config.Key{},
 	}
 
-	d := New(cfg)
+	d := New(cfg, "")
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- d.Start()
@@ -145,7 +147,7 @@ func TestDaemon_WaitForShutdown(t *testing.T) {
 		Keys:     map[string]config.Key{},
 	}
 
-	d := New(cfg)
+	d := New(cfg, "")
 
 	startErrCh := make(chan error, 1)
 	go func() {
@@ -184,7 +186,7 @@ func TestDaemon_loadPlugins_NoVaults(t *testing.T) {
 		Vaults:   map[string]config.Vault{},
 		Keys:     map[string]config.Key{},
 	}
-	d := New(cfg)
+	d := New(cfg, "")
 	if err := d.loadPlugins(); err != nil {
 		t.Fatalf("loadPlugins() with no vaults: %v", err)
 	}
@@ -196,7 +198,7 @@ func TestDaemon_loadPlugins_MissingBinary(t *testing.T) {
 		Vaults:   map[string]config.Vault{"myvault": {Type: "nonexistent-vault-type-xyz"}},
 		Keys:     map[string]config.Key{},
 	}
-	d := New(cfg)
+	d := New(cfg, "")
 	// Should not error - just warns when binary not found.
 	if err := d.loadPlugins(); err != nil {
 		t.Fatalf("loadPlugins() with missing binary should warn not error: %v", err)
@@ -209,7 +211,7 @@ func TestDaemon_cleanupLoop(t *testing.T) {
 		Vaults:   map[string]config.Vault{},
 		Keys:     map[string]config.Key{},
 	}
-	d := New(cfg)
+	d := New(cfg, "")
 	// cleanupExpired on empty store removes nothing.
 	d.cleanupExpired()
 }
@@ -229,7 +231,7 @@ func TestDaemon_Start_InvalidSocketDir(t *testing.T) {
 		Vaults:   map[string]config.Vault{},
 		Keys:     map[string]config.Key{},
 	}
-	d := New(cfg)
+	d := New(cfg, "")
 	err := d.Start()
 	if err == nil {
 		d.Stop()
@@ -251,7 +253,7 @@ func TestDaemon_Start_ListenError(t *testing.T) {
 		Vaults:   map[string]config.Vault{},
 		Keys:     map[string]config.Key{},
 	}
-	d := New(cfg)
+	d := New(cfg, "")
 	err := d.Start()
 	if err == nil {
 		d.Stop()
@@ -266,7 +268,7 @@ func TestDaemon_cleanupExpired_WithExpiredSession(t *testing.T) {
 		Vaults:   map[string]config.Vault{},
 		Keys:     map[string]config.Key{},
 	}
-	d := New(cfg)
+	d := New(cfg, "")
 	// Create a session with a very short TTL so it expires immediately.
 	d.store.Create(1*time.Nanosecond, nil)
 	time.Sleep(time.Millisecond)
@@ -280,7 +282,7 @@ func TestDaemon_WaitForShutdown_Signal(t *testing.T) {
 		Vaults:   map[string]config.Vault{},
 		Keys:     map[string]config.Key{},
 	}
-	d := New(cfg)
+	d := New(cfg, "")
 	done := make(chan struct{})
 	go func() {
 		d.WaitForShutdown()
@@ -294,5 +296,222 @@ func TestDaemon_WaitForShutdown_Signal(t *testing.T) {
 		// WaitForShutdown returned - success.
 	case <-time.After(2 * time.Second):
 		t.Fatal("WaitForShutdown() did not return after SIGINT")
+	}
+}
+
+// fakePluginManager is a daemonPlugins stub for testing syncPlugins.
+type fakePluginManager struct {
+	mu       sync.Mutex
+	launched []string
+	killed   []string
+	running  map[string]struct{}
+}
+
+func (f *fakePluginManager) Launch(vaultType, _ string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.launched = append(f.launched, vaultType)
+	f.running[vaultType] = struct{}{}
+	return nil
+}
+
+func (f *fakePluginManager) KillOne(vaultType string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.killed = append(f.killed, vaultType)
+	delete(f.running, vaultType)
+}
+
+func (f *fakePluginManager) Kill() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for k := range f.running {
+		delete(f.running, k)
+	}
+}
+
+func (f *fakePluginManager) Get(_ string) (vault.Provider, error) { return nil, nil }
+
+func (f *fakePluginManager) Types() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]string, 0, len(f.running))
+	for t := range f.running {
+		out = append(out, t)
+	}
+	return out
+}
+
+func newFakePluginManager(running ...string) *fakePluginManager {
+	f := &fakePluginManager{running: make(map[string]struct{})}
+	for _, t := range running {
+		f.running[t] = struct{}{}
+	}
+	return f
+}
+
+func writeTempConfig(t *testing.T, dir, content string) string {
+	t.Helper()
+	path := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+const baseConfigYAML = `
+defaults:
+  session_ttl: 1h
+vaults: {}
+keys: {}
+`
+
+func TestDaemon_Reload_Success(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeTempConfig(t, dir, baseConfigYAML)
+
+	cfg, err := config.LoadFromBytes([]byte(baseConfigYAML))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := New(cfg, cfgPath)
+
+	updated := `
+defaults:
+  session_ttl: 2h
+vaults: {}
+keys: {}
+`
+	if err := os.WriteFile(cfgPath, []byte(updated), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Reload(); err != nil {
+		t.Fatalf("Reload() error: %v", err)
+	}
+	if got := d.loadedConfig().Defaults.SessionTTL; got != "2h" {
+		t.Errorf("SessionTTL = %s, want 2h", got)
+	}
+}
+
+func TestDaemon_Reload_InvalidConfig(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeTempConfig(t, dir, baseConfigYAML)
+
+	cfg, err := config.LoadFromBytes([]byte(baseConfigYAML))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := New(cfg, cfgPath)
+
+	if err := os.WriteFile(cfgPath, []byte("invalid: yaml: [\nbad"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Reload(); err == nil {
+		t.Fatal("Reload() expected error for invalid config")
+	}
+	if got := d.loadedConfig().Defaults.SessionTTL; got != "1h" {
+		t.Errorf("config changed despite error; SessionTTL = %s, want 1h", got)
+	}
+}
+
+func TestDaemon_Reload_Concurrent(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeTempConfig(t, dir, baseConfigYAML)
+	cfg, _ := config.LoadFromBytes([]byte(baseConfigYAML))
+	d := New(cfg, cfgPath)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = d.Reload()
+		}()
+	}
+	wg.Wait()
+}
+
+func TestDaemon_syncPlugins_Kill(t *testing.T) {
+	oldCfg := &config.Config{
+		Defaults: config.Defaults{SessionTTL: "1h"},
+		Vaults: map[string]config.Vault{
+			"kc": {Type: "keychain"},
+			"gp": {Type: "gopass"},
+		},
+		Keys: map[string]config.Key{},
+	}
+	newCfg := &config.Config{
+		Defaults: config.Defaults{SessionTTL: "1h"},
+		Vaults: map[string]config.Vault{
+			"kc": {Type: "keychain"},
+		},
+		Keys: map[string]config.Key{},
+	}
+
+	fake := newFakePluginManager("keychain", "gopass")
+	d := New(oldCfg, "")
+	d.plugins = fake
+
+	if err := d.syncPlugins(oldCfg, newCfg); err != nil {
+		t.Fatalf("syncPlugins() error: %v", err)
+	}
+
+	fake.mu.Lock()
+	defer fake.mu.Unlock()
+
+	killed := make(map[string]bool)
+	for _, k := range fake.killed {
+		killed[k] = true
+	}
+	if !killed["gopass"] {
+		t.Error("expected gopass to be killed")
+	}
+	if killed["keychain"] {
+		t.Error("keychain should not have been killed")
+	}
+}
+
+func TestDaemon_syncPlugins_Launch(t *testing.T) {
+	pluginDir := t.TempDir()
+	fakeBin := filepath.Join(pluginDir, "locksmith-plugin-1password")
+	if err := os.WriteFile(fakeBin, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", pluginDir+":"+os.Getenv("PATH"))
+
+	oldCfg := &config.Config{
+		Defaults: config.Defaults{SessionTTL: "1h"},
+		Vaults:   map[string]config.Vault{"kc": {Type: "keychain"}},
+		Keys:     map[string]config.Key{},
+	}
+	newCfg := &config.Config{
+		Defaults: config.Defaults{SessionTTL: "1h"},
+		Vaults: map[string]config.Vault{
+			"kc": {Type: "keychain"},
+			"op": {Type: "1password"},
+		},
+		Keys: map[string]config.Key{},
+	}
+
+	fake := newFakePluginManager("keychain")
+	d := New(oldCfg, "")
+	d.plugins = fake
+
+	if err := d.syncPlugins(oldCfg, newCfg); err != nil {
+		t.Fatalf("syncPlugins() error: %v", err)
+	}
+
+	fake.mu.Lock()
+	defer fake.mu.Unlock()
+
+	launched := make(map[string]bool)
+	for _, l := range fake.launched {
+		launched[l] = true
+	}
+	if !launched["1password"] {
+		t.Error("expected 1password to be launched")
+	}
+	if launched["keychain"] {
+		t.Error("keychain should not have been launched again")
 	}
 }

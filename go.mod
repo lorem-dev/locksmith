@@ -5,6 +5,7 @@ go 1.25.9
 require (
 	github.com/charmbracelet/huh v1.0.0
 	github.com/fatih/color v1.13.0
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/hashicorp/go-plugin v1.7.0
 	github.com/lorem-dev/locksmith/sdk v0.0.0-00010101000000-000000000000
 	github.com/mattn/go-isatty v0.0.20

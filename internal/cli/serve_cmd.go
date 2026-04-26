@@ -45,7 +45,7 @@ func newServeCmd(cfgFile *string) *cobra.Command {
 
 			log.Init(w, cfg.Logging.Level, cfg.Logging.Format)
 
-			d := daemon.New(cfg)
+			d := daemon.New(cfg, cfgPath)
 			go d.WaitForShutdown()
 
 			return d.Start()

@@ -2,6 +2,14 @@
 
 ## Development
 
+- `Daemon` now stores config in `atomic.Pointer[config.Config]` for lock-free
+  reads. Added `Reload()` method that re-reads the config file, delta-syncs
+  plugins via `syncPlugins` (launching new vault types, killing removed ones),
+  and atomically swaps the active config - keeping the old config on any error.
+  `WaitForShutdown` handles `SIGHUP` to trigger live reloads. A background
+  `watchConfig` goroutine uses `fsnotify` to detect file changes and debounce
+  them into automatic reloads. Added `github.com/fsnotify/fsnotify` dependency.
+
 - `Server` now receives a `cfgFn func() *config.Config` instead of a plain
   config pointer, so each gRPC handler reads the current config snapshot on
   every call - required for hot-reload. Added `ReloadConfig` RPC handler that
