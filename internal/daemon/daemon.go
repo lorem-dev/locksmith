@@ -69,7 +69,7 @@ func (d *Daemon) Start() error {
 	}
 
 	srv := grpc.NewServer()
-	locksmithv1.RegisterLocksmithServiceServer(srv, NewServer(d.cfg, d.store, d.plugins))
+	locksmithv1.RegisterLocksmithServiceServer(srv, NewServer(func() *config.Config { return d.cfg }, d.store, d.plugins, nil))
 
 	d.mu.Lock()
 	d.listener = listener

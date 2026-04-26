@@ -27,29 +27,37 @@ type pluginRegistry interface {
 	Types() []string
 }
 
+// reloader is implemented by Daemon and injected into Server so that
+// the ReloadConfig RPC can trigger a config reload without an import cycle.
+type reloader interface {
+	Reload() error
+}
+
 // Server is the gRPC implementation of LocksmithService.
 type Server struct {
 	locksmithv1.UnimplementedLocksmithServiceServer
 
-	cfg     *config.Config
-	store   *session.Store
-	plugins pluginRegistry
+	cfgFn    func() *config.Config
+	store    *session.Store
+	plugins  pluginRegistry
+	reloader reloader
 }
 
-// NewServer creates a LocksmithService server backed by the given store and plugin manager.
-// plugins may be nil (tests that don't exercise vault calls can pass nil).
-func NewServer(cfg *config.Config, store *session.Store, plugins *pluginpkg.Manager) *Server {
+// NewServer creates a LocksmithService server.
+// cfgFn is called on every request to read the current config snapshot.
+// r may be nil (tests that do not exercise ReloadConfig can pass nil).
+func NewServer(cfgFn func() *config.Config, store *session.Store, plugins *pluginpkg.Manager, r reloader) *Server {
 	var reg pluginRegistry
 	if plugins != nil {
 		reg = plugins
 	}
-	return &Server{cfg: cfg, store: store, plugins: reg}
+	return &Server{cfgFn: cfgFn, store: store, plugins: reg, reloader: r}
 }
 
 // NewServerWithRegistry creates a Server with an arbitrary pluginRegistry.
 // Use this in tests to inject fakes; production code uses NewServer.
-func NewServerWithRegistry(cfg *config.Config, store *session.Store, reg pluginRegistry) *Server {
-	return &Server{cfg: cfg, store: store, plugins: reg}
+func NewServerWithRegistry(cfgFn func() *config.Config, store *session.Store, reg pluginRegistry, r reloader) *Server {
+	return &Server{cfgFn: cfgFn, store: store, plugins: reg, reloader: r}
 }
 
 // SessionStart creates a new agent session with the requested TTL and key restrictions.
@@ -57,7 +65,8 @@ func (s *Server) SessionStart(
 	_ context.Context,
 	req *locksmithv1.SessionStartRequest,
 ) (*locksmithv1.SessionStartResponse, error) {
-	ttl, err := parseTTL(req.Ttl, s.cfg.Defaults.SessionTTL)
+	cfg := s.cfgFn()
+	ttl, err := parseTTL(req.Ttl, cfg.Defaults.SessionTTL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid TTL: %w", err)
 	}
@@ -137,8 +146,8 @@ func (s *Server) GetSecret(
 
 	resp, err := provider.GetSecret(ctx, &vaultv1.GetSecretRequest{Path: path, Opts: opts})
 	if err != nil {
-		if s, ok := status.FromError(err); ok && s.Code() != codes.OK {
-			return nil, status.Errorf(s.Code(), "fetching secret: %s", s.Message())
+		if st, ok := status.FromError(err); ok && st.Code() != codes.OK {
+			return nil, status.Errorf(st.Code(), "fetching secret: %s", st.Message())
 		}
 		return nil, status.Errorf(codes.Internal, "fetching secret: %s", err.Error())
 	}
@@ -202,18 +211,33 @@ func (s *Server) VaultHealth(
 	return &locksmithv1.VaultHealthResponse{Vaults: results}, nil
 }
 
+// ReloadConfig triggers a config reload on the daemon and returns the result.
+func (s *Server) ReloadConfig(
+	_ context.Context,
+	_ *locksmithv1.ReloadConfigRequest,
+) (*locksmithv1.ReloadConfigResponse, error) {
+	if s.reloader == nil {
+		return nil, status.Error(codes.Unimplemented, "reload not available")
+	}
+	if err := s.reloader.Reload(); err != nil {
+		return nil, status.Errorf(codes.Internal, "reload failed: %s", err)
+	}
+	return &locksmithv1.ReloadConfigResponse{Message: "config reloaded"}, nil
+}
+
 // resolveKey returns vault type, secret path, and extra opts for a GetSecret request.
 // Supports both key alias lookup and direct vault+path fallback.
 func (s *Server) resolveKey(
 	req *locksmithv1.GetSecretRequest,
 ) (vaultType, path string, opts map[string]string, err error) {
+	cfg := s.cfgFn()
 	opts = make(map[string]string)
 	if req.KeyAlias != "" {
-		keyDef, ok := s.cfg.Keys[req.KeyAlias]
+		keyDef, ok := cfg.Keys[req.KeyAlias]
 		if !ok {
 			return "", "", nil, fmt.Errorf("unknown key alias %q", req.KeyAlias)
 		}
-		vaultDef, ok := s.cfg.Vaults[keyDef.Vault]
+		vaultDef, ok := cfg.Vaults[keyDef.Vault]
 		if !ok {
 			return "", "", nil, fmt.Errorf("key %q references unknown vault %q", req.KeyAlias, keyDef.Vault)
 		}
@@ -228,7 +252,7 @@ func (s *Server) resolveKey(
 	if req.VaultName == "" || req.Path == "" {
 		return "", "", nil, fmt.Errorf("either key_alias or both vault_name and path are required")
 	}
-	if vaultDef, ok := s.cfg.Vaults[req.VaultName]; ok {
+	if vaultDef, ok := cfg.Vaults[req.VaultName]; ok {
 		if vaultDef.Store != "" {
 			opts["store"] = vaultDef.Store
 		}

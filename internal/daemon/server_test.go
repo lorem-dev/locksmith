@@ -4,11 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	locksmithv1 "github.com/lorem-dev/locksmith/gen/proto/locksmith/v1"
 	"github.com/lorem-dev/locksmith/internal/config"
@@ -29,7 +34,7 @@ func newTestServer() *daemon.Server {
 		Vaults:   map[string]config.Vault{"keychain": {Type: "keychain"}},
 		Keys:     map[string]config.Key{"test-key": {Vault: "keychain", Path: "test-path"}},
 	}
-	return daemon.NewServer(cfg, session.NewStore(), nil)
+	return daemon.NewServer(func() *config.Config { return cfg }, session.NewStore(), nil, nil)
 }
 
 func TestSessionStart(t *testing.T) {
@@ -286,5 +291,69 @@ func TestSessionStart_LogsFullSessionIdInDebug(t *testing.T) {
 	}
 	if sessionID != resp.SessionId {
 		t.Errorf("session_id in debug log should be full ID\ngot:  %q\nwant: %q", sessionID, resp.SessionId)
+	}
+}
+
+// stubReloader records Reload() calls for testing.
+type stubReloader struct {
+	mu     sync.Mutex
+	calls  int
+	retErr error
+}
+
+func (r *stubReloader) Reload() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.calls++
+	return r.retErr
+}
+
+func TestReloadConfig_RPC_Success(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.Defaults{SessionTTL: "1h"},
+		Vaults:   map[string]config.Vault{},
+		Keys:     map[string]config.Key{},
+	}
+	r := &stubReloader{}
+	srv := daemon.NewServerWithRegistry(
+		func() *config.Config { return cfg },
+		session.NewStore(),
+		nil,
+		r,
+	)
+	resp, err := srv.ReloadConfig(context.Background(), &locksmithv1.ReloadConfigRequest{})
+	if err != nil {
+		t.Fatalf("ReloadConfig() error: %v", err)
+	}
+	if resp.Message == "" {
+		t.Error("expected non-empty message")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.calls != 1 {
+		t.Errorf("Reload() called %d times, want 1", r.calls)
+	}
+}
+
+func TestReloadConfig_RPC_Error(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.Defaults{SessionTTL: "1h"},
+		Vaults:   map[string]config.Vault{},
+		Keys:     map[string]config.Key{},
+	}
+	r := &stubReloader{retErr: errors.New("bad config")}
+	srv := daemon.NewServerWithRegistry(
+		func() *config.Config { return cfg },
+		session.NewStore(),
+		nil,
+		r,
+	)
+	_, err := srv.ReloadConfig(context.Background(), &locksmithv1.ReloadConfigRequest{})
+	if err == nil {
+		t.Fatal("expected error from ReloadConfig when Reload fails")
+	}
+	st, ok := status.FromError(err)
+	if !ok || st.Code() != codes.Internal {
+		t.Errorf("expected codes.Internal, got %v", err)
 	}
 }

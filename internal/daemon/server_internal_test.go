@@ -79,7 +79,7 @@ func newServerWithMock(providers map[string]vault.Provider) *Server {
 		Keys:     map[string]config.Key{"test-key": {Vault: "keychain", Path: "test-path"}},
 	}
 	reg := &mockRegistry{providers: providers}
-	return &Server{cfg: cfg, store: session.NewStore(), plugins: reg}
+	return &Server{cfgFn: func() *config.Config { return cfg }, store: session.NewStore(), plugins: reg}
 }
 
 func TestVaultList_WithPlugins(t *testing.T) {
@@ -211,7 +211,7 @@ func TestSessionStart_InvalidTTL(t *testing.T) {
 		Vaults:   map[string]config.Vault{},
 		Keys:     map[string]config.Key{},
 	}
-	srv := &Server{cfg: cfg, store: session.NewStore()}
+	srv := &Server{cfgFn: func() *config.Config { return cfg }, store: session.NewStore()}
 	_, err := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
 	if err == nil {
 		t.Fatal("SessionStart() expected error for invalid default TTL")
@@ -224,7 +224,7 @@ func TestSessionEnd_NotFound(t *testing.T) {
 		Vaults:   map[string]config.Vault{},
 		Keys:     map[string]config.Key{},
 	}
-	srv := &Server{cfg: cfg, store: session.NewStore()}
+	srv := &Server{cfgFn: func() *config.Config { return cfg }, store: session.NewStore()}
 	_, err := srv.SessionEnd(context.Background(), &locksmithv1.SessionEndRequest{SessionIdPrefix: "ls_notfound"})
 	if err == nil {
 		t.Fatal("SessionEnd() expected error for unknown session")
@@ -239,17 +239,18 @@ func TestResolveKey_UnknownVault(t *testing.T) {
 		Keys:     map[string]config.Key{"orphan-key": {Vault: "missing-vault", Path: "p"}},
 	}
 	store := session.NewStore()
+	sessionCfg := &config.Config{
+		Defaults: config.Defaults{SessionTTL: "1h"},
+		Vaults:   map[string]config.Vault{},
+		Keys:     map[string]config.Key{},
+	}
 	srvForSession := &Server{
-		cfg: &config.Config{
-			Defaults: config.Defaults{SessionTTL: "1h"},
-			Vaults:   map[string]config.Vault{},
-			Keys:     map[string]config.Key{},
-		},
+		cfgFn: func() *config.Config { return sessionCfg },
 		store: store,
 	}
 	startResp, _ := srvForSession.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
 
-	srv := &Server{cfg: cfg, store: store}
+	srv := &Server{cfgFn: func() *config.Config { return cfg }, store: store}
 	_, err := srv.GetSecret(context.Background(), &locksmithv1.GetSecretRequest{
 		SessionId: startResp.SessionId,
 		KeyAlias:  "orphan-key",
@@ -268,7 +269,7 @@ func TestGetSecret_WithStoreInOpts(t *testing.T) {
 	}
 	provider := &mockProvider{secret: []byte("value"), contentType: "text/plain"}
 	reg := &mockRegistry{providers: map[string]vault.Provider{"keychain": provider}}
-	srv := &Server{cfg: cfg, store: session.NewStore(), plugins: reg}
+	srv := &Server{cfgFn: func() *config.Config { return cfg }, store: session.NewStore(), plugins: reg}
 
 	startResp, _ := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
 	resp, err := srv.GetSecret(context.Background(), &locksmithv1.GetSecretRequest{
@@ -292,7 +293,7 @@ func TestGetSecret_DirectVaultWithStore(t *testing.T) {
 	}
 	provider := &mockProvider{secret: []byte("direct"), contentType: "text/plain"}
 	reg := &mockRegistry{providers: map[string]vault.Provider{"keychain": provider}}
-	srv := &Server{cfg: cfg, store: session.NewStore(), plugins: reg}
+	srv := &Server{cfgFn: func() *config.Config { return cfg }, store: session.NewStore(), plugins: reg}
 
 	startResp, _ := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
 	resp, err := srv.GetSecret(context.Background(), &locksmithv1.GetSecretRequest{
@@ -317,7 +318,7 @@ func TestGetSecret_DirectVaultNotInConfig(t *testing.T) {
 	}
 	provider := &mockProvider{secret: []byte("raw"), contentType: "text/plain"}
 	reg := &mockRegistry{providers: map[string]vault.Provider{"rawvault": provider}}
-	srv := &Server{cfg: cfg, store: session.NewStore(), plugins: reg}
+	srv := &Server{cfgFn: func() *config.Config { return cfg }, store: session.NewStore(), plugins: reg}
 
 	startResp, _ := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
 	resp, err := srv.GetSecret(context.Background(), &locksmithv1.GetSecretRequest{
@@ -351,7 +352,7 @@ func TestVaultHealth_GetError(t *testing.T) {
 		Vaults:   map[string]config.Vault{},
 		Keys:     map[string]config.Key{},
 	}
-	srv := &Server{cfg: cfg, store: session.NewStore(), plugins: &failingMockRegistry{}}
+	srv := &Server{cfgFn: func() *config.Config { return cfg }, store: session.NewStore(), plugins: &failingMockRegistry{}}
 	resp, err := srv.VaultHealth(context.Background(), &locksmithv1.VaultHealthRequest{})
 	if err != nil {
 		t.Fatalf("VaultHealth() error: %v", err)
@@ -372,7 +373,7 @@ func TestGetSecret_PreservesVaultErrorCode(t *testing.T) {
 	}
 	provider := &mockProvider{getErr: sdkerrors.NotFoundError("keychain: item not found")}
 	reg := &mockRegistry{providers: map[string]vault.Provider{"keychain": provider}}
-	srv := NewServerWithRegistry(cfg, session.NewStore(), reg)
+	srv := NewServerWithRegistry(func() *config.Config { return cfg }, session.NewStore(), reg, nil)
 
 	startResp, _ := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
 	_, err := srv.GetSecret(context.Background(), &locksmithv1.GetSecretRequest{
@@ -399,7 +400,7 @@ func TestResolveKey_PassesServiceOpt(t *testing.T) {
 	}
 	provider := &mockProvider{secret: []byte("secret"), contentType: "text/plain"}
 	reg := &mockRegistry{providers: map[string]vault.Provider{"keychain": provider}}
-	srv := NewServerWithRegistry(cfg, session.NewStore(), reg)
+	srv := NewServerWithRegistry(func() *config.Config { return cfg }, session.NewStore(), reg, nil)
 
 	startResp, _ := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
 	_, err := srv.GetSecret(context.Background(), &locksmithv1.GetSecretRequest{
@@ -425,7 +426,7 @@ func TestResolveKey_DirectVault_PassesServiceOpt(t *testing.T) {
 	}
 	provider := &mockProvider{secret: []byte("secret"), contentType: "text/plain"}
 	reg := &mockRegistry{providers: map[string]vault.Provider{"keychain": provider}}
-	srv := NewServerWithRegistry(cfg, session.NewStore(), reg)
+	srv := NewServerWithRegistry(func() *config.Config { return cfg }, session.NewStore(), reg, nil)
 
 	startResp, _ := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{})
 	_, err := srv.GetSecret(context.Background(), &locksmithv1.GetSecretRequest{

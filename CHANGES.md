@@ -2,6 +2,13 @@
 
 ## Development
 
+- `Server` now receives a `cfgFn func() *config.Config` instead of a plain
+  config pointer, so each gRPC handler reads the current config snapshot on
+  every call - required for hot-reload. Added `ReloadConfig` RPC handler that
+  delegates to an injected `reloader` interface, keeping `Server` independently
+  testable. `NewServer` and `NewServerWithRegistry` signatures updated
+  accordingly.
+
 - Added `KillOne(vaultType string)` to `plugin.Manager` for targeted plugin
   shutdown - enables hot-reload to stop a single vault plugin process when its
   vault type is removed from the config, without disrupting other running plugins.
