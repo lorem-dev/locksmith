@@ -197,13 +197,11 @@ func TestManager_Kill_WithPlugin(t *testing.T) {
 }
 
 func TestKillOne(t *testing.T) {
-	killed := make(map[string]bool)
 	m := &Manager{
 		plugins:       make(map[string]*runningPlugin),
 		clientFactory: defaultClientFactory,
 	}
-	// Inject two fake running plugins directly (white-box).
-	makeStub := func(name string) *runningPlugin {
+	makeStub := func() *runningPlugin {
 		return &runningPlugin{
 			client: &stubClient{clientFn: func() (goplugin.ClientProtocol, error) {
 				return nil, errors.New("not used")
@@ -211,11 +209,12 @@ func TestKillOne(t *testing.T) {
 			provider: nil,
 		}
 	}
-	m.plugins["keychain"] = makeStub("keychain")
-	m.plugins["gopass"] = makeStub("gopass")
-	// Patch Kill on the stub to record calls.
-	m.plugins["keychain"].client.(*stubClient).killed = false
-	m.plugins["gopass"].client.(*stubClient).killed = false
+	m.plugins["keychain"] = makeStub()
+	m.plugins["gopass"] = makeStub()
+
+	// Save client references before KillOne removes the entry from the map.
+	gopassClient := m.plugins["gopass"].client.(*stubClient)
+	keychainClient := m.plugins["keychain"].client.(*stubClient)
 
 	m.KillOne("gopass")
 
@@ -225,7 +224,12 @@ func TestKillOne(t *testing.T) {
 	if _, exists := m.plugins["keychain"]; !exists {
 		t.Error("keychain should still be in plugins map")
 	}
-	_ = killed
+	if !gopassClient.killed {
+		t.Error("KillOne should have called Kill() on the gopass client")
+	}
+	if keychainClient.killed {
+		t.Error("KillOne should not have called Kill() on the keychain client")
+	}
 }
 
 func TestKillOne_Unknown(t *testing.T) {
