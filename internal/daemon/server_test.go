@@ -357,3 +357,20 @@ func TestReloadConfig_RPC_Error(t *testing.T) {
 		t.Errorf("expected codes.Internal, got %v", err)
 	}
 }
+
+func TestReloadConfig_RPC_NilReloader(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.Defaults{SessionTTL: "1h"},
+		Vaults:   map[string]config.Vault{},
+		Keys:     map[string]config.Key{},
+	}
+	srv := daemon.NewServer(func() *config.Config { return cfg }, session.NewStore(), nil, nil)
+	_, err := srv.ReloadConfig(context.Background(), &locksmithv1.ReloadConfigRequest{})
+	if err == nil {
+		t.Fatal("expected error when reloader is nil")
+	}
+	st, ok := status.FromError(err)
+	if !ok || st.Code() != codes.Unimplemented {
+		t.Errorf("expected codes.Unimplemented, got %v", err)
+	}
+}
