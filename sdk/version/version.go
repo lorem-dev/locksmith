@@ -7,4 +7,4 @@
 package version
 
 // Current is the locksmith version this build was produced from.
-const Current = "0.1.0"
+var Current = "0.1.0"

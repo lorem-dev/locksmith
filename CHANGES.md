@@ -2,6 +2,7 @@
 
 ## Development
 
+- Added `sdk/version` package exposing `version.Current` - the authoritative locksmith version string, overridable at link time via `-ldflags`.
 - Added `verification` skill and `.scripts/verification.sh`: a single `make verify`
   command now runs all quality gates (lint, race tests, coverage >= 90% per package,
   build, GPG signature check on branch commits, docs-completeness check, CHANGES.md
