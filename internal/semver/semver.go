@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+const numParts = 3
+
 // Version is a parsed semantic version triple.
 type Version struct {
 	Major int
@@ -24,7 +26,7 @@ func Parse(s string) (Version, error) {
 		return Version{}, fmt.Errorf("semver: pre-release/build metadata not supported in %q", s)
 	}
 	parts := strings.Split(s, ".")
-	if len(parts) != 3 {
+	if len(parts) != numParts {
 		return Version{}, fmt.Errorf("semver: %q is not major.minor.patch", s)
 	}
 	out := Version{}
@@ -44,7 +46,7 @@ func Parse(s string) (Version, error) {
 			out.Major = n
 		case 1:
 			out.Minor = n
-		case 2:
+		case numParts - 1:
 			out.Patch = n
 		}
 	}
