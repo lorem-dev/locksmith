@@ -83,6 +83,7 @@ message VaultHealthInfo {
   string name = 1;
   bool available = 2;
   string message = 3;
+  repeated string compat_warnings = 4;  // empty = compatible
 }
 
 message ReloadConfigRequest {}

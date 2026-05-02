@@ -34,4 +34,6 @@ message InfoResponse {
   string name = 1;
   string version = 2;
   repeated string platforms = 3;
+  string min_locksmith_version = 4;  // semver e.g. "1.0.0"; empty = skip check
+  string max_locksmith_version = 5;  // semver; empty = no upper bound
 }

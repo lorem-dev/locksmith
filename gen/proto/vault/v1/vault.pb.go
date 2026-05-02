@@ -250,12 +250,14 @@ func (*InfoRequest) Descriptor() ([]byte, []int) {
 }
 
 type InfoResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Version       string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
-	Platforms     []string               `protobuf:"bytes,3,rep,name=platforms,proto3" json:"platforms,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	Name                string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Version             string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
+	Platforms           []string               `protobuf:"bytes,3,rep,name=platforms,proto3" json:"platforms,omitempty"`
+	MinLocksmithVersion string                 `protobuf:"bytes,4,opt,name=min_locksmith_version,json=minLocksmithVersion,proto3" json:"min_locksmith_version,omitempty"` // semver e.g. "1.0.0"; empty = skip check
+	MaxLocksmithVersion string                 `protobuf:"bytes,5,opt,name=max_locksmith_version,json=maxLocksmithVersion,proto3" json:"max_locksmith_version,omitempty"` // semver; empty = no upper bound
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *InfoResponse) Reset() {
@@ -309,6 +311,20 @@ func (x *InfoResponse) GetPlatforms() []string {
 	return nil
 }
 
+func (x *InfoResponse) GetMinLocksmithVersion() string {
+	if x != nil {
+		return x.MinLocksmithVersion
+	}
+	return ""
+}
+
+func (x *InfoResponse) GetMaxLocksmithVersion() string {
+	if x != nil {
+		return x.MaxLocksmithVersion
+	}
+	return ""
+}
+
 var File_vault_v1_vault_proto protoreflect.FileDescriptor
 
 const file_vault_v1_vault_proto_rawDesc = "" +
@@ -327,11 +343,13 @@ const file_vault_v1_vault_proto_rawDesc = "" +
 	"\x13HealthCheckResponse\x12\x1c\n" +
 	"\tavailable\x18\x01 \x01(\bR\tavailable\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"\r\n" +
-	"\vInfoRequest\"Z\n" +
+	"\vInfoRequest\"\xc2\x01\n" +
 	"\fInfoResponse\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\tR\aversion\x12\x1c\n" +
-	"\tplatforms\x18\x03 \x03(\tR\tplatforms2\xdf\x01\n" +
+	"\tplatforms\x18\x03 \x03(\tR\tplatforms\x122\n" +
+	"\x15min_locksmith_version\x18\x04 \x01(\tR\x13minLocksmithVersion\x122\n" +
+	"\x15max_locksmith_version\x18\x05 \x01(\tR\x13maxLocksmithVersion2\xdf\x01\n" +
 	"\x14VaultProviderService\x12D\n" +
 	"\tGetSecret\x12\x1a.vault.v1.GetSecretRequest\x1a\x1b.vault.v1.GetSecretResponse\x12J\n" +
 	"\vHealthCheck\x12\x1c.vault.v1.HealthCheckRequest\x1a\x1d.vault.v1.HealthCheckResponse\x125\n" +

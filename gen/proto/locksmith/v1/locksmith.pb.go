@@ -718,12 +718,13 @@ func (x *VaultHealthResponse) GetVaults() []*VaultHealthInfo {
 }
 
 type VaultHealthInfo struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Available     bool                   `protobuf:"varint,2,opt,name=available,proto3" json:"available,omitempty"`
-	Message       string                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Name           string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Available      bool                   `protobuf:"varint,2,opt,name=available,proto3" json:"available,omitempty"`
+	Message        string                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
+	CompatWarnings []string               `protobuf:"bytes,4,rep,name=compat_warnings,json=compatWarnings,proto3" json:"compat_warnings,omitempty"` // empty = compatible
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *VaultHealthInfo) Reset() {
@@ -775,6 +776,13 @@ func (x *VaultHealthInfo) GetMessage() string {
 		return x.Message
 	}
 	return ""
+}
+
+func (x *VaultHealthInfo) GetCompatWarnings() []string {
+	if x != nil {
+		return x.CompatWarnings
+	}
+	return nil
 }
 
 type ReloadConfigRequest struct {
@@ -907,11 +915,12 @@ const file_locksmith_v1_locksmith_proto_rawDesc = "" +
 	"\aversion\x18\x04 \x01(\tR\aversion\"\x14\n" +
 	"\x12VaultHealthRequest\"L\n" +
 	"\x13VaultHealthResponse\x125\n" +
-	"\x06vaults\x18\x01 \x03(\v2\x1d.locksmith.v1.VaultHealthInfoR\x06vaults\"]\n" +
+	"\x06vaults\x18\x01 \x03(\v2\x1d.locksmith.v1.VaultHealthInfoR\x06vaults\"\x86\x01\n" +
 	"\x0fVaultHealthInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
 	"\tavailable\x18\x02 \x01(\bR\tavailable\x12\x18\n" +
-	"\amessage\x18\x03 \x01(\tR\amessage\"\x15\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\x12'\n" +
+	"\x0fcompat_warnings\x18\x04 \x03(\tR\x0ecompatWarnings\"\x15\n" +
 	"\x13ReloadConfigRequest\"0\n" +
 	"\x14ReloadConfigResponse\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage2\xd5\x04\n" +
