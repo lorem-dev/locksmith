@@ -59,8 +59,11 @@ func (v *CompatValidator) Validate(info *vaultv1.InfoResponse) []CompatWarning {
 		}
 		if !matched {
 			ws = append(ws, CompatWarning{
-				Kind:    WarnPlatformMismatch,
-				Message: fmt.Sprintf("plugin supports %v but running on %s", info.Platforms, v.Platform),
+				Kind: WarnPlatformMismatch,
+				Message: fmt.Sprintf(
+					"plugin supports %v but running on %s",
+					info.Platforms, v.Platform,
+				),
 			})
 		}
 	}
@@ -69,8 +72,11 @@ func (v *CompatValidator) Validate(info *vaultv1.InfoResponse) []CompatWarning {
 	current, err := semver.Parse(v.LocksmithVersion)
 	if err != nil {
 		ws = append(ws, CompatWarning{
-			Kind:    WarnInvalidSemver,
-			Message: fmt.Sprintf("local locksmith version %q is not valid semver: %v", v.LocksmithVersion, err),
+			Kind: WarnInvalidSemver,
+			Message: fmt.Sprintf(
+				"local locksmith version %q is not valid semver: %v",
+				v.LocksmithVersion, err,
+			),
 		})
 		return ws
 	}
@@ -85,13 +91,19 @@ func (v *CompatValidator) Validate(info *vaultv1.InfoResponse) []CompatWarning {
 		minV, perr := semver.Parse(info.MinLocksmithVersion)
 		if perr != nil {
 			ws = append(ws, CompatWarning{
-				Kind:    WarnInvalidMinVersion,
-				Message: fmt.Sprintf("min_locksmith_version %q is not valid semver: %v", info.MinLocksmithVersion, perr),
+				Kind: WarnInvalidMinVersion,
+				Message: fmt.Sprintf(
+					"min_locksmith_version %q is not valid semver: %v",
+					info.MinLocksmithVersion, perr,
+				),
 			})
 		} else if current.Compare(minV) < 0 {
 			ws = append(ws, CompatWarning{
-				Kind:    WarnDaemonTooOld,
-				Message: fmt.Sprintf("plugin min_locksmith_version=%s, current=%s", info.MinLocksmithVersion, v.LocksmithVersion),
+				Kind: WarnDaemonTooOld,
+				Message: fmt.Sprintf(
+					"plugin min_locksmith_version=%s, current=%s",
+					info.MinLocksmithVersion, v.LocksmithVersion,
+				),
 			})
 		}
 	}
@@ -101,13 +113,19 @@ func (v *CompatValidator) Validate(info *vaultv1.InfoResponse) []CompatWarning {
 		maxV, perr := semver.Parse(info.MaxLocksmithVersion)
 		if perr != nil {
 			ws = append(ws, CompatWarning{
-				Kind:    WarnInvalidMaxVersion,
-				Message: fmt.Sprintf("max_locksmith_version %q is not valid semver: %v", info.MaxLocksmithVersion, perr),
+				Kind: WarnInvalidMaxVersion,
+				Message: fmt.Sprintf(
+					"max_locksmith_version %q is not valid semver: %v",
+					info.MaxLocksmithVersion, perr,
+				),
 			})
 		} else if current.Compare(maxV) > 0 {
 			ws = append(ws, CompatWarning{
-				Kind:    WarnDaemonTooNew,
-				Message: fmt.Sprintf("plugin max_locksmith_version=%s, current=%s", info.MaxLocksmithVersion, v.LocksmithVersion),
+				Kind: WarnDaemonTooNew,
+				Message: fmt.Sprintf(
+					"plugin max_locksmith_version=%s, current=%s",
+					info.MaxLocksmithVersion, v.LocksmithVersion,
+				),
 			})
 		}
 	}
