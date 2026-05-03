@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lorem-dev/locksmith/internal/bundled"
 	"github.com/lorem-dev/locksmith/internal/initflow"
 )
 
@@ -20,38 +21,40 @@ func (m *mockPinentryPrompter) GPGPinentry(_ string) (bool, error) {
 	return m.accept, m.err
 }
 
-// fakePinentryBin creates a fake locksmith-pinentry executable in a temp dir,
-// prepends that dir to PATH, and returns the binary path.
-func fakePinentryBin(t *testing.T) string {
+// fakePinentryAt creates a fake locksmith-pinentry executable at the canonical
+// bundled location under home, sets HOME to home, and returns the binary path.
+func fakePinentryAt(t *testing.T, home string) string {
 	t.Helper()
-	dir := t.TempDir()
-	bin := filepath.Join(dir, "locksmith-pinentry")
-	if err := os.WriteFile(bin, []byte("#!/bin/sh\n"), 0o755); err != nil {
-		t.Fatalf("creating fake locksmith-pinentry: %v", err)
+	binDir := filepath.Join(home, ".config", "locksmith", "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
 	}
-	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	bin := filepath.Join(binDir, "locksmith-pinentry")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write fake pinentry: %v", err)
+	}
 	return bin
 }
 
-func TestRunConfigPinentry_NotFound(t *testing.T) {
-	// Empty PATH - locksmith-pinentry cannot be found.
-	t.Setenv("PATH", t.TempDir())
+func TestRunConfigPinentry_MissingPinentry_EmptyBundle(t *testing.T) {
+	// This test only passes in builds with the placeholder (empty) bundle.
+	// If a real bundle is present, the pinentry is extracted successfully and
+	// no error is returned - skip in that case.
+	if _, openErr := bundled.OpenBundle(); openErr == nil {
+		t.Skip("real bundle present; skipping empty-bundle error test")
+	}
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-
 	_, err := initflow.RunConfigPinentry(initflow.ConfigPinentryOptions{Auto: true})
-	if err == nil {
-		t.Fatal("expected error when locksmith-pinentry not found")
-	}
-	if !strings.Contains(err.Error(), "locksmith-pinentry not found") {
-		t.Errorf("unexpected error message: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "bundle is empty") {
+		t.Errorf("err = %v, want 'bundle is empty' error", err)
 	}
 }
 
 func TestRunConfigPinentry_Auto_Configures(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	binPath := fakePinentryBin(t)
+	binPath := fakePinentryAt(t, home)
 
 	result, err := initflow.RunConfigPinentry(initflow.ConfigPinentryOptions{Auto: true})
 	if err != nil {
@@ -60,16 +63,23 @@ func TestRunConfigPinentry_Auto_Configures(t *testing.T) {
 	if !result.Configured {
 		t.Error("expected Configured = true in auto mode")
 	}
-	if result.PinentryPath != binPath {
-		t.Errorf("PinentryPath = %q, want %q", result.PinentryPath, binPath)
+
+	wantPath, pathErr := bundled.PinentryPath()
+	if pathErr != nil {
+		t.Fatalf("bundled.PinentryPath: %v", pathErr)
 	}
+	if result.PinentryPath != wantPath {
+		t.Errorf("PinentryPath = %q, want %q", result.PinentryPath, wantPath)
+	}
+	_ = binPath
+
 	// Verify gpg-agent.conf was written.
 	confPath := filepath.Join(home, ".gnupg", "gpg-agent.conf")
 	data, readErr := os.ReadFile(confPath)
 	if readErr != nil {
 		t.Fatalf("gpg-agent.conf not created: %v", readErr)
 	}
-	if !strings.Contains(string(data), "pinentry-program "+binPath) {
+	if !strings.Contains(string(data), "pinentry-program "+wantPath) {
 		t.Errorf("gpg-agent.conf does not contain expected line:\n%s", data)
 	}
 }
@@ -77,7 +87,7 @@ func TestRunConfigPinentry_Auto_Configures(t *testing.T) {
 func TestRunConfigPinentry_Interactive_Accepted(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	fakePinentryBin(t)
+	fakePinentryAt(t, home)
 
 	mp := &mockPinentryPrompter{accept: true}
 	result, err := initflow.RunConfigPinentry(initflow.ConfigPinentryOptions{Prompter: mp})
@@ -92,7 +102,7 @@ func TestRunConfigPinentry_Interactive_Accepted(t *testing.T) {
 func TestRunConfigPinentry_Interactive_Declined(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	fakePinentryBin(t)
+	fakePinentryAt(t, home)
 
 	mp := &mockPinentryPrompter{accept: false}
 	result, err := initflow.RunConfigPinentry(initflow.ConfigPinentryOptions{Prompter: mp})
@@ -112,7 +122,12 @@ func TestRunConfigPinentry_Interactive_Declined(t *testing.T) {
 func TestRunConfigPinentry_ReplacesExisting(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	binPath := fakePinentryBin(t)
+	fakePinentryAt(t, home)
+
+	wantPath, pathErr := bundled.PinentryPath()
+	if pathErr != nil {
+		t.Fatalf("bundled.PinentryPath: %v", pathErr)
+	}
 
 	// Pre-populate gpg-agent.conf with an existing pinentry-program.
 	gnupgDir := filepath.Join(home, ".gnupg")
@@ -133,7 +148,7 @@ func TestRunConfigPinentry_ReplacesExisting(t *testing.T) {
 	if !strings.Contains(content, "#pinentry-program /opt/homebrew/bin/pinentry-mac") {
 		t.Errorf("old line should be commented out:\n%s", content)
 	}
-	if !strings.Contains(content, "pinentry-program "+binPath) {
+	if !strings.Contains(content, "pinentry-program "+wantPath) {
 		t.Errorf("new line missing:\n%s", content)
 	}
 }
@@ -141,7 +156,7 @@ func TestRunConfigPinentry_ReplacesExisting(t *testing.T) {
 func TestRunConfigPinentry_PromptError(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	fakePinentryBin(t)
+	fakePinentryAt(t, home)
 
 	wantErr := errors.New("prompt failed")
 	mp := &mockPinentryPrompter{err: wantErr}

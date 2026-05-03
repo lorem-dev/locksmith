@@ -1,10 +1,14 @@
 package initflow
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/lorem-dev/locksmith/internal/bundled"
 )
 
 // ConfigPinentryPrompter is the prompt subset needed by RunConfigPinentry.
@@ -35,9 +39,28 @@ func RunConfigPinentry(opts ConfigPinentryOptions) (*ConfigPinentryResult, error
 		return nil, fmt.Errorf("getting home dir: %w", err)
 	}
 
-	pinentryPath, err := exec.LookPath("locksmith-pinentry")
+	pinentryPath, err := bundled.PinentryPath()
 	if err != nil {
-		return nil, fmt.Errorf("locksmith-pinentry not found in PATH - run 'make init' first")
+		return nil, fmt.Errorf("resolving pinentry path: %w", err)
+	}
+	if _, err := os.Stat(pinentryPath); errors.Is(err, fs.ErrNotExist) {
+		// Pinentry not yet extracted (e.g. user is running `locksmith config
+		// pinentry` standalone without `init`). Extract it now.
+		bundle, openErr := bundled.OpenBundle()
+		if openErr != nil {
+			if errors.Is(openErr, bundled.ErrEmptyBundle) {
+				return nil, fmt.Errorf("locksmith-pinentry not extracted and bundle is empty (dev build): run `make build-all` then re-run init")
+			}
+			return nil, fmt.Errorf("opening bundle: %w", openErr)
+		}
+		if err := bundled.Extract(bundle, bundled.ExtractOptions{
+			Names:        []string{"locksmith-pinentry"},
+			PinentryPath: pinentryPath,
+		}); err != nil {
+			return nil, fmt.Errorf("extracting pinentry: %w", err)
+		}
+	} else if err != nil {
+		return nil, fmt.Errorf("stat %s: %w", pinentryPath, err)
 	}
 
 	gnupgDir := filepath.Join(homeDir, ".gnupg")
