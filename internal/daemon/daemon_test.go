@@ -11,8 +11,10 @@ import (
 	"testing"
 	"time"
 
+	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
 	"github.com/lorem-dev/locksmith/internal/config"
 	"github.com/lorem-dev/locksmith/internal/log"
+	pluginpkg "github.com/lorem-dev/locksmith/internal/plugin"
 	vault "github.com/lorem-dev/locksmith/sdk/vault"
 )
 
@@ -332,6 +334,10 @@ func (f *fakePluginManager) Kill() {
 }
 
 func (f *fakePluginManager) Get(_ string) (vault.Provider, error) { return nil, nil }
+
+func (f *fakePluginManager) Warnings(_ string) []pluginpkg.CompatWarning { return nil }
+
+func (f *fakePluginManager) CachedInfo(_ string) *vaultv1.InfoResponse { return nil }
 
 func (f *fakePluginManager) Types() []string {
 	f.mu.Lock()

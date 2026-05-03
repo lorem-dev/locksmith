@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc"
 
 	locksmithv1 "github.com/lorem-dev/locksmith/gen/proto/locksmith/v1"
+	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
 	"github.com/lorem-dev/locksmith/internal/config"
 	"github.com/lorem-dev/locksmith/internal/log"
 	pluginpkg "github.com/lorem-dev/locksmith/internal/plugin"
@@ -30,6 +31,8 @@ type daemonPlugins interface {
 	Kill()
 	Get(vaultType string) (vault.Provider, error)
 	Types() []string
+	Warnings(vaultType string) []pluginpkg.CompatWarning
+	CachedInfo(vaultType string) *vaultv1.InfoResponse
 }
 
 // Daemon manages the daemon lifecycle: plugin loading, gRPC server, session cleanup.

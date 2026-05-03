@@ -25,6 +25,8 @@ import (
 type pluginRegistry interface {
 	Get(vaultType string) (vault.Provider, error)
 	Types() []string
+	Warnings(vaultType string) []pluginpkg.CompatWarning
+	CachedInfo(vaultType string) *vaultv1.InfoResponse
 }
 
 // reloader is implemented by Daemon and injected into Server so that
@@ -170,7 +172,10 @@ func (s *Server) VaultList(_ context.Context, _ *locksmithv1.VaultListRequest) (
 	var vaults []*locksmithv1.VaultInfo
 	for _, vaultType := range s.plugins.Types() {
 		info := &locksmithv1.VaultInfo{Name: vaultType, Type: vaultType}
-		if provider, err := s.plugins.Get(vaultType); err == nil {
+		if pi := s.plugins.CachedInfo(vaultType); pi != nil {
+			info.Version = pi.Version
+			info.Platforms = pi.Platforms
+		} else if provider, err := s.plugins.Get(vaultType); err == nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			if pi, err := provider.Info(ctx, &vaultv1.InfoRequest{}); err == nil {
 				info.Version = pi.Version
@@ -205,6 +210,10 @@ func (s *Server) VaultHealth(
 				result.Message = h.Message
 			}
 			cancel()
+		}
+		for _, w := range s.plugins.Warnings(vaultType) {
+			result.CompatWarnings = append(result.CompatWarnings,
+				fmt.Sprintf("%s: %s", w.Kind, w.Message))
 		}
 		results = append(results, result)
 	}

@@ -2,6 +2,10 @@
 
 ## Development
 
+- The daemon gRPC server now surfaces plugin compatibility warnings in `VaultHealth`
+  responses (`compat_warnings` field) and uses the cached `InfoResponse` from
+  plugin launch in `VaultList` (live RPC fallback when no cache is available).
+
 - Added `internal/semver` package: minimal major.minor.patch semver parser used by CompatValidator.
 
 - Added `sdk/version` package exposing `version.Current` - the authoritative locksmith version string, overridable at link time via `-ldflags`.

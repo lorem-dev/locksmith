@@ -11,6 +11,7 @@ import (
 	locksmithv1 "github.com/lorem-dev/locksmith/gen/proto/locksmith/v1"
 	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
 	"github.com/lorem-dev/locksmith/internal/config"
+	pluginpkg "github.com/lorem-dev/locksmith/internal/plugin"
 	"github.com/lorem-dev/locksmith/internal/session"
 	sdkerrors "github.com/lorem-dev/locksmith/sdk/errors"
 	"github.com/lorem-dev/locksmith/sdk/vault"
@@ -36,6 +37,10 @@ func (m *mockRegistry) Types() []string {
 	}
 	return types
 }
+
+func (m *mockRegistry) Warnings(_ string) []pluginpkg.CompatWarning { return nil }
+
+func (m *mockRegistry) CachedInfo(_ string) *vaultv1.InfoResponse { return nil }
 
 // mockProvider implements vault.Provider for testing.
 type mockProvider struct {
@@ -345,6 +350,10 @@ func (f *failingMockRegistry) Get(_ string) (vault.Provider, error) {
 func (f *failingMockRegistry) Types() []string {
 	return []string{"broken"}
 }
+
+func (f *failingMockRegistry) Warnings(_ string) []pluginpkg.CompatWarning { return nil }
+
+func (f *failingMockRegistry) CachedInfo(_ string) *vaultv1.InfoResponse { return nil }
 
 func TestVaultHealth_GetError(t *testing.T) {
 	cfg := &config.Config{

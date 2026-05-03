@@ -16,11 +16,14 @@ import (
 	"google.golang.org/grpc/status"
 
 	locksmithv1 "github.com/lorem-dev/locksmith/gen/proto/locksmith/v1"
+	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
 	"github.com/lorem-dev/locksmith/internal/config"
 	"github.com/lorem-dev/locksmith/internal/daemon"
 	"github.com/lorem-dev/locksmith/internal/log"
+	pluginpkg "github.com/lorem-dev/locksmith/internal/plugin"
 	"github.com/lorem-dev/locksmith/internal/session"
 	sdklog "github.com/lorem-dev/locksmith/sdk/log"
+	"github.com/lorem-dev/locksmith/sdk/vault"
 )
 
 func TestMain(m *testing.M) {
@@ -372,5 +375,114 @@ func TestReloadConfig_RPC_NilReloader(t *testing.T) {
 	st, ok := status.FromError(err)
 	if !ok || st.Code() != codes.Unimplemented {
 		t.Errorf("expected codes.Unimplemented, got %v", err)
+	}
+}
+
+// fakeProvider is a minimal vault.Provider for use in fakeRegistry.
+type fakeProvider struct {
+	vault.Provider
+
+	healthAvailable bool
+	healthMessage   string
+}
+
+func (f *fakeProvider) HealthCheck(
+	_ context.Context,
+	_ *vaultv1.HealthCheckRequest,
+) (*vaultv1.HealthCheckResponse, error) {
+	return &vaultv1.HealthCheckResponse{
+		Available: f.healthAvailable,
+		Message:   f.healthMessage,
+	}, nil
+}
+
+func (f *fakeProvider) Info(
+	_ context.Context,
+	_ *vaultv1.InfoRequest,
+) (*vaultv1.InfoResponse, error) {
+	return &vaultv1.InfoResponse{}, nil
+}
+
+// fakeRegistry implements daemon's pluginRegistry interface for tests.
+type fakeRegistry struct {
+	types      []string
+	provider   vault.Provider
+	warnings   []pluginpkg.CompatWarning
+	cachedInfo *vaultv1.InfoResponse
+}
+
+func (f *fakeRegistry) Get(_ string) (vault.Provider, error) {
+	if f.provider == nil {
+		return nil, errors.New("no provider")
+	}
+	return f.provider, nil
+}
+
+func (f *fakeRegistry) Types() []string { return f.types }
+
+func (f *fakeRegistry) Warnings(_ string) []pluginpkg.CompatWarning { return f.warnings }
+
+func (f *fakeRegistry) CachedInfo(_ string) *vaultv1.InfoResponse { return f.cachedInfo }
+
+func newRegistryServer(reg *fakeRegistry) *daemon.Server {
+	cfg := &config.Config{
+		Defaults: config.Defaults{SessionTTL: "1h"},
+		Vaults:   map[string]config.Vault{},
+		Keys:     map[string]config.Key{},
+	}
+	return daemon.NewServerWithRegistry(func() *config.Config { return cfg }, session.NewStore(), reg, nil)
+}
+
+func TestVaultHealth_IncludesCompatWarnings(t *testing.T) {
+	reg := &fakeRegistry{
+		types: []string{"x"},
+		provider: &fakeProvider{
+			healthAvailable: true,
+			healthMessage:   "ok",
+		},
+		warnings: []pluginpkg.CompatWarning{
+			{
+				Kind:    pluginpkg.WarnPlatformMismatch,
+				Message: "supports [darwin] but on linux",
+			},
+		},
+	}
+	srv := newRegistryServer(reg)
+	resp, err := srv.VaultHealth(context.Background(), &locksmithv1.VaultHealthRequest{})
+	if err != nil {
+		t.Fatalf("VaultHealth() error: %v", err)
+	}
+	if len(resp.Vaults) != 1 {
+		t.Fatalf("expected 1 vault, got %d", len(resp.Vaults))
+	}
+	v := resp.Vaults[0]
+	if len(v.CompatWarnings) != 1 {
+		t.Fatalf("expected 1 compat warning, got %d", len(v.CompatWarnings))
+	}
+	want := "platform_mismatch: supports [darwin] but on linux"
+	if v.CompatWarnings[0] != want {
+		t.Errorf("compat warning = %q, want %q", v.CompatWarnings[0], want)
+	}
+}
+
+func TestVaultList_UsesCachedInfo(t *testing.T) {
+	reg := &fakeRegistry{
+		types: []string{"x"},
+		cachedInfo: &vaultv1.InfoResponse{
+			Name:      "x",
+			Version:   "9.9.9",
+			Platforms: []string{"linux"},
+		},
+	}
+	srv := newRegistryServer(reg)
+	resp, err := srv.VaultList(context.Background(), &locksmithv1.VaultListRequest{})
+	if err != nil {
+		t.Fatalf("VaultList() error: %v", err)
+	}
+	if len(resp.Vaults) != 1 {
+		t.Fatalf("expected 1 vault, got %d", len(resp.Vaults))
+	}
+	if resp.Vaults[0].Version != "9.9.9" {
+		t.Errorf("Version = %q, want %q", resp.Vaults[0].Version, "9.9.9")
 	}
 }
