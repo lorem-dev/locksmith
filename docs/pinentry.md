@@ -2,6 +2,11 @@
 
 > See also: [Configuration Reference](configuration.md)
 
+`locksmith-pinentry` is shipped embedded in the `locksmith` binary and
+extracted at `locksmith init` to
+`~/.config/locksmith/bin/locksmith-pinentry`. The path stays stable across
+`brew upgrade` and re-installs because it lives under `$HOME`.
+
 ## GPG passphrase and background daemons
 
 When the locksmith daemon runs as a background process (launched from `.zshrc`,
@@ -20,8 +25,7 @@ available UI and uses the best option automatically:
 
 **Setup:**
 
-Run `make init` once after cloning to build and install `locksmith-pinentry`.
-Then run `locksmith init` - if you select the gopass vault, you will be asked:
+Run `locksmith init` - if you select the gopass vault, you will be asked:
 
 ```
 Configure locksmith-pinentry for GPG passphrase prompts?
@@ -42,7 +46,7 @@ After `locksmith init` it becomes:
 
 ```
 #pinentry-program /opt/homebrew/bin/pinentry-mac
-pinentry-program /Users/you/go/bin/locksmith-pinentry
+pinentry-program /Users/you/.config/locksmith/bin/locksmith-pinentry
 ```
 
 You can restore the original setting at any time by editing
@@ -72,8 +76,10 @@ modified.
   passphrase (within its TTL), `locksmith-pinentry` is never invoked. This is
   the expected production path after the first unlock.
 
-- **locksmith-pinentry must be on PATH**: installed via `make init`. If missing,
-  gopass falls back to the system-configured pinentry (original behavior).
+- **locksmith-pinentry must be extracted**: run `locksmith init` (or
+  `locksmith plugins update`) to extract it to
+  `~/.config/locksmith/bin/locksmith-pinentry`. If missing, gopass falls
+  back to the system-configured pinentry (original behavior).
 
 ## locksmith config pinentry
 
@@ -94,7 +100,9 @@ locksmith config pinentry [--auto] [--no-tui]
 | `--auto` | Configure without prompting (equivalent to answering "yes") |
 | `--no-tui` | Use plain-text prompts instead of the TUI |
 
-**Requires** `locksmith-pinentry` to be installed - run `make init` once after cloning.
+**Requires** `locksmith-pinentry` to be extracted - run `locksmith init` or
+`locksmith plugins update` once to place it at
+`~/.config/locksmith/bin/locksmith-pinentry`.
 
 The command comments out any existing `pinentry-program` line in
 `~/.gnupg/gpg-agent.conf`, writes the new path, and restarts `gpg-agent`.

@@ -7,7 +7,7 @@ Touch ID / smartcard when configured).
 ## See also
 
 - [Configuration Reference - gopass](../../docs/configuration.md#gopass) - canonical YAML schema
-- [Writing Vault Plugins](../../docs/plugins.md) - SDK and plugin authoring
+- [Plugins](../../docs/plugins/README.md) - SDK and plugin authoring
 - [GPG Passphrase and Pinentry](../../docs/pinentry.md) - background-daemon prompts
 
 ## Requirements
@@ -18,7 +18,11 @@ Touch ID / smartcard when configured).
 
 ## Installation
 
-The plugin ships with locksmith. Build everything from the repository root:
+The plugin is normally installed automatically by `locksmith init` from
+the embedded bundle into `~/.config/locksmith/plugins/`. The build commands
+below are for development only.
+
+Build everything from the repository root:
 
 ```bash
 make build-all
@@ -40,6 +44,12 @@ Place the binary in one of:
 3. Any directory in `$PATH`.
 
 Locksmith discovers plugins automatically by name (`locksmith-plugin-<type>`).
+
+### Custom builds
+
+If you fork or modify this plugin, build it manually as above and place the
+binary into `~/.config/locksmith/plugins/`. The discovery logic picks it
+up; `vault health` will report any version mismatch via `compat_warnings`.
 
 ## Configuration
 

@@ -217,6 +217,10 @@ See [Agent Integration](agent-integration.md) for the full protocol.
 | `keychain` | macOS Keychain (CGo, Touch ID) |
 | `gopass` | gopass password manager (shells out to `gopass` CLI) |
 
+Default plugins are placed in `~/.config/locksmith/plugins/` automatically
+by `locksmith init` from the embedded bundle. See
+[Plugins](plugins/README.md) and [PLUGINS.md](../PLUGINS.md).
+
 ---
 
 ## Re-running locksmith init

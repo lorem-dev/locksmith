@@ -70,6 +70,14 @@ Each plugin is a standalone binary implementing the `VaultProviderService` gRPC 
 - `HealthCheck` - verifies the vault is installed and accessible
 - `Info` - returns plugin name, version, and supported platforms
 
+### Bundled plugins and pinentry
+
+Default vault plugins and `locksmith-pinentry` ship embedded in the
+`locksmith` binary as a per-platform zip and are extracted at `locksmith
+init` to `~/.config/locksmith/`. Plugin version is locked to the host
+`locksmith` version. The full pipeline is documented in
+[`docs/plugins/architecture.md`](plugins/architecture.md).
+
 ### CLI
 
 Thin gRPC client to the daemon. If `LOCKSMITH_SESSION` is set in the environment,

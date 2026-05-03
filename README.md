@@ -21,6 +21,10 @@ make init        # install tools and generate protobuf code (required after clon
 make build-all
 ```
 
+After install, `locksmith init` extracts the default vault plugins and
+`locksmith-pinentry` from the embedded bundle into `~/.config/locksmith/`.
+See [PLUGINS.md](PLUGINS.md).
+
 ## Quick Start
 
 ```bash
@@ -127,7 +131,7 @@ Per-plugin installation, configuration examples, and troubleshooting:
 - [Architecture](docs/architecture.md)
 - [Configuration Reference](docs/configuration.md)
 - [Agent Integration](docs/agent-integration.md)
-- [Writing Vault Plugins](docs/plugins.md)
+- [Plugins](docs/plugins/README.md)
 
 ## Contributing
 

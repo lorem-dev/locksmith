@@ -136,6 +136,16 @@ than duplicating it.
 Whenever a plugin's behavior, configuration fields, or external requirements
 change, update `plugins/<name>/README.md` in the same commit.
 
+## Bundled Plugins
+
+Default plugins (`gopass`, `keychain`) and `locksmith-pinentry` ship
+embedded inside the `locksmith` binary as a per-platform zip. `locksmith
+init` extracts the plugins for the chosen vaults to
+`~/.config/locksmith/plugins/` and pinentry to
+`~/.config/locksmith/bin/locksmith-pinentry`. Plugin version is locked to
+the host `locksmith` version - no network resolution. See
+[`PLUGINS.md`](PLUGINS.md) for the full overview.
+
 ## Changelog (CHANGES.md)
 **Every user-visible change must be recorded in `CHANGES.md` before the work is considered done.**
 
