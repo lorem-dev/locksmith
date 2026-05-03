@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
+	sdkversion "github.com/lorem-dev/locksmith/sdk/version"
 )
 
 func TestKeychainProvider_Info(t *testing.T) {
@@ -238,5 +239,20 @@ func TestKeychainError_Internal(t *testing.T) {
 	}
 	if s.Code() != codes.Internal {
 		t.Errorf("Code() = %v, want Internal", s.Code())
+	}
+}
+
+func TestInfoCompatibility(t *testing.T) {
+	p := &KeychainProvider{}
+	resp, err := p.Info(context.Background(), &vaultv1.InfoRequest{})
+	if err != nil {
+		t.Fatalf("Info() error: %v", err)
+	}
+	if resp.MaxLocksmithVersion != sdkversion.Current {
+		t.Errorf("MaxLocksmithVersion = %q, want %q",
+			resp.MaxLocksmithVersion, sdkversion.Current)
+	}
+	if resp.MinLocksmithVersion == "" {
+		t.Error("MinLocksmithVersion must not be empty")
 	}
 }
