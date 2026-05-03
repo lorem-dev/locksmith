@@ -73,6 +73,7 @@ func (p *infoFailingProvider) Info(_ context.Context, _ *vaultv1.InfoRequest) (*
 
 type infoStubProvider struct {
 	stubProvider
+
 	resp *vaultv1.InfoResponse
 }
 
