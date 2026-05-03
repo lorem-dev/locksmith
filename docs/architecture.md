@@ -56,6 +56,12 @@ never a mix.
 - Launches each required plugin as a child process via hashicorp/go-plugin
 - Plugin processes communicate over gRPC; isolated from daemon memory space
 
+After a plugin is dispensed, the daemon calls `Info()` (5-second timeout) and runs
+`CompatValidator` against the response. Warnings (platform mismatch, version range
+violation, unreachable `Info()`, missing or invalid version metadata) are stored
+alongside the running plugin and surfaced via `locksmith vault health`. No plugin is
+blocked from running based on these checks.
+
 ### Vault Plugins
 
 Each plugin is a standalone binary implementing the `VaultProviderService` gRPC service:

@@ -2,6 +2,8 @@
 
 ## Development
 
+- Plugin launches now run a soft compatibility check (platform support, locksmith min/max version, Info() availability). Warnings are surfaced via `locksmith vault health` and never block a plugin from running.
+
 - The gopass plugin `Info()` response now declares `MinLocksmithVersion` ("0.1.0") and `MaxLocksmithVersion` (from `sdk/version.Current`), enabling the daemon's CompatValidator to enforce version range checks for this plugin.
 
 - The daemon gRPC server now surfaces plugin compatibility warnings in `VaultHealth`
