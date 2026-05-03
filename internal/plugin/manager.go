@@ -4,16 +4,21 @@
 package plugin
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	goplugin "github.com/hashicorp/go-plugin"
 
+	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
 	"github.com/lorem-dev/locksmith/internal/log"
 	"github.com/lorem-dev/locksmith/sdk/vault"
+	sdkversion "github.com/lorem-dev/locksmith/sdk/version"
 )
 
 const pluginPrefix = "locksmith-plugin-"
@@ -42,6 +47,8 @@ type Manager struct {
 type runningPlugin struct {
 	client   pluginClient
 	provider vault.Provider
+	info     *vaultv1.InfoResponse
+	warnings []CompatWarning
 }
 
 // NewManager creates a new, empty plugin manager.
@@ -125,9 +132,60 @@ func (m *Manager) Launch(vaultType, binaryPath string) error {
 		return fmt.Errorf("plugin %q does not implement Provider", vaultType)
 	}
 
-	m.plugins[vaultType] = &runningPlugin{client: client, provider: provider}
+	rp := &runningPlugin{client: client, provider: provider}
+
+	infoCtx, infoCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer infoCancel()
+	info, infoErr := provider.Info(infoCtx, &vaultv1.InfoRequest{})
+	if infoErr != nil {
+		rp.warnings = append(rp.warnings, CompatWarning{
+			Kind:    WarnInfoUnavailable,
+			Message: infoErr.Error(),
+		})
+	} else {
+		rp.info = info
+		validator := &CompatValidator{
+			Platform:         runtime.GOOS,
+			LocksmithVersion: sdkversion.Current,
+		}
+		rp.warnings = append(rp.warnings, validator.Validate(info)...)
+	}
+
+	for _, w := range rp.warnings {
+		ev := log.Warn()
+		if w.Kind == WarnMinVersionMissing {
+			ev = log.Debug()
+		}
+		ev.Str("vault", vaultType).Str("kind", string(w.Kind)).Msg(w.Message)
+	}
+
+	m.plugins[vaultType] = rp
 	log.Info().Str("vault", vaultType).Str("binary", binaryPath).Msg("plugin launched")
 	return nil
+}
+
+// Warnings returns stored compatibility warnings for the given vault type.
+// Returns nil if the vault type is not loaded or has no warnings.
+func (m *Manager) Warnings(vaultType string) []CompatWarning {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	rp, ok := m.plugins[vaultType]
+	if !ok {
+		return nil
+	}
+	return rp.warnings
+}
+
+// CachedInfo returns the InfoResponse cached at Launch time.
+// Returns nil if the vault type is not loaded or Info() was unavailable.
+func (m *Manager) CachedInfo(vaultType string) *vaultv1.InfoResponse {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	rp, ok := m.plugins[vaultType]
+	if !ok {
+		return nil
+	}
+	return rp.info
 }
 
 // Get returns the Provider for a vault type, or an error if not loaded.

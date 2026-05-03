@@ -65,6 +65,21 @@ func (p *stubProvider) Info(_ context.Context, _ *vaultv1.InfoRequest) (*vaultv1
 	return nil, nil
 }
 
+type infoFailingProvider struct{ stubProvider }
+
+func (p *infoFailingProvider) Info(_ context.Context, _ *vaultv1.InfoRequest) (*vaultv1.InfoResponse, error) {
+	return nil, errors.New("info rpc failed")
+}
+
+type infoStubProvider struct {
+	stubProvider
+	resp *vaultv1.InfoResponse
+}
+
+func (p *infoStubProvider) Info(_ context.Context, _ *vaultv1.InfoRequest) (*vaultv1.InfoResponse, error) {
+	return p.resp, nil
+}
+
 // --- tests ---
 
 func TestLaunch_ClientConnectError(t *testing.T) {
@@ -236,4 +251,79 @@ func TestKillOne_Unknown(t *testing.T) {
 	m := NewManager()
 	// Must not panic when called with an unknown vault type.
 	m.KillOne("does-not-exist")
+}
+
+func TestLaunch_StoresWarnings_WhenInfoFails(t *testing.T) {
+	m := NewManager()
+	m.clientFactory = func(_ string) pluginClient {
+		return &stubClient{
+			clientFn: func() (goplugin.ClientProtocol, error) {
+				return &stubProtocol{
+					dispenseFn: func(_ string) (interface{}, error) {
+						return &infoFailingProvider{}, nil
+					},
+				}, nil
+			},
+		}
+	}
+	if err := m.Launch("test", "/fake/binary"); err != nil {
+		t.Fatalf("Launch() unexpected error: %v", err)
+	}
+	ws := m.Warnings("test")
+	found := false
+	for _, w := range ws {
+		if w.Kind == WarnInfoUnavailable {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected WarnInfoUnavailable in %+v", ws)
+	}
+	if m.CachedInfo("test") != nil {
+		t.Errorf("CachedInfo should be nil when Info() fails")
+	}
+}
+
+func TestLaunch_CachesInfo_WhenInfoSucceeds(t *testing.T) {
+	m := NewManager()
+	wantInfo := &vaultv1.InfoResponse{
+		Name:                "myvault",
+		Version:             "0.1.0",
+		Platforms:           []string{"darwin", "linux"},
+		MinLocksmithVersion: "0.1.0",
+		MaxLocksmithVersion: "0.1.0",
+	}
+	m.clientFactory = func(_ string) pluginClient {
+		return &stubClient{
+			clientFn: func() (goplugin.ClientProtocol, error) {
+				return &stubProtocol{
+					dispenseFn: func(_ string) (interface{}, error) {
+						return &infoStubProvider{resp: wantInfo}, nil
+					},
+				}, nil
+			},
+		}
+	}
+	if err := m.Launch("myvault", "/fake/binary"); err != nil {
+		t.Fatalf("Launch() unexpected error: %v", err)
+	}
+	got := m.CachedInfo("myvault")
+	if got == nil || got.Name != "myvault" {
+		t.Fatalf("CachedInfo = %+v, want name=myvault", got)
+	}
+}
+
+func TestWarnings_UnknownVault(t *testing.T) {
+	m := NewManager()
+	if ws := m.Warnings("nope"); ws != nil {
+		t.Errorf("Warnings(unknown) = %v, want nil", ws)
+	}
+}
+
+func TestCachedInfo_UnknownVault(t *testing.T) {
+	m := NewManager()
+	if info := m.CachedInfo("nope"); info != nil {
+		t.Errorf("CachedInfo(unknown) = %v, want nil", info)
+	}
 }
