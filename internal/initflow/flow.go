@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -441,9 +442,16 @@ func writeConfigFile(result *InitResult, homeDir string) error {
 
 // applyGPGPinentryConfig runs the gpg-agent pinentry configuration steps.
 func applyGPGPinentryConfig(homeDir string) {
-	pinentryPath, lookErr := exec.LookPath("locksmith-pinentry")
-	if lookErr != nil {
-		fmt.Println("  warning: locksmith-pinentry not found in PATH - run 'make init' first")
+	pinentryPath, pathErr := bundled.PinentryPath()
+	if pathErr != nil {
+		fmt.Printf("  warning: could not resolve pinentry path: %v\n", pathErr)
+		return
+	}
+	if _, statErr := os.Stat(pinentryPath); errors.Is(statErr, fs.ErrNotExist) {
+		fmt.Printf("  warning: %s not found - run `locksmith init` to extract or `make build-all` for a non-empty bundle\n", pinentryPath)
+		return
+	} else if statErr != nil {
+		fmt.Printf("  warning: stat %s: %v\n", pinentryPath, statErr)
 		return
 	}
 	gnupgDir := filepath.Join(homeDir, ".gnupg")
