@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
+	sdkversion "github.com/lorem-dev/locksmith/sdk/version"
 )
 
 func TestGopassProvider_Info(t *testing.T) {
@@ -240,5 +241,20 @@ func TestGopassProvider_GetSecret_GenericError_Mocked(t *testing.T) {
 	s, ok := status.FromError(err)
 	if ok && s.Code() == codes.Unauthenticated {
 		t.Errorf("generic gopass error should not map to Unauthenticated")
+	}
+}
+
+func TestInfoCompatibility(t *testing.T) {
+	p := &GopassProvider{}
+	resp, err := p.Info(context.Background(), &vaultv1.InfoRequest{})
+	if err != nil {
+		t.Fatalf("Info() error: %v", err)
+	}
+	if resp.MaxLocksmithVersion != sdkversion.Current {
+		t.Errorf("MaxLocksmithVersion = %q, want %q",
+			resp.MaxLocksmithVersion, sdkversion.Current)
+	}
+	if resp.MinLocksmithVersion == "" {
+		t.Error("MinLocksmithVersion must not be empty")
 	}
 }

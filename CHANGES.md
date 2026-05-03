@@ -2,6 +2,8 @@
 
 ## Development
 
+- The gopass plugin `Info()` response now declares `MinLocksmithVersion` ("0.1.0") and `MaxLocksmithVersion` (from `sdk/version.Current`), enabling the daemon's CompatValidator to enforce version range checks for this plugin.
+
 - The daemon gRPC server now surfaces plugin compatibility warnings in `VaultHealth`
   responses (`compat_warnings` field) and uses the cached `InfoResponse` from
   plugin launch in `VaultList` (live RPC fallback when no cache is available).

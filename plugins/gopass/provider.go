@@ -12,6 +12,7 @@ import (
 
 	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
 	sdkerrors "github.com/lorem-dev/locksmith/sdk/errors"
+	sdkversion "github.com/lorem-dev/locksmith/sdk/version"
 )
 
 // GopassProvider retrieves secrets from a gopass password store.
@@ -122,8 +123,10 @@ func (p *GopassProvider) HealthCheck(
 // Info returns plugin metadata.
 func (p *GopassProvider) Info(_ context.Context, _ *vaultv1.InfoRequest) (*vaultv1.InfoResponse, error) {
 	return &vaultv1.InfoResponse{
-		Name:      "gopass",
-		Version:   "0.1.0",
-		Platforms: []string{"darwin", "linux"},
+		Name:                "gopass",
+		Version:             "0.1.0",
+		Platforms:           []string{"darwin", "linux"},
+		MinLocksmithVersion: "0.1.0",
+		MaxLocksmithVersion: sdkversion.Current,
 	}, nil
 }
