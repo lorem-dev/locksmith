@@ -10,3 +10,5 @@ TODO.md
 !.claude/skills/
 # Output files
 *.out
+# Generated bundle artefacts (built by make build-all / make init).
+internal/bundled/assets/
