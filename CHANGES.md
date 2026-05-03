@@ -2,6 +2,17 @@
 
 ## Development
 
+- Release tooling: canonical version moved to `sdk/version/VERSION`
+  (with a `VERSION` symlink in the repo root) and embedded into
+  `sdk/version.Current` via `//go:embed`; new `locksmith version`
+  command prints the embedded value; new `make check-version`
+  (`.scripts/check-version`) verifies tag-VERSION-CHANGES.md
+  alignment on CI tag builds (GitHub Actions and GitLab CI);
+  `CONTRIBUTING.md` documents the bump procedure and CI YAML
+  snippets; new committed `version-bump` skill orchestrates VERSION
+  update plus a `changelog`-skill invocation, optionally invoking
+  `check-licenses` first.
+
 - Bundled default plugins (`gopass`, `keychain`) and `locksmith-pinentry`
   inside the `locksmith` binary as a per-platform `//go:embed` zip;
   `locksmith init` extracts the plugins matching chosen vault types to
