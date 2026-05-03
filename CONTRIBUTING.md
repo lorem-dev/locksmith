@@ -23,6 +23,62 @@ If the library you need carries one of these licenses, look for a
 permissive alternative or raise the issue with the maintainers before
 adding it.
 
+## Version Bumps
+
+Locksmith follows [Semantic Versioning](https://semver.org/) -
+`MAJOR.MINOR.PATCH`.
+
+The canonical version lives in `sdk/version/VERSION`. The repo-root
+`VERSION` is a symlink to that file for convenience (`cat VERSION`
+works at any path). The file content has no `v` prefix; git tags do
+(e.g. `v0.1.0`).
+
+`sdk/version.Current` is populated at build time via `//go:embed`, so
+no `-ldflags` are required. `go install
+github.com/lorem-dev/locksmith/cmd/locksmith@latest` produces a binary
+containing the version that was tagged.
+
+### Cutting a release
+
+1. Run the `version-bump` skill. It prompts for the new version,
+   updates `sdk/version/VERSION`, and invokes the `changelog` skill to
+   compress `## Development` into a versioned section in `CHANGES.md`.
+2. Optionally run `check-licenses` (the skill prompts you).
+3. Review the diff (`git diff`).
+4. Commit and tag manually:
+   ```bash
+   git add sdk/version/VERSION CHANGES.md LICENSE
+   git commit -S -m "release: vX.Y.Z"
+   git tag -s vX.Y.Z -m "vX.Y.Z"
+   git push --follow-tags
+   ```
+5. CI verifies the release. The `make check-version` target must pass:
+   the git tag matches `VERSION`, and `CHANGES.md` has a
+   `## Version vX.Y.Z` section.
+
+### Wiring CI
+
+`check-version` reads `$GITHUB_REF` (GitHub Actions) or
+`$CI_COMMIT_TAG` (GitLab CI). On non-tag builds it is a no-op (exit 0).
+
+GitHub Actions:
+
+```yaml
+- name: Verify release version
+  if: startsWith(github.ref, 'refs/tags/v')
+  run: make check-version
+```
+
+GitLab CI:
+
+```yaml
+verify-version:
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v/'
+  script:
+    - make check-version
+```
+
 ## GPG Signing
 
 Signing commits is strongly recommended. It lets maintainers verify that commits genuinely
