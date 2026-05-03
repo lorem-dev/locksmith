@@ -1,6 +1,7 @@
 package initflow
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/lorem-dev/locksmith/internal/bundled"
 	"github.com/lorem-dev/locksmith/internal/config"
+	"github.com/lorem-dev/locksmith/internal/log"
 	"github.com/lorem-dev/locksmith/internal/shellhook"
 )
 
@@ -195,7 +197,7 @@ func RunInit(opts InitOptions) (*InitResult, error) {
 		return nil, err
 	}
 
-	if err := applyInit(result, homeDir); err != nil {
+	if err := applyInit(result, homeDir, prompter, opts.Auto); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -324,9 +326,57 @@ func detectClaudeHookConsent(result *InitResult, opts InitOptions, prompter Prom
 	return nil
 }
 
-func applyInit(result *InitResult, homeDir string) error {
+// ExtractBundled writes the plugins required by selectedVaults plus
+// locksmith-pinentry from the embedded bundle to their canonical paths.
+// Returns nil and prints a warning if the bundle is empty (dev build).
+func ExtractBundled(selectedVaults []string, prompter Prompter, auto bool) error {
+	bundle, err := bundled.OpenBundle()
+	if err != nil {
+		if errors.Is(err, bundled.ErrEmptyBundle) {
+			log.Warn().Msg("this build has no bundled plugins; install plugins manually or run `make build-all`")
+			return nil
+		}
+		return fmt.Errorf("opening bundle: %w", err)
+	}
+	pluginsDir, err := bundled.PluginsDir()
+	if err != nil {
+		return err
+	}
+	pinentryPath, err := bundled.PinentryPath()
+	if err != nil {
+		return err
+	}
+	names := []string{"locksmith-pinentry"}
+	for _, v := range selectedVaults {
+		names = append(names, "locksmith-plugin-"+v)
+	}
+	var p bundled.ExtractPrompter
+	if !auto {
+		p = prompter
+	}
+	return bundled.Extract(bundle, bundled.ExtractOptions{
+		Names:        names,
+		PluginsDir:   pluginsDir,
+		PinentryPath: pinentryPath,
+		Prompter:     p,
+		OnKept: func(name string, withWarning bool) {
+			if withWarning {
+				log.Warn().Str("entry", name).Msg("kept; bundled version differs - functionality may not work as expected")
+			}
+		},
+		OnExtracted: func(name string) {
+			log.Info().Str("entry", name).Msg("extracted from bundle")
+		},
+	})
+}
+
+func applyInit(result *InitResult, homeDir string, prompter Prompter, auto bool) error {
 	if err := os.MkdirAll(filepath.Dir(result.ConfigPath), 0o755); err != nil { //nolint:gosec // G301: user config dir
 		return fmt.Errorf("creating config dir: %w", err)
+	}
+
+	if err := ExtractBundled(result.SelectedVaults, prompter, auto); err != nil {
+		return fmt.Errorf("extracting bundled plugins: %w", err)
 	}
 
 	if err := writeConfigFile(result, homeDir); err != nil {
