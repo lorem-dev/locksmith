@@ -20,6 +20,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lorem-dev/locksmith/internal/bundled"
 	"github.com/lorem-dev/locksmith/internal/initflow"
 )
 
@@ -385,5 +386,16 @@ func TestHuhPrompter_ClaudeHook_No(t *testing.T) {
 	}
 	if got {
 		t.Error("ClaudeHook() = true, want false")
+	}
+}
+
+func TestHuhPrompter_BundleExtractPrompt_Accessible(t *testing.T) {
+	p := initflow.NewHuhPrompter(true, nil, nil) // accessible mode -> no TTY interaction
+	res, err := p.BundleExtractPrompt("locksmith-plugin-gopass", "0123456789abcdef", "fedcba9876543210")
+	if err != nil {
+		t.Fatalf("BundleExtractPrompt: %v", err)
+	}
+	if res != bundled.Keep {
+		t.Errorf("res = %v, want bundled.Keep (accessible default)", res)
 	}
 }

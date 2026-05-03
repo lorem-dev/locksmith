@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lorem-dev/locksmith/internal/bundled"
 	"github.com/lorem-dev/locksmith/internal/config"
 	"github.com/lorem-dev/locksmith/internal/initflow"
 )
@@ -69,6 +70,10 @@ func (m *mockPrompter) ShellHook(_ string) (bool, error) {
 
 func (m *mockPrompter) ClaudeHook(_ string) (bool, error) {
 	return m.claudeHook, m.claudeHookErr
+}
+
+func (m *mockPrompter) BundleExtractPrompt(_, _, _ string) (bundled.ConflictResolution, error) {
+	return bundled.Keep, nil
 }
 
 func TestAgentMatches_CaseInsensitive(t *testing.T) {

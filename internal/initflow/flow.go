@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"gopkg.in/yaml.v3"
 
+	"github.com/lorem-dev/locksmith/internal/bundled"
 	"github.com/lorem-dev/locksmith/internal/config"
 	"github.com/lorem-dev/locksmith/internal/shellhook"
 )
@@ -46,6 +47,11 @@ type Prompter interface {
 	// ClaudeHook asks whether to install the Locksmith UserPromptSubmit hook
 	// into settingsPath (~/.claude/settings.json). Shows what will be changed.
 	ClaudeHook(settingsPath string) (bool, error)
+	// BundleExtractPrompt is called when an existing plugin or pinentry file
+	// has different content from the bundled version. Returns the user's
+	// resolution choice. existingSHA and newSHA are short (8-char) hex
+	// strings suitable for display.
+	BundleExtractPrompt(name, existingSHA, newSHA string) (bundled.ConflictResolution, error)
 }
 
 // InitOptions controls the behaviour of RunInit.
@@ -705,6 +711,53 @@ func (p *huhPrompter) ClaudeHook(settingsPath string) (bool, error) {
 		return false, fmt.Errorf("prompting for Claude hook: %w", err)
 	}
 	return confirmed, nil
+}
+
+// BundleExtractPrompt asks the user how to resolve a sha256 mismatch on an
+// already-extracted plugin or pinentry binary.
+func (p *huhPrompter) BundleExtractPrompt(name, existingSHA, newSHA string) (bundled.ConflictResolution, error) {
+	if p.accessible {
+		return bundled.Keep, nil
+	}
+	short := func(s string) string {
+		if len(s) > 8 {
+			return s[:8]
+		}
+		return s
+	}
+	var choice string
+	prompt := fmt.Sprintf(
+		"Existing %s differs from bundled (on disk %s vs bundled %s). Overwrite?",
+		name, short(existingSHA), short(newSHA),
+	)
+	form := p.formWith(huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title(prompt).
+				Options(
+					huh.NewOption("Overwrite this one", "y"),
+					huh.NewOption("Keep this one", "n"),
+					huh.NewOption("Overwrite all remaining", "all"),
+					huh.NewOption("Keep all remaining", "skip"),
+				).
+				Value(&choice),
+		),
+	))
+	if err := form.Run(); err != nil {
+		return bundled.Keep, fmt.Errorf("BundleExtractPrompt: %w", err)
+	}
+	switch choice {
+	case "y":
+		return bundled.Overwrite, nil
+	case "n":
+		return bundled.Keep, nil
+	case "all":
+		return bundled.OverwriteAll, nil
+	case "skip":
+		return bundled.KeepAll, nil
+	default:
+		return bundled.Keep, nil
+	}
 }
 
 // AgentMatches returns true if agent name matches the query (case-insensitive).
