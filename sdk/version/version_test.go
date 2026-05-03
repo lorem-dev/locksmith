@@ -1,27 +1,30 @@
-package version_test
+package version
 
 import (
-	"strconv"
+	"os"
 	"strings"
 	"testing"
-
-	"github.com/lorem-dev/locksmith/sdk/version"
 )
 
-func TestCurrent_NonEmpty(t *testing.T) {
-	if version.Current == "" {
+func TestCurrent_MatchesVERSIONFile(t *testing.T) {
+	data, err := os.ReadFile("VERSION")
+	if err != nil {
+		t.Fatalf("read VERSION: %v", err)
+	}
+	want := strings.TrimSpace(string(data))
+	if Current != want {
+		t.Errorf("Current = %q, want %q", Current, want)
+	}
+}
+
+func TestCurrent_NotEmpty(t *testing.T) {
+	if Current == "" {
 		t.Fatal("Current must not be empty")
 	}
 }
 
-func TestCurrent_ValidSemver(t *testing.T) {
-	parts := strings.Split(version.Current, ".")
-	if len(parts) != 3 {
-		t.Fatalf("Current = %q, want major.minor.patch", version.Current)
-	}
-	for i, p := range parts {
-		if _, err := strconv.Atoi(p); err != nil {
-			t.Errorf("part %d (%q) is not an integer: %v", i, p, err)
-		}
+func TestCurrent_NoVPrefix(t *testing.T) {
+	if strings.HasPrefix(Current, "v") {
+		t.Errorf("Current = %q must not have v-prefix; tags carry the v, the file does not", Current)
 	}
 }

@@ -1,10 +1,16 @@
-// Package version exposes the current locksmith version as a constant.
-// At release time the value is overridden via:
-//
-//	-ldflags '-X github.com/lorem-dev/locksmith/sdk/version.Current=X.Y.Z'
-//
-// The source value is used for tests and local builds only.
+// Package version exposes the locksmith version, embedded at build
+// time from sdk/version/VERSION via //go:embed. The embedded value is
+// available regardless of how the binary was produced (`go install`,
+// `go build`, `make build-all`).
 package version
 
+import (
+	_ "embed"
+	"strings"
+)
+
+//go:embed VERSION
+var versionFile string
+
 // Current is the locksmith version this build was produced from.
-var Current = "0.1.0"
+var Current = strings.TrimSpace(versionFile)
