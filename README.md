@@ -28,6 +28,9 @@ See [PLUGINS.md](PLUGINS.md).
 ## Quick Start
 
 ```bash
+# Print the installed version (embedded from sdk/version/VERSION)
+locksmith version
+
 # 1. Initialize (interactive TUI)
 locksmith init
 
@@ -42,6 +45,10 @@ locksmith get --key my-api-key
 export LOCKSMITH_SESSION=$(locksmith session start | jq -r .session_id)
 # Sessions expire automatically by TTL - no need to end them manually
 ```
+
+The version is read from `sdk/version/VERSION` and embedded into the
+binary at build time via `//go:embed`. See [CONTRIBUTING.md](CONTRIBUTING.md#version-bumps)
+for the release process.
 
 ## Agent Usage
 
