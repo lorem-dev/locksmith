@@ -63,6 +63,9 @@ func newVaultCmd() *cobra.Command {
 						status = "OK"
 					}
 					fmt.Printf("%-20s %s  %s\n", v.Name, status, v.Message)
+					for _, w := range v.CompatWarnings {
+						fmt.Printf("  ! %s\n", w)
+					}
 				}
 				return nil
 			},
