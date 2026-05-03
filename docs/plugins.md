@@ -91,3 +91,12 @@ Any compatibility warnings appear with a `!` prefix under the affected vault:
 
     gopass               OK    gopass found at /usr/bin/gopass
       ! platform_mismatch: plugin supports [darwin] but running on linux
+
+## Built-in plugins
+
+Locksmith ships with two reference plugins. Each has its own README that walks
+through installation, configuration, and troubleshooting - useful when writing
+your own plugin and looking for worked examples:
+
+- [`plugins/gopass/README.md`](../plugins/gopass/README.md) - shells out to the `gopass` CLI; Linux + macOS.
+- [`plugins/keychain/README.md`](../plugins/keychain/README.md) - macOS Security framework via CGo.

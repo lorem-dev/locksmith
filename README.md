@@ -113,6 +113,15 @@ config file is invalid, the daemon keeps the previous configuration and logs an 
 | 1Password | macOS, Linux | Touch ID / master password | Planned |
 | GNOME Keyring | Linux | Keyring password | Planned |
 
+### Plugin Setup Guides
+
+Per-plugin installation, configuration examples, and troubleshooting:
+
+| Plugin   | Platform     | Setup guide                                              |
+|----------|--------------|----------------------------------------------------------|
+| gopass   | Linux, macOS | [`plugins/gopass/README.md`](plugins/gopass/README.md)   |
+| keychain | macOS only   | [`plugins/keychain/README.md`](plugins/keychain/README.md) |
+
 ## Documentation
 
 - [Architecture](docs/architecture.md)

@@ -77,6 +77,9 @@ locksmith get --vault my-gopass --path dev/key
 Retrieves secrets from the macOS Keychain using the Security framework.
 Authorization (Touch ID or password) is triggered by the OS on each access.
 
+> Plugin-specific setup, examples, and troubleshooting:
+> [`plugins/keychain/README.md`](../plugins/keychain/README.md).
+
 **Configuration:**
 
 ```yaml
@@ -140,6 +143,9 @@ keys:
 ### gopass
 
 Retrieves secrets from a [gopass](https://github.com/gopasspw/gopass) password store.
+
+> Plugin-specific setup, examples, and troubleshooting:
+> [`plugins/gopass/README.md`](../plugins/gopass/README.md).
 
 **Configuration:**
 

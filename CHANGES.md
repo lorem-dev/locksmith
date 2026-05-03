@@ -2,6 +2,12 @@
 
 ## Development
 
+- Added per-plugin `README.md` for `plugins/gopass` and `plugins/keychain`
+  covering installation, configuration examples, and troubleshooting. The
+  canonical YAML schema stays in `docs/configuration.md`; per-plugin READMEs
+  are cross-linked from `docs/configuration.md`, `docs/plugins.md`, the root
+  `README.md`, and `CLAUDE.md` (new "Plugin Documentation" rule).
+
 - Plugin launches now run a soft compatibility check (platform support, locksmith min/max version, Info() availability). Warnings are surfaced via `locksmith vault health` and never block a plugin from running.
 
 - The gopass plugin `Info()` response now declares `MinLocksmithVersion` ("0.1.0") and `MaxLocksmithVersion` (from `sdk/version.Current`), enabling the daemon's CompatValidator to enforce version range checks for this plugin.

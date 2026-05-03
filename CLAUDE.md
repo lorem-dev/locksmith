@@ -126,6 +126,16 @@ Use `internal/log` (zerolog). Never use `fmt.Print*` in daemon/plugin code.
 ## Documentation
 All documentation lives in `docs/`. Keep `README.md` focused on install + quickstart.
 
+## Plugin Documentation
+
+Each built-in plugin under `plugins/<name>/` ships its own `README.md` covering
+installation, configuration examples, and troubleshooting. The canonical YAML
+schema lives in `docs/configuration.md`; the plugin README links to it rather
+than duplicating it.
+
+Whenever a plugin's behavior, configuration fields, or external requirements
+change, update `plugins/<name>/README.md` in the same commit.
+
 ## Changelog (CHANGES.md)
 **Every user-visible change must be recorded in `CHANGES.md` before the work is considered done.**
 
