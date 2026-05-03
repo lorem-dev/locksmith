@@ -72,7 +72,7 @@ func Extract(b *Bundle, opts ExtractOptions) error {
 		if err != nil {
 			return err
 		}
-		existingSHA, exists, err := fileSHA256(dest)
+		existingSHA, exists, err := FileSHA256(dest)
 		if err != nil {
 			return err
 		}
@@ -126,7 +126,10 @@ func destPathFor(e Entry, opts ExtractOptions) (string, error) {
 	}
 }
 
-func fileSHA256(path string) (string, bool, error) {
+// FileSHA256 returns the hex sha256 of the file at path, plus whether the
+// file exists. Exported so callers can implement dry-run / diff logic
+// without duplicating the hash code.
+func FileSHA256(path string) (string, bool, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {

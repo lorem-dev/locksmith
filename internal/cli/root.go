@@ -30,6 +30,7 @@ func NewRootCmd() *cobra.Command {
 		newInitCmd(),
 		newAutostartCmd(),
 		newReloadCmd(),
+		newPluginsCmd(),
 	)
 	return root
 }
