@@ -2,6 +2,19 @@
 
 ## Development
 
+- Bundled default plugins (`gopass`, `keychain`) and `locksmith-pinentry`
+  inside the `locksmith` binary as a per-platform `//go:embed` zip;
+  `locksmith init` extracts the plugins matching chosen vault types to
+  `~/.config/locksmith/plugins/` and pinentry to
+  `~/.config/locksmith/bin/locksmith-pinentry`. Conflict policy: sha256
+  match -> silent skip; mismatch -> `y/n/all/skip` prompt; "keep" emits a
+  warning. New `locksmith plugins update [--dry-run] [--force]` re-extracts
+  for the vaults declared in `config.yaml`. Plugin version is locked to
+  the host `locksmith` version (no network, no registry). Documentation
+  decomposed: `docs/plugins.md` is split into `docs/plugins/{README,
+  architecture,authoring,compatibility}.md`; new root `PLUGINS.md` is the
+  canonical short overview; `CLAUDE.md` gains a "Bundled Plugins" rule.
+
 - Added per-plugin `README.md` for `plugins/gopass` and `plugins/keychain`
   covering installation, configuration examples, and troubleshooting; the
   canonical YAML schema stays in `docs/configuration.md` and per-plugin
