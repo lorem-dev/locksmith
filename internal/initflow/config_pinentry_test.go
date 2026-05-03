@@ -22,8 +22,8 @@ func (m *mockPinentryPrompter) GPGPinentry(_ string) (bool, error) {
 }
 
 // fakePinentryAt creates a fake locksmith-pinentry executable at the canonical
-// bundled location under home, sets HOME to home, and returns the binary path.
-func fakePinentryAt(t *testing.T, home string) string {
+// bundled location under home.
+func fakePinentryAt(t *testing.T, home string) {
 	t.Helper()
 	binDir := filepath.Join(home, ".config", "locksmith", "bin")
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
@@ -33,7 +33,6 @@ func fakePinentryAt(t *testing.T, home string) string {
 	if err := os.WriteFile(bin, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatalf("write fake pinentry: %v", err)
 	}
-	return bin
 }
 
 func TestRunConfigPinentry_MissingPinentry_EmptyBundle(t *testing.T) {
@@ -54,7 +53,7 @@ func TestRunConfigPinentry_MissingPinentry_EmptyBundle(t *testing.T) {
 func TestRunConfigPinentry_Auto_Configures(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	binPath := fakePinentryAt(t, home)
+	fakePinentryAt(t, home)
 
 	result, err := initflow.RunConfigPinentry(initflow.ConfigPinentryOptions{Auto: true})
 	if err != nil {
@@ -71,7 +70,6 @@ func TestRunConfigPinentry_Auto_Configures(t *testing.T) {
 	if result.PinentryPath != wantPath {
 		t.Errorf("PinentryPath = %q, want %q", result.PinentryPath, wantPath)
 	}
-	_ = binPath
 
 	// Verify gpg-agent.conf was written.
 	confPath := filepath.Join(home, ".gnupg", "gpg-agent.conf")

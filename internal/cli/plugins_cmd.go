@@ -83,7 +83,8 @@ func runPluginsUpdate(dryRun, force bool) error {
 		ForceOverwrite: force,
 		OnKept: func(name string, withWarning bool) {
 			if withWarning {
-				log.Warn().Str("entry", name).Msg("kept; bundled version differs - functionality may not work as expected")
+				log.Warn().Str("entry", name).
+					Msg("kept; bundled version differs - functionality may not work as expected")
 			}
 		},
 		OnExtracted: func(name string) {
@@ -105,14 +106,8 @@ func cliPromptOrNil(force bool) bundled.ExtractPrompter {
 type cliPrompter struct{}
 
 func (cliPrompter) BundleExtractPrompt(name, existingSHA, newSHA string) (bundled.ConflictResolution, error) {
-	short := func(s string) string {
-		if len(s) > 8 {
-			return s[:8]
-		}
-		return s
-	}
 	fmt.Printf("Existing %s differs from bundled (disk %s vs bundled %s). [y]es/[n]o/[a]ll/[s]kip-all: ",
-		name, short(existingSHA), short(newSHA))
+		name, bundled.ShortSHA(existingSHA), bundled.ShortSHA(newSHA))
 	var ans string
 	fmt.Scanln(&ans) //nolint:errcheck
 	switch ans {

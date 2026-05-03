@@ -31,6 +31,19 @@ const (
 // match the manifest's expected sha256, indicating bundle corruption.
 var ErrSHAMismatch = errors.New("bundled: sha256 mismatch after extract")
 
+// ShortSHALen is the number of hex characters used when displaying a truncated
+// SHA256 digest in user-facing output (e.g. conflict prompts).
+const ShortSHALen = 8
+
+// ShortSHA returns the first ShortSHALen characters of a hex SHA256 string,
+// or the full string if it is shorter than ShortSHALen.
+func ShortSHA(s string) string {
+	if len(s) > ShortSHALen {
+		return s[:ShortSHALen]
+	}
+	return s
+}
+
 // ExtractPrompter resolves sha256 mismatches during Extract.
 type ExtractPrompter interface {
 	// BundleExtractPrompt is called when an existing file has a different
@@ -60,6 +73,8 @@ type ExtractOptions struct {
 }
 
 // Extract writes selected entries from b to disk per opts.
+//
+//nolint:gocognit // inherent linear scan: each entry has lookup, hash-check, conflict, write, callback branches
 func Extract(b *Bundle, opts ExtractOptions) error {
 	const noSticky ConflictResolution = -1
 	sticky := noSticky
@@ -83,22 +98,14 @@ func Extract(b *Bundle, opts ExtractOptions) error {
 			continue
 		}
 		if exists && !opts.ForceOverwrite {
-			res := sticky
-			if res == noSticky {
-				if opts.Prompter == nil {
-					res = Keep
-				} else {
-					r, perr := opts.Prompter.BundleExtractPrompt(name, existingSHA, entry.SHA256)
-					if perr != nil {
-						return fmt.Errorf("prompt for %q: %w", name, perr)
-					}
-					res = r
-					if r == OverwriteAll || r == KeepAll {
-						sticky = r
-					}
-				}
+			keep, newSticky, resolveErr := opts.resolveConflict(name, existingSHA, entry.SHA256, sticky)
+			if resolveErr != nil {
+				return resolveErr
 			}
-			if res == Keep || res == KeepAll {
+			if newSticky != noSticky {
+				sticky = newSticky
+			}
+			if keep {
 				if opts.OnKept != nil {
 					opts.OnKept(name, true)
 				}
@@ -113,6 +120,33 @@ func Extract(b *Bundle, opts ExtractOptions) error {
 		}
 	}
 	return nil
+}
+
+// resolveConflict decides what to do when an existing file has a different
+// sha256 from the manifest entry. It returns keep=true when the existing file
+// should be left untouched, and newSticky with the updated sticky resolution
+// (-1 means no change). The caller must update sticky when newSticky != -1.
+func (opts ExtractOptions) resolveConflict(
+	name, existingSHA, newSHA string,
+	sticky ConflictResolution,
+) (keep bool, newSticky ConflictResolution, err error) {
+	const noSticky ConflictResolution = -1
+	res := sticky
+	if res == noSticky {
+		if opts.Prompter == nil {
+			res = Keep
+		} else {
+			r, perr := opts.Prompter.BundleExtractPrompt(name, existingSHA, newSHA)
+			if perr != nil {
+				return false, noSticky, fmt.Errorf("prompt for %q: %w", name, perr)
+			}
+			res = r
+			if r == OverwriteAll || r == KeepAll {
+				return res == Keep || res == KeepAll, r, nil
+			}
+		}
+	}
+	return res == Keep || res == KeepAll, noSticky, nil
 }
 
 func destPathFor(e Entry, opts ExtractOptions) (string, error) {
@@ -130,14 +164,14 @@ func destPathFor(e Entry, opts ExtractOptions) (string, error) {
 // file exists. Exported so callers can implement dry-run / diff logic
 // without duplicating the hash code.
 func FileSHA256(path string) (string, bool, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(path) //nolint:gosec // G304: path is internal, not user-controlled
 	if err != nil {
 		if os.IsNotExist(err) {
 			return "", false, nil
 		}
 		return "", false, fmt.Errorf("opening %s: %w", path, err)
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // read-only open; close error not actionable here
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {
 		return "", true, fmt.Errorf("hashing %s: %w", path, err)
@@ -146,15 +180,16 @@ func FileSHA256(path string) (string, bool, error) {
 }
 
 func writeEntry(b *Bundle, e Entry, dest string) error {
-	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(dest), 0o700); err != nil {
 		return fmt.Errorf("mkdir %s: %w", filepath.Dir(dest), err)
 	}
 	rc, err := b.Open(e.Name)
 	if err != nil {
 		return err
 	}
-	defer rc.Close()
+	defer rc.Close() //nolint:errcheck // zip entry reader; close error not actionable in defer
 	tmp := dest + ".tmp"
+	//nolint:gosec // G302: extracted binaries must be executable (0o755)
 	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o755)
 	if err != nil {
 		return fmt.Errorf("creating %s: %w", tmp, err)
@@ -162,16 +197,16 @@ func writeEntry(b *Bundle, e Entry, dest string) error {
 	h := sha256.New()
 	w := io.MultiWriter(f, h)
 	if _, err := io.Copy(w, rc); err != nil {
-		f.Close()
-		os.Remove(tmp)
+		f.Close()      //nolint:errcheck // closing after write failure; original error takes precedence
+		os.Remove(tmp) //nolint:errcheck // best-effort cleanup of temp file
 		return fmt.Errorf("writing %s: %w", tmp, err)
 	}
 	if err := f.Close(); err != nil {
-		os.Remove(tmp)
+		os.Remove(tmp) //nolint:errcheck // best-effort cleanup of temp file
 		return fmt.Errorf("closing %s: %w", tmp, err)
 	}
 	if got := hex.EncodeToString(h.Sum(nil)); got != e.SHA256 {
-		os.Remove(tmp)
+		os.Remove(tmp) //nolint:errcheck // best-effort cleanup of temp file after integrity failure
 		return fmt.Errorf("%w: %s: got %s want %s", ErrSHAMismatch, e.Name, got, e.SHA256)
 	}
 	if err := os.Rename(tmp, dest); err != nil {

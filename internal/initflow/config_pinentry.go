@@ -43,24 +43,29 @@ func RunConfigPinentry(opts ConfigPinentryOptions) (*ConfigPinentryResult, error
 	if err != nil {
 		return nil, fmt.Errorf("resolving pinentry path: %w", err)
 	}
-	if _, err := os.Stat(pinentryPath); errors.Is(err, fs.ErrNotExist) {
+	_, statErr := os.Stat(pinentryPath)
+	if errors.Is(statErr, fs.ErrNotExist) {
 		// Pinentry not yet extracted (e.g. user is running `locksmith config
 		// pinentry` standalone without `init`). Extract it now.
 		bundle, openErr := bundled.OpenBundle()
 		if openErr != nil {
 			if errors.Is(openErr, bundled.ErrEmptyBundle) {
-				return nil, fmt.Errorf("locksmith-pinentry not extracted and bundle is empty (dev build): run `make build-all` then re-run init")
+				return nil, fmt.Errorf(
+					"locksmith-pinentry not extracted and bundle is empty (dev build):" +
+						" run `make build-all` then re-run init",
+				)
 			}
 			return nil, fmt.Errorf("opening bundle: %w", openErr)
 		}
-		if err := bundled.Extract(bundle, bundled.ExtractOptions{
+		extractErr := bundled.Extract(bundle, bundled.ExtractOptions{
 			Names:        []string{"locksmith-pinentry"},
 			PinentryPath: pinentryPath,
-		}); err != nil {
-			return nil, fmt.Errorf("extracting pinentry: %w", err)
+		})
+		if extractErr != nil {
+			return nil, fmt.Errorf("extracting pinentry: %w", extractErr)
 		}
-	} else if err != nil {
-		return nil, fmt.Errorf("stat %s: %w", pinentryPath, err)
+	} else if statErr != nil {
+		return nil, fmt.Errorf("stat %s: %w", pinentryPath, statErr)
 	}
 
 	gnupgDir := filepath.Join(homeDir, ".gnupg")

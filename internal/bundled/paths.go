@@ -4,6 +4,7 @@
 package bundled
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -13,7 +14,7 @@ import (
 func PluginsDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("getting home dir: %w", err)
 	}
 	return filepath.Join(home, ".config", "locksmith", "plugins"), nil
 }
@@ -23,7 +24,7 @@ func PluginsDir() (string, error) {
 func BinDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("getting home dir: %w", err)
 	}
 	return filepath.Join(home, ".config", "locksmith", "bin"), nil
 }

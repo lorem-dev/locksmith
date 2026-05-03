@@ -73,7 +73,7 @@ func openFromBytes(data []byte) (*Bundle, error) {
 	if err != nil {
 		return nil, fmt.Errorf("opening %s: %w", manifestName, err)
 	}
-	defer rc.Close()
+	defer rc.Close() //nolint:errcheck // manifest rc is a zip entry reader; close error not actionable
 	var m Manifest
 	if err := json.NewDecoder(rc).Decode(&m); err != nil {
 		return nil, fmt.Errorf("decoding %s: %w", manifestName, err)
@@ -98,7 +98,11 @@ func (b *Bundle) FindEntry(name string) (Entry, bool) {
 func (b *Bundle) Open(name string) (io.ReadCloser, error) {
 	for _, f := range b.zip.File {
 		if f.Name == name {
-			return f.Open()
+			rc, err := f.Open()
+			if err != nil {
+				return nil, fmt.Errorf("opening entry %q: %w", name, err)
+			}
+			return rc, nil
 		}
 	}
 	return nil, fmt.Errorf("entry %q not found in bundle", name)

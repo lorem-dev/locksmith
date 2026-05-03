@@ -33,12 +33,17 @@ func TestExtract_FreshWrite(t *testing.T) {
 	dir := t.TempDir()
 	pluginContent := []byte("plugin-bytes")
 	mf := Manifest{Entries: []Entry{
-		{Name: "locksmith-plugin-gopass", Kind: KindPlugin, SHA256: sha256Hex(pluginContent), Size: int64(len(pluginContent))},
+		{
+			Name:   "locksmith-plugin-gopass",
+			Kind:   KindPlugin,
+			SHA256: sha256Hex(pluginContent),
+			Size:   int64(len(pluginContent)),
+		},
 	}}
 	data := makeZip(t, mf, map[string][]byte{"locksmith-plugin-gopass": pluginContent})
-	b, err := openFromBytes(data)
-	if err != nil {
-		t.Fatalf("openFromBytes: %v", err)
+	b, openErr := openFromBytes(data)
+	if openErr != nil {
+		t.Fatalf("openFromBytes: %v", openErr)
 	}
 	if err := Extract(b, ExtractOptions{
 		Names:        []string{"locksmith-plugin-gopass"},
@@ -177,7 +182,9 @@ func TestExtract_ForceOverwrite(t *testing.T) {
 	data := makeZip(t, mf, map[string][]byte{"p": newContent})
 	b, _ := openFromBytes(data)
 	prompter := &fakePrompter{response: Keep}
-	if err := Extract(b, ExtractOptions{Names: []string{"p"}, PluginsDir: dir, Prompter: prompter, ForceOverwrite: true}); err != nil {
+	if err := Extract(b, ExtractOptions{
+		Names: []string{"p"}, PluginsDir: dir, Prompter: prompter, ForceOverwrite: true,
+	}); err != nil {
 		t.Fatalf("Extract: %v", err)
 	}
 	if prompter.calls != 0 {

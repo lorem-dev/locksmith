@@ -341,11 +341,11 @@ func ExtractBundled(selectedVaults []string, prompter Prompter, auto bool) error
 	}
 	pluginsDir, err := bundled.PluginsDir()
 	if err != nil {
-		return err
+		return fmt.Errorf("resolving plugins dir: %w", err)
 	}
 	pinentryPath, err := bundled.PinentryPath()
 	if err != nil {
-		return err
+		return fmt.Errorf("resolving pinentry path: %w", err)
 	}
 	names := []string{"locksmith-pinentry"}
 	for _, v := range selectedVaults {
@@ -355,20 +355,24 @@ func ExtractBundled(selectedVaults []string, prompter Prompter, auto bool) error
 	if !auto {
 		p = prompter
 	}
-	return bundled.Extract(bundle, bundled.ExtractOptions{
+	if err := bundled.Extract(bundle, bundled.ExtractOptions{
 		Names:        names,
 		PluginsDir:   pluginsDir,
 		PinentryPath: pinentryPath,
 		Prompter:     p,
 		OnKept: func(name string, withWarning bool) {
 			if withWarning {
-				log.Warn().Str("entry", name).Msg("kept; bundled version differs - functionality may not work as expected")
+				log.Warn().Str("entry", name).
+					Msg("kept; bundled version differs - functionality may not work as expected")
 			}
 		},
 		OnExtracted: func(name string) {
 			log.Info().Str("entry", name).Msg("extracted from bundle")
 		},
-	})
+	}); err != nil {
+		return fmt.Errorf("extracting bundled entries: %w", err)
+	}
+	return nil
 }
 
 func applyInit(result *InitResult, homeDir string, prompter Prompter, auto bool) error {
@@ -448,7 +452,8 @@ func applyGPGPinentryConfig(homeDir string) {
 		return
 	}
 	if _, statErr := os.Stat(pinentryPath); errors.Is(statErr, fs.ErrNotExist) {
-		fmt.Printf("  warning: %s not found - run `locksmith init` to extract or `make build-all` for a non-empty bundle\n", pinentryPath)
+		fmt.Printf("  warning: %s not found - run `locksmith init` to extract"+
+			" or `make build-all` for a non-empty bundle\n", pinentryPath)
 		return
 	} else if statErr != nil {
 		fmt.Printf("  warning: stat %s: %v\n", pinentryPath, statErr)
@@ -777,16 +782,10 @@ func (p *huhPrompter) BundleExtractPrompt(name, existingSHA, newSHA string) (bun
 	if p.accessible {
 		return bundled.Keep, nil
 	}
-	short := func(s string) string {
-		if len(s) > 8 {
-			return s[:8]
-		}
-		return s
-	}
 	var choice string
 	prompt := fmt.Sprintf(
 		"Existing %s differs from bundled (on disk %s vs bundled %s). Overwrite?",
-		name, short(existingSHA), short(newSHA),
+		name, bundled.ShortSHA(existingSHA), bundled.ShortSHA(newSHA),
 	)
 	form := p.formWith(huh.NewForm(
 		huh.NewGroup(
