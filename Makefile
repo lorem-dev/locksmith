@@ -1,4 +1,4 @@
-.PHONY: build build-plugins build-all build-all-plugins build-bundle ensure-bundle-placeholder lint test test-coverage test-race test-integration verify proto install-tools init clean tidy
+.PHONY: build build-plugins build-all build-all-plugins build-bundle ensure-bundle-placeholder lint test test-coverage test-race test-integration verify proto install-tools init clean tidy check-version
 
 # Tool versions - bump here to upgrade everywhere
 BUF_VERSION ?= v1.68.1
@@ -82,6 +82,12 @@ test-integration:
 # Use this as the final step before merging a feature branch.
 verify:
 	./.scripts/verification.sh
+
+# Verify that the git tag a CI build is running on matches sdk/version/VERSION
+# and that CHANGES.md has a corresponding ## Version vX.Y.Z section.
+# On non-tag builds the script is a no-op (exit 0).
+check-version:
+	go run ./.scripts/check-version
 
 # Regenerate protobuf Go code and verify linting.
 # Installs pinned tool versions into GOPATH/bin on each run (no-op if already at correct version).
