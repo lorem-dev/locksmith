@@ -32,7 +32,7 @@ type templateData struct {
 }
 
 func defaultData() templateData {
-	platforms := []string{"linux-amd64", "linux-arm64", "darwin-amd64", "darwin-arm64"}
+	platforms := []string{"linux-amd64", "linux-arm64", "darwin-arm64"}
 	return templateData{
 		Owner:              "lorem-dev",
 		Repo:               "locksmith",

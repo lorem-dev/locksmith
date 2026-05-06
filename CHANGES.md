@@ -2,149 +2,98 @@
 
 ## Development
 
-- `TestDaemon_Start_ListenError` previously relied on macOS rejecting
-  Unix socket paths longer than 104 bytes; on Linux (108-byte limit)
-  the path fit and the daemon entered `grpc.Serve`, hanging the test.
-  The test now uses a non-empty directory at the socket path so
-  `os.Remove` deterministically fails on both platforms before the
-  listen step.
+## Version v0.1.0 - 2026-05-07
 
-- Keychain plugin: `provider_test.go` referenced Darwin-only symbols
-  (`keychainGetPasswordFunc`, `keychainError`, `parseKeychainPath`)
-  without a build tag, breaking compilation on Linux. Added
-  `//go:build darwin` to match the production `provider_darwin.go`.
+Locksmith v0.1.0 is the first public release. It ships the secret-management
+daemon, CLI, two reference vault plugins, agent integrations for the major
+AI clients, and the install/release pipeline.
 
-- Release tooling: canonical version moved to `sdk/version/VERSION`
-  (with a `VERSION` symlink in the repo root) and embedded into
-  `sdk/version.Current` via `//go:embed`; new `locksmith version`
-  command prints the embedded value; new `make check-version`
-  (`.scripts/check-version`) verifies tag-VERSION-CHANGES.md
-  alignment on CI tag builds (GitHub Actions and GitLab CI);
-  `CONTRIBUTING.md` documents the bump procedure and CI YAML
-  snippets; new committed `version-bump` skill orchestrates VERSION
-  update plus a `changelog`-skill invocation, optionally invoking
-  `check-licenses` first.
+### Daemon & CLI
 
-- Bundled default plugins (`gopass`, `keychain`) and `locksmith-pinentry`
-  inside the `locksmith` binary as a per-platform `//go:embed` zip;
-  `locksmith init` extracts the plugins matching chosen vault types to
-  `~/.config/locksmith/plugins/` and pinentry to
+- gRPC daemon over a local Unix socket; CLI subcommands `init`, `serve`,
+  `get`, `session`, `vault`, `config`, `reload`, `version`, and
+  `plugins update`.
+- Session manager with TTL, per-session secret cache, and memory wipe on
+  invalidation. Session IDs are masked in daemon log output unless
+  `logging.level: debug` is set; see `docs/security/debug-logging.md` for
+  the security implications of debug mode.
+- Structured logging via zerolog (text or JSON, configurable level);
+  optional `logging.file` enables file output with 50 MB rotation and
+  3-day retention via lumberjack.
+
+### Vault plugins
+
+- Reference plugins for gopass and macOS Keychain (Touch ID via the
+  Security framework + CGo). Plugins run as separate processes via
+  `hashicorp/go-plugin`.
+- Default plugins and `locksmith-pinentry` ship bundled inside the
+  `locksmith` binary as a per-platform `//go:embed` zip and are extracted
+  by `locksmith init` to `~/.config/locksmith/plugins/` and
   `~/.config/locksmith/bin/locksmith-pinentry`. Conflict policy: sha256
-  match -> silent skip; mismatch -> interactive prompt (Overwrite / Keep /
-  Overwrite all / Keep all); "Keep" emits a warning. New `locksmith plugins update [--dry-run] [--force]` re-extracts
-  for the vaults declared in `config.yaml`. Plugin version is locked to
-  the host `locksmith` version (no network, no registry). Documentation
-  decomposed: `docs/plugins.md` is split into `docs/plugins/{README,
-  architecture,authoring,compatibility}.md`; new root `PLUGINS.md` is the
-  canonical short overview; `CLAUDE.md` gains a "Bundled Plugins" rule.
+  match -> silent skip; mismatch -> interactive prompt
+  (Overwrite / Keep / Overwrite all / Keep all). `locksmith plugins update
+  [--dry-run] [--force]` re-extracts for the vaults declared in
+  `config.yaml`.
+- Plugin launches run a soft compatibility check (platform support,
+  locksmith min/max version range); warnings surface via `locksmith vault
+  health` (`compat_warnings`) and never block a plugin from running.
+- Per-plugin documentation: `plugins/gopass/README.md`,
+  `plugins/keychain/README.md`.
 
-- Added per-plugin `README.md` for `plugins/gopass` and `plugins/keychain`
-  covering installation, configuration examples, and troubleshooting; the
-  canonical YAML schema stays in `docs/configuration.md` and per-plugin
-  READMEs are cross-linked from `docs/configuration.md`, `docs/plugins.md`,
-  the root `README.md`, and `CLAUDE.md` (new "Plugin Documentation" rule).
+### Agent integration
 
-- Plugin launches now run a soft compatibility check (platform support,
-  locksmith min/max version range, `Info()` availability); warnings are
-  surfaced via `locksmith vault health` (`compat_warnings` field) and never
-  block a plugin from running. Added `internal/semver` (minimal
-  major.minor.patch parser), `sdk/version` exposing `version.Current`
-  (overridable via `-ldflags`), and the gopass plugin declares
-  `MinLocksmithVersion`/`MaxLocksmithVersion` in `Info()`.
-
-- Added `verification` skill and `.scripts/verification.sh`: a single
-  `make verify` runs all quality gates (lint, race tests, coverage >= 90%
-  per package, build, GPG signatures on branch commits, docs completeness,
-  `CHANGES.md` entry); the skill interprets failures gate-by-gate and
-  offers the `changelog` skill once five or more Development entries have
-  accumulated. CLAUDE.md updated to make verification the mandatory final
-  task in every superpowers plan.
-
-- Hot-reload config: the daemon picks up `config.yaml` changes without
-  restarting via SIGHUP, `locksmith reload`, or automatic file-watcher
-  (1-second debounce via fsnotify). Active sessions and their secret
-  caches are preserved; an invalid config is rejected and the previous
-  config remains active. Plugin processes are delta-synced (new types
-  launched, removed ones killed cleanly with no zombies). Config stored
-  in `atomic.Pointer[config.Config]` for lock-free reads on the hot path.
-
-- Build and lint stack: golangci-lint v2.11.4 with strict ruleset
-  (`errcheck` with `check-blank`/`check-type-assertions`, `wrapcheck`,
-  `unparam`, `mnd`, `embeddedstructfieldcheck`, `gocritic`, `errorlint`),
-  buf linter for protobuf, all tool versions pinned via
-  `make install-tools`, `make tidy` for workspace-wide `go mod tidy`,
-  configurable per-module test timeout (`TEST_TIMEOUT`, default 3m), and
-  third-party notices for buf and golangci-lint in LICENSE.
-
-- Interactive `locksmith init` (charmbracelet/huh) with agent
-  auto-detection, sandbox allowlist generation for restricted modes, and
-  idempotent installation of the Claude Code `UserPromptSubmit` hook into
-  `~/.claude/settings.json` (with `--auto` mode and post-install restart
-  reminder). Embedded agent templates document both alias-based and
-  direct-path (`--path/--vault`) syntax.
-
-- Universal agent integration: session management protocol documented in
-  `docs/agent-integration.md`; `locksmith session ensure --quiet` reuses
-  or starts a session for hook scripts; `agent.pass_session_to_subagents`
-  config (default `true`) controls session inheritance to child agents;
-  embedded templates cover Claude Code (`UserPromptSubmit`),
+- Universal session-management protocol documented in
+  `docs/agent-integration.md`. `locksmith session ensure --quiet` reuses
+  or starts a session for hook scripts.
+- Embedded templates for Claude Code (`UserPromptSubmit` hook installed
+  into `~/.claude/settings.json` by `locksmith init`),
   Cursor / Copilot / Codex (`AGENTS.md`), and Gemini CLI (`GEMINI.md`).
+- `agent.pass_session_to_subagents` config (default `true`) controls
+  session inheritance to child agents.
 
-- Internal refactors: vault-type constants in `internal/config`, pinentry
-  protocol/UI moved into `internal/pinentry/`, and all CLI command files
-  renamed to `<command>_cmd.go` with per-command test files.
+### Configuration & operations
 
-- Fixed zombie process leak in `_autostart` (a `go c.Wait()` goroutine
-  reaps the spawned `serve` child if it exits before parent); added
-  `TestAutostart_ZombieReaping` and isolated `HOME` in autostart tests
-  to prevent long-lived daemons from accumulating across test runs.
+- YAML config at `~/.config/locksmith/config.yaml` with validation,
+  path expansion, and per-vault sections; full reference in
+  `docs/configuration.md`.
+- Hot-reload: the daemon picks up `config.yaml` changes via SIGHUP,
+  `locksmith reload`, or an automatic file-watcher (1-second debounce
+  via fsnotify). Active sessions and secret caches are preserved; an
+  invalid config is rejected and the previous config remains active.
+  Plugin processes are delta-synced (new types launched, removed ones
+  killed cleanly with no zombies).
+- Shell autostart hook for zsh, bash, and fish; `locksmith init` offers
+  to install it. Spawned `serve` children are reaped to prevent
+  zombies.
 
-- SDK for vault plugin authors at `github.com/lorem-dev/locksmith/sdk`,
-  organized into subpackages: `sdk/vault` (Provider interface, `Serve()`),
+### Release & CI/CD
+
+- GitHub Actions: `ci.yml` runs lint, race tests, and coverage on
+  ubuntu-latest and macos-latest for every push and PR; `release.yml`
+  cross-builds for linux/amd64, linux/arm64, and darwin/arm64 on tag
+  push and publishes a GitHub release with per-platform zip archives,
+  SHA-256 checksums, a GPG-signed `checksums.txt.asc`, and a generated
+  POSIX `install.sh`. Intel Macs (darwin/amd64) are not in the prebuilt
+  set for v0.1.0; on those systems the install script prints
+  `go install` instructions so users can opt in to a from-source build.
+- Install path: `curl -fsSL https://github.com/lorem-dev/locksmith/releases/latest/download/install.sh | sh`
+  with `LOCKSMITH_VERSION` pinning and `LOCKSMITH_INSTALL_DIR` override.
+  Long-form install, GPG verification, build-from-source, and the
+  `go install` fallback in `docs/install.md`; maintainer release
+  procedure in `docs/release.md`.
+- Version is embedded from `sdk/version/VERSION` (with a `VERSION`
+  symlink at the repo root) and surfaced by `locksmith version`.
+  `make check-version` keeps the pushed tag, VERSION file, and
+  `CHANGES.md` heading aligned at tag-build time.
+- Build and lint stack pinned via `make install-tools`: golangci-lint
+  v2.11.4 with a strict ruleset (errcheck, wrapcheck, gocritic,
+  errorlint, mnd, etc.) and the buf protobuf linter.
+
+### SDK for plugin authors
+
+- Public SDK at `github.com/lorem-dev/locksmith/sdk`, organised into
+  subpackages: `sdk/vault` (Provider interface, `Serve()`),
   `sdk/errors` (typed `VaultError`), `sdk/log` (`LogConfig`,
-  `NewLogWriter`, `IsDebug`), `sdk/session` (session-id helpers), and
-  `sdk/platform` (`Darwin`/`Linux` constants used by plugins and
-  initflow).
-
-- Structured logging via zerolog (stdout or JSON, configurable level);
-  optional `logging.file` config option enables file output with 50 MB
-  rotation and 3-day retention via lumberjack.
-
-- Session IDs are masked in daemon log output unless `logging.level: debug`
-  is active (masking applies only to log call sites, not RPC responses or
-  CLI output). SDK: `HideSession` renamed to `HideSessionId` (breaking
-  change for plugin authors); added `MaskSessionId` for log call sites
-  (returns full ID in debug mode). New `docs/security/debug-logging.md`
-  documents the security implications of debug mode.
-
-- Shell autostart hook: the locksmith daemon starts automatically when a
-  terminal opens via a one-line snippet added to `~/.zshrc`, `~/.bashrc`,
-  or Fish config; `locksmith init` offers to set this up and it can also
-  be added manually.
-
-- Core: Go workspace + Makefile + protobuf definitions (VaultProvider,
-  LocksmithService); daemon gRPC server over Unix socket; CLI commands
-  `serve`, `get`, `session`, `vault`, `config`, `init`; YAML config with
-  validation and path expansion; session manager with TTL, per-session
-  secret cache, and memory wipe on invalidation; plugin manager with
-  process isolation via `hashicorp/go-plugin`; reference plugins for
-  gopass and macOS Keychain (Touch ID via Security framework + CGo);
-  integration test for the full session lifecycle.
-
-- Documentation: README, architecture, configuration, plugins guide.
-
-- Added GitHub Actions CI/CD: `.github/workflows/ci.yml` runs lint,
-  race tests, and coverage on linux + darwin for every push and PR;
-  `.github/workflows/release.yml` cross-builds for linux/amd64,
-  linux/arm64, darwin/amd64, darwin/arm64 on tag push and publishes a
-  GitHub release with per-platform zip archives, SHA-256 checksums, a
-  GPG-signed `checksums.txt.asc`, and a generated POSIX `install.sh`.
-  The install script is rendered from
-  `.scripts/install-template/install.sh.tmpl` via
-  `.scripts/render-install`. New `make build-release`,
-  `make install-script`, and `make extract-changelog` targets. README
-  install section now leads with `curl ... | sh`; long-form install
-  instructions moved to `docs/install.md`; release procedure
-  documented in `docs/release.md`; release-signing setup, plugin
-  versioning/compatibility policy, and CHANGES.md / BREAKING-change
-  rules documented in `CONTRIBUTING.md`.
+  `NewLogWriter`, `IsDebug`), `sdk/session` (session-id helpers,
+  `MaskSessionId`), and `sdk/platform` (`Darwin` / `Linux` constants).
+- The SDK surface is at v0.1.0; expect refinements before v1.0.

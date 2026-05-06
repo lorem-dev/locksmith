@@ -13,7 +13,7 @@ curl -fsSL https://github.com/lorem-dev/locksmith/releases/latest/download/insta
 Pin a specific version:
 
 ```sh
-LOCKSMITH_VERSION=v0.2.0 curl -fsSL https://github.com/lorem-dev/locksmith/releases/latest/download/install.sh | sh
+LOCKSMITH_VERSION=v0.1.0 curl -fsSL https://github.com/lorem-dev/locksmith/releases/download/v0.1.0/install.sh | sh
 ```
 
 Custom install dir (default `~/.local/bin`):
@@ -24,7 +24,9 @@ LOCKSMITH_INSTALL_DIR=/usr/local/bin curl -fsSL https://github.com/lorem-dev/loc
 
 Re-running the same command updates an existing install in place and
 refreshes bundled plugins / `locksmith-pinentry`. Supported platforms:
-linux/amd64, linux/arm64, darwin/amd64, darwin/arm64. See
+linux/amd64, linux/arm64, darwin/arm64. On Intel Macs (darwin/amd64)
+the install script prints `go install` instructions instead of
+fetching a prebuilt binary. See
 [docs/install.md](docs/install.md) for manual download, GPG signature
 verification, build-from-source, the `go install` fallback, and the
 full list of install-script flags. Plugin and pinentry extraction

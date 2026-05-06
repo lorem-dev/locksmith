@@ -69,8 +69,8 @@ func TestRender_NoUnresolvedPlaceholders(t *testing.T) {
 
 func TestRender_SupportedPlatformsSpaceSeparated(t *testing.T) {
 	script, _ := render(t)
-	// e.g. SUPPORTED_PLATFORMS="linux-amd64 linux-arm64 darwin-amd64 darwin-arm64"
-	if !strings.Contains(script, `SUPPORTED_PLATFORMS="linux-amd64 linux-arm64 darwin-amd64 darwin-arm64"`) {
+	// e.g. SUPPORTED_PLATFORMS="linux-amd64 linux-arm64 darwin-arm64"
+	if !strings.Contains(script, `SUPPORTED_PLATFORMS="linux-amd64 linux-arm64 darwin-arm64"`) {
 		t.Errorf("SUPPORTED_PLATFORMS not formatted as space-separated string")
 	}
 }

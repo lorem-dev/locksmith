@@ -53,21 +53,35 @@ require() {
 
 go_install_fallback() {
     warn "$1"
+    info ""
+    info "No prebuilt binary is available for this system. You can install"
+    info "locksmith from source via 'go install':"
+    info ""
     if ! command -v go >/dev/null 2>&1; then
-        err "go is not installed; install it from https://go.dev/dl/ and re-run, or download a prebuilt binary manually"
+        info "  1. Install Go (1.25 or newer) from https://go.dev/dl/"
+        info "  2. Run:"
+        info ""
+        info "       go install ${GO_MODULE}@${VERSION}"
+        info ""
+        info "  3. Add \$(go env GOPATH)/bin to your PATH:"
+        info ""
+        info "       export PATH=\"\$(go env GOPATH)/bin:\$PATH\""
+    else
+        GOPATH_BIN="$(go env GOPATH)/bin"
+        info "  1. Run:"
+        info ""
+        info "       go install ${GO_MODULE}@${VERSION}"
+        info ""
+        info "  2. Make sure ${GOPATH_BIN} is in your PATH:"
+        info ""
+        info "       export PATH=\"${GOPATH_BIN}:\$PATH\""
     fi
-    info "running: go install ${GO_MODULE}@${VERSION}"
-    if ! go install "${GO_MODULE}@${VERSION}"; then
-        err "go install failed"
-    fi
-    GOPATH_BIN="$(go env GOPATH)/bin"
     info ""
-    info "Installed via 'go install'. The bundle inside this build contains placeholder"
-    info "plugins only - 'locksmith init' will not extract real plugins. Build plugins"
-    info "from source if needed."
+    info "Note: a build produced by 'go install' embeds placeholder plugins;"
+    info "'locksmith init' will not extract real vault plugins. Build them"
+    info "from source if you need them on this platform."
     info ""
-    info "Make sure ${GOPATH_BIN} is in your PATH."
-    exit 0
+    exit 1
 }
 
 # Argument parsing

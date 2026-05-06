@@ -23,13 +23,13 @@ updates an existing install in place.
 | `--version vX.Y.Z` | `LOCKSMITH_VERSION` | `latest` | Pin a specific tag. |
 | `--dir <path>` | `LOCKSMITH_INSTALL_DIR` | `~/.local/bin` | Target install directory. |
 | `--no-plugins-update` | `LOCKSMITH_NO_PLUGINS_UPDATE=1` | unset | Skip the `plugins update --force` step. |
-| `--via-go` | (none) | unset | Force the `go install` fallback path. |
+| `--via-go` | (none) | unset | Print `go install` instructions and exit non-zero (no automatic install). |
 | `-h`, `--help` | (none) | - | Print usage and exit. |
 
-Supported platforms: `linux/amd64`, `linux/arm64`, `darwin/amd64`,
-`darwin/arm64`. On any other platform the script falls back to
-`go install` and prints a warning that the platform is not officially
-tested.
+Supported platforms: `linux/amd64`, `linux/arm64`, `darwin/arm64`.
+On any other platform (including Intel Macs, darwin/amd64) the script
+prints `go install` instructions and exits non-zero so the user can
+opt in to a from-source build.
 
 ## Manual download
 
@@ -85,7 +85,8 @@ automatically; the GPG step is opt-in and currently manual).
 ## `go install` fallback
 
 If your platform is not in the supported list, the install script
-calls `go install`:
+prints step-by-step `go install` instructions and exits non-zero so
+nothing happens automatically. You can then run the command yourself:
 
 ```sh
 go install github.com/lorem-dev/locksmith/cmd/locksmith@latest
