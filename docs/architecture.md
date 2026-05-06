@@ -26,7 +26,7 @@ locksmith CLI  ──(gRPC/Unix socket)──▶  locksmith daemon
 
 ### Session Manager (`internal/session`)
 
-- Sessions identified by `ls_<32-byte-hex>` tokens
+- Sessions identified by `ls_` followed by 64 hex chars (32 random bytes)
 - TTL-based expiry (default 3h, configurable)
 - Per-session secret cache: secrets are fetched from vault once per session,
   then served from memory cache for subsequent calls
@@ -105,8 +105,7 @@ environment variable. The daemon validates the session token on every request.
 Agents interact with the daemon exclusively through the CLI. Session management
 follows the protocol described in [Agent Integration](agent-integration.md):
 the `locksmith session ensure` command reuses an existing valid session from
-`LOCKSMITH_SESSION` or starts a new one. Platform hook scripts (see
-`docs/hooks/`) automate this for platforms that support hooks (e.g. Claude
-Code). For platforms without hook support, instructions in platform adapter
-files (`docs/hooks/AGENTS.md`, `docs/hooks/GEMINI.md`) guide agents through
-the same protocol.
+`LOCKSMITH_SESSION` or starts a new one. Platform hook templates are embedded
+in the binary and installed by `locksmith autostart install`; the root
+[`AGENTS.md`](../AGENTS.md) and [Agent Integration](agent-integration.md)
+describe the protocol for platforms without hook support.

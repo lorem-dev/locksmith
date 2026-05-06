@@ -4,7 +4,7 @@
 
 Default location: `~/.config/locksmith/config.yaml`
 
-Override with `--config <path>` or the `LOCKSMITH_CONFIG` environment variable.
+Override with `--config <path>`.
 
 ## Top-level structure
 

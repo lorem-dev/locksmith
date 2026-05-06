@@ -52,8 +52,8 @@ logging:
 Restart the daemon after changing the level:
 
 ```bash
-# End all sessions and stop the daemon
-locksmith session end --all
+# Stop the daemon (send SIGTERM to the locksmith serve process)
+pkill -TERM -f 'locksmith serve'
 # Let the shell hook restart it on next terminal open, or run manually:
 locksmith serve
 ```
