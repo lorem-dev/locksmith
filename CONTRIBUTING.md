@@ -149,3 +149,232 @@ chore: update golangci-lint to v1.57
   (e.g. `get_cmd.go`, `serve_cmd.go`). Non-command files (`root.go`,
   `client.go`, `color.go`, `errors.go`) are exempt. Tests go in
   `<command>_cmd_test.go`.
+
+## Release signing setup
+
+The release workflow signs `checksums.txt` with a dedicated GPG key
+that is separate from any maintainer's personal commit-signing key.
+This is a one-time setup; rotate every five years or on suspected
+compromise.
+
+1. Generate a dedicated release key:
+
+   ```sh
+   gpg --batch --gen-key <<EOF
+   %no-protection
+   Key-Type: EDDSA
+   Key-Curve: ed25519
+   Subkey-Type: ECDH
+   Subkey-Curve: cv25519
+   Name-Real: Lorem Dev Release
+   Name-Email: contact@lorem.dev
+   Expire-Date: 5y
+   EOF
+   ```
+
+   Add a passphrase by removing the `%no-protection` line; you
+   will then need to set `LOCKSMITH_RELEASE_GPG_PASSPHRASE` in
+   step 4.
+
+2. Get the fingerprint and export both halves:
+
+   ```sh
+   FPR="$(gpg --list-secret-keys --with-colons contact@lorem.dev \
+        | awk -F: '/^fpr:/ {print $10; exit}')"
+   gpg --armor --export-secret-keys "$FPR" > release-key.priv.asc
+   gpg --armor --export             "$FPR" > release-key.asc
+   echo "Fingerprint: $FPR"
+   ```
+
+3. Commit the public key (GPG-signed commit):
+
+   ```sh
+   mkdir -p .github
+   mv release-key.asc .github/release-key.asc
+   git add .github/release-key.asc
+   git commit -S -m "chore(release): add release-signing public key"
+   ```
+
+4. Add the GitHub Actions secrets in
+   `Settings -> Secrets and variables -> Actions`:
+
+   - `LOCKSMITH_RELEASE_GPG_KEY` = the contents of
+     `release-key.priv.asc` (entire ASCII-armored block).
+   - `LOCKSMITH_RELEASE_GPG_PASSPHRASE` = the passphrase, or an
+     empty string if the key is unprotected.
+
+5. Securely destroy the local secret material:
+
+   ```sh
+   shred -u release-key.priv.asc
+   gpg --delete-secret-keys "$FPR"   # optional - keep only public locally
+   ```
+
+6. **Rotation.** Every five years, repeat steps 1-4. Do NOT delete
+   prior public keys from the repo; users may still verify older
+   releases with them.
+
+7. **First release verification.** After the first tagged release
+   following this setup, locally verify the artifacts:
+
+   ```sh
+   curl -fsSLO https://github.com/lorem-dev/locksmith/releases/latest/download/checksums.txt
+   curl -fsSLO https://github.com/lorem-dev/locksmith/releases/latest/download/checksums.txt.asc
+   gpg --verify checksums.txt.asc checksums.txt
+   ```
+
+   A `Good signature` line confirms the workflow is signing with the
+   intended key.
+
+## Plugin versioning and compatibility
+
+Bundled plugins (`plugins/gopass`, `plugins/keychain`) and any
+third-party plugins follow these rules. The CI test job
+(`make test-race`) enforces them - a plugin PR cannot land green
+without satisfying every check.
+
+### Bundled plugins (lockstep with host)
+
+A bundled plugin has no separate version field, no separate tag,
+and no separate release cycle. Its version is the version of the
+`locksmith` binary that bundled it (see [PLUGINS.md](PLUGINS.md)).
+
+Each bundled plugin's `Info()` MUST set:
+
+- `MaxLocksmithVersion = sdkversion.Current` (using
+  `github.com/lorem-dev/locksmith/sdk/version`). Already enforced
+  by unit tests in `plugins/<name>/provider_test.go`. Keep these
+  tests in place when refactoring.
+- `MinLocksmithVersion`: the earliest host version the plugin is
+  still tested against. Bumped only when the plugin starts using an
+  SDK feature unavailable in earlier hosts; document the bump in
+  `CHANGES.md` under `## Development`.
+- `Platforms`: list of supported `runtime.GOOS` values, taken from
+  `sdk/platform` (`platform.Darwin`, `platform.Linux`). An empty
+  list means "skip the platform check" and SHOULD NOT be used by
+  bundled plugins.
+
+When the SDK or proto contract changes in a way that breaks plugin
+builds, the same commit MUST update all bundled plugins. The
+race-test CI job catches plugin compile failures; a green run is
+the enforcement point.
+
+### Third-party plugins
+
+Authors own their own versioning and tag cadence.
+
+- `MinLocksmithVersion` is strongly recommended; omitting it
+  produces a `min_version_missing` warning visible in
+  `locksmith vault health`.
+- `MaxLocksmithVersion` is optional but recommended. Format:
+  `major.minor.patch`, no `v` prefix, no pre-release suffix
+  (validated by `internal/plugin.CompatValidator`).
+- Use `sdk/platform` constants for `Platforms`.
+- Add unit tests covering `Info()`, modeled on
+  `plugins/gopass/provider_test.go`.
+
+### Required compatibility checks (every plugin)
+
+Every plugin MUST pass these in `make test-race`:
+
+1. `Info()` returns non-empty `MinLocksmithVersion`.
+2. `Info()` returns `MaxLocksmithVersion = sdkversion.Current`
+   (bundled plugins) or a concrete `major.minor.patch` string
+   (third-party).
+3. `Info()` returns `Platforms` containing the target OS.
+4. The plugin builds against the SDK pinned in the repo's
+   `go.work` (verified by `make init` running before tests).
+5. `internal/plugin.CompatValidator.Validate(info)` produces no
+   warnings under the current `sdk/version.Current` on the
+   plugin's declared platform.
+
+### SDK / proto breaking changes
+
+Any non-additive change to `sdk/vault.Provider`, `sdk/errors`,
+`sdk/log`, `sdk/session`, `sdk/platform`, or `proto/` is a
+breaking change for plugin authors. Such a change MUST:
+
+1. Update all bundled plugins in the same commit; the green
+   race-test job confirms the workspace still compiles.
+2. Document the migration in `docs/plugins/authoring.md` or
+   `docs/plugins/compatibility.md` (whichever fits).
+3. Add a `CHANGES.md ## Development` entry beginning with
+   `BREAKING:` (see "Changelog policy" below).
+4. Bump bundled plugins' `MinLocksmithVersion` to the upcoming
+   release tag, signalling the floor for third-party plugins.
+
+### Pointers
+
+- Plugin SDK quickstart: [docs/plugins/authoring.md](docs/plugins/authoring.md).
+- Wire-level compatibility: [docs/plugins/compatibility.md](docs/plugins/compatibility.md).
+- Bundle pipeline: [docs/plugins/architecture.md](docs/plugins/architecture.md).
+- Plugin overview for end users: [PLUGINS.md](PLUGINS.md).
+
+## Changelog policy (BREAKING changes)
+
+The basic rule that "every user-visible change goes under
+`## Development` in CHANGES.md, in the same commit" is documented
+in [CLAUDE.md](CLAUDE.md). This section adds the rules for
+BREAKING entries, which the `changelog` skill and the release
+workflow rely on.
+
+### What is a breaking change?
+
+Any of:
+
+- Alters the daemon-plugin protocol (`proto/`,
+  `sdk/vault.Provider`, `sdk/errors`, `sdk/log`, `sdk/session`,
+  `sdk/platform`).
+- Removes or renames a CLI flag, command, or environment
+  variable.
+- Changes `config.yaml` schema in a non-additive way.
+- Drops support for a previously documented platform or host
+  version.
+
+### Authoring rules
+
+Apply to both `## Development` and any `## Version vX.Y.Z`
+section.
+
+1. **Required entry.** Every breaking change MUST have a bullet
+   beginning with `BREAKING:` (uppercase, colon, then space). No
+   exception. Same commit as the code change.
+2. **Grouped at the top.** Within a section, all `BREAKING:`
+   bullets come first, before non-breaking entries, in the
+   chronological order they were introduced.
+3. **One bullet per change.** Do NOT merge multiple breaking
+   changes into a single bullet, even when related. Each must
+   remain independently addressable in the historical log.
+4. **Preserved across compressions.** When the `changelog` skill
+   collapses `## Development` into `## Version vX.Y.Z`, every
+   `BREAKING:` bullet is carried forward verbatim. The skill
+   MUST NOT merge two `BREAKING:` bullets and MUST NOT drop one.
+   Non-breaking bullets MAY be merged or rephrased.
+5. **Permanence after release.** Once a `## Version vX.Y.Z`
+   heading is tagged and pushed, its `BREAKING:` bullets are
+   immutable; edits are allowed only for typos that do not
+   change meaning.
+6. **Pre-release deletion is allowed only with the offending
+   logic.** A `BREAKING:` bullet under `## Development` MAY be
+   removed only if the breaking change itself is reverted in the
+   same commit (the logic that produced the breakage is removed).
+   Other reasons - "decided not to mention", "not interesting
+   enough" - are forbidden.
+7. **Plugin floor bump.** A breaking change to the SDK or proto
+   MUST bump bundled plugins' `MinLocksmithVersion` to the
+   upcoming release tag in the same commit (mirrors the rule in
+   "Plugin versioning and compatibility" above).
+
+### Release-time guarantee
+
+The release workflow's `extract-changelog` step reads the
+`## Version vX.Y.Z` section corresponding to the pushed tag and
+uses its full body - including all `BREAKING:` bullets, in their
+grouped order at the top - as the GitHub-release body. There is
+no separate release-notes file; the published changelog IS the
+release notes.
+
+`make check-version` already asserts that a `## Version vX.Y.Z`
+section exists for the tagged version. The release workflow
+refuses to publish if the section is missing or empty
+(`extract-changelog` returns an error on an empty body).
