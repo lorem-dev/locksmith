@@ -2,6 +2,13 @@
 
 ## Development
 
+- `TestDaemon_Start_ListenError` previously relied on macOS rejecting
+  Unix socket paths longer than 104 bytes; on Linux (108-byte limit)
+  the path fit and the daemon entered `grpc.Serve`, hanging the test.
+  The test now uses a non-empty directory at the socket path so
+  `os.Remove` deterministically fails on both platforms before the
+  listen step.
+
 - Release tooling: canonical version moved to `sdk/version/VERSION`
   (with a `VERSION` symlink in the repo root) and embedded into
   `sdk/version.Current` via `//go:embed`; new `locksmith version`

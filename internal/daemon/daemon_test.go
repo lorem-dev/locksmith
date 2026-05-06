@@ -243,12 +243,20 @@ func TestDaemon_Start_InvalidSocketDir(t *testing.T) {
 }
 
 func TestDaemon_Start_ListenError(t *testing.T) {
-	// Use an existing regular file as the socket path (after mkdir succeeds for the dir)
-	// so that Listen fails with "address already in use" or similar.
+	// Use a non-empty directory at the socket path so that Start()'s stale-socket
+	// removal fails (os.Remove cannot remove a non-empty directory) on both
+	// macOS and Linux. An empty directory is removable, and net.Listen("unix",
+	// path) on a freshly emptied path then succeeds on Linux (where the socket
+	// path length limit is 108 bytes), causing Start() to block in grpc.Serve.
+	// A non-empty directory triggers a deterministic error on both platforms
+	// before Start() reaches the listen step.
 	dir := t.TempDir()
-	// Create a directory where the socket should be so net.Listen fails.
 	socketPath := filepath.Join(dir, "socket-is-a-dir")
 	if err := os.Mkdir(socketPath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// Place a file inside so os.Remove(socketPath) returns "directory not empty".
+	if err := os.WriteFile(filepath.Join(socketPath, "blocker"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cfg := &config.Config{
@@ -260,7 +268,7 @@ func TestDaemon_Start_ListenError(t *testing.T) {
 	err := d.Start()
 	if err == nil {
 		d.Stop()
-		t.Fatal("Start() expected error when socket path is a directory")
+		t.Fatal("Start() expected error when socket path is a non-empty directory")
 	}
 }
 
