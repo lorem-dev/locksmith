@@ -177,6 +177,59 @@ func TestExtract_TrailingWhitespaceTrimmed(t *testing.T) {
 	}
 }
 
+func TestExtract_HeadingWithDateSuffix(t *testing.T) {
+	// The 'changelog' skill writes headings as
+	// '## Version vX.Y.Z - YYYY-MM-DD'. extract must accept this form.
+	path := writeFixture(t, `# Changelog
+
+## Development
+
+- dev entry
+
+## Version v0.1.0 - 2026-05-07
+
+- first release
+
+## Version v0.0.1 - 2026-04-01
+
+- older
+`)
+
+	got, err := extract(path, "v0.1.0")
+	if err != nil {
+		t.Fatalf("extract: %v", err)
+	}
+	if strings.TrimSpace(got) != "- first release" {
+		t.Errorf("got %q, want %q", got, "- first release")
+	}
+}
+
+func TestExtract_DoesNotMatchPartialVersionPrefix(t *testing.T) {
+	// v0.1.0 must NOT match a heading for v0.1.10.
+	path := writeFixture(t, `# Changelog
+
+## Version v0.1.10 - 2026-06-01
+
+- ten release
+`)
+
+	if _, err := extract(path, "v0.1.0"); err == nil {
+		t.Error("expected error: v0.1.0 must not match v0.1.10")
+	}
+}
+
+func TestExtract_ChangelogSkillFormat(t *testing.T) {
+	// End-to-end: exact format that the 'changelog' skill produces.
+	path := writeFixture(t, "# Changelog\n\n## Version v0.1.0 - 2026-05-07\n\n- bullet\n")
+	got, err := extract(path, "v0.1.0")
+	if err != nil {
+		t.Fatalf("extract: %v", err)
+	}
+	if strings.TrimSpace(got) != "- bullet" {
+		t.Errorf("got %q, want %q", got, "- bullet")
+	}
+}
+
 func TestExtract_ReadFileError(t *testing.T) {
 	dir := t.TempDir()
 	missing := filepath.Join(dir, "does-not-exist.md")

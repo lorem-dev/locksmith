@@ -16,6 +16,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 )
 
@@ -62,12 +63,16 @@ func extract(path, version string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("read %s: %w", path, err)
 	}
+	// Match "## Version <version>" with a trailing word boundary so that
+	// "v0.1.0" does not match "v0.1.10" but does match the dated form
+	// "## Version v0.1.0 - 2026-05-07" produced by the changelog skill.
 	heading := "## Version " + version
+	pattern := regexp.MustCompile(`(?m)^## Version ` + regexp.QuoteMeta(version) + `\b`)
 	lines := strings.Split(string(data), "\n")
 
 	start := -1
 	for i, line := range lines {
-		if strings.TrimRight(line, " \t") == heading {
+		if pattern.MatchString(line) {
 			start = i + 1
 			break
 		}
