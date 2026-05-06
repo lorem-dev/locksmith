@@ -1,0 +1,232 @@
+#!/bin/sh
+# Locksmith installer.
+# Generated from .scripts/install-template/install.sh.tmpl by
+# .scripts/render-install. Do not edit the generated file directly.
+#
+# Usage:
+#   sh install.sh [--version vX.Y.Z] [--dir <path>] [--no-plugins-update] [--via-go]
+#   LOCKSMITH_VERSION=vX.Y.Z LOCKSMITH_INSTALL_DIR=/path sh install.sh
+#
+# Re-running this script updates an existing install in place.
+set -eu
+
+OWNER="{{.Owner}}"
+REPO="{{.Repo}}"
+BINARY="{{.BinaryName}}"
+GO_MODULE="{{.GoModulePath}}"
+SUPPORTED_PLATFORMS="{{.SupportedPlatforms}}"
+
+DEFAULT_INSTALL_DIR="${HOME}/.local/bin"
+
+VERSION="${LOCKSMITH_VERSION:-latest}"
+INSTALL_DIR="${LOCKSMITH_INSTALL_DIR:-$DEFAULT_INSTALL_DIR}"
+NO_PLUGINS_UPDATE="${LOCKSMITH_NO_PLUGINS_UPDATE:-0}"
+VIA_GO=0
+
+usage() {
+    cat <<EOF
+Usage: install.sh [OPTIONS]
+
+Options:
+  --version VERSION         Locksmith version to install (default: latest)
+  --dir DIR                 Install directory (default: ~/.local/bin)
+  --no-plugins-update       Skip 'locksmith plugins update' after install
+  --via-go                  Force fallback to 'go install'
+  -h, --help                Show this help
+
+Environment:
+  LOCKSMITH_VERSION             Same as --version
+  LOCKSMITH_INSTALL_DIR         Same as --dir
+  LOCKSMITH_NO_PLUGINS_UPDATE   Set to 1 for --no-plugins-update
+EOF
+}
+
+err()  { printf 'error: %s\n'   "$*" >&2; exit 1; }
+warn() { printf 'warning: %s\n' "$*" >&2; }
+info() { printf '%s\n'          "$*"; }
+
+require() {
+    if ! command -v "$1" >/dev/null 2>&1; then
+        err "missing required tool: $1 ($2)"
+    fi
+}
+
+go_install_fallback() {
+    warn "$1"
+    if ! command -v go >/dev/null 2>&1; then
+        err "go is not installed; install it from https://go.dev/dl/ and re-run, or download a prebuilt binary manually"
+    fi
+    info "running: go install ${GO_MODULE}@${VERSION}"
+    if ! go install "${GO_MODULE}@${VERSION}"; then
+        err "go install failed"
+    fi
+    GOPATH_BIN="$(go env GOPATH)/bin"
+    info ""
+    info "Installed via 'go install'. The bundle inside this build contains placeholder"
+    info "plugins only - 'locksmith init' will not extract real plugins. Build plugins"
+    info "from source if needed."
+    info ""
+    info "Make sure ${GOPATH_BIN} is in your PATH."
+    exit 0
+}
+
+# Argument parsing
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --version)            VERSION="$2"; shift 2 ;;
+        --version=*)          VERSION="${1#*=}"; shift ;;
+        --dir)                INSTALL_DIR="$2"; shift 2 ;;
+        --dir=*)              INSTALL_DIR="${1#*=}"; shift ;;
+        --no-plugins-update)  NO_PLUGINS_UPDATE=1; shift ;;
+        --via-go)             VIA_GO=1; shift ;;
+        -h|--help)            usage; exit 0 ;;
+        *)
+            printf 'unknown option: %s\n' "$1" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
+# Tool checks
+require curl  "install: apt install curl  /  brew install curl"
+require unzip "install: apt install unzip  /  brew install unzip  (or use --via-go)"
+require mktemp "coreutils package"
+require uname  "coreutils package"
+require chmod  "coreutils package"
+require mv     "coreutils package"
+
+if command -v sha256sum >/dev/null 2>&1; then
+    SHA256_CMD="sha256sum"
+elif command -v shasum >/dev/null 2>&1; then
+    SHA256_CMD="shasum -a 256"
+else
+    err "no sha256 tool found (need sha256sum or shasum)"
+fi
+
+if [ "$VIA_GO" -eq 1 ]; then
+    go_install_fallback "--via-go specified"
+fi
+
+# OS detection
+OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+case "$OS" in
+    linux|darwin) ;;
+    *) go_install_fallback "no prebuilt binary for OS '$OS'" ;;
+esac
+
+# Arch detection
+RAW_ARCH="$(uname -m)"
+case "$RAW_ARCH" in
+    x86_64|amd64)   ARCH=amd64 ;;
+    aarch64|arm64)  ARCH=arm64 ;;
+    *) go_install_fallback "no prebuilt binary for arch '$RAW_ARCH'" ;;
+esac
+
+# Validate against the platforms baked into the template at build time
+SUPPORTED=0
+for p in $SUPPORTED_PLATFORMS; do
+    if [ "$p" = "${OS}-${ARCH}" ]; then
+        SUPPORTED=1
+        break
+    fi
+done
+if [ "$SUPPORTED" -ne 1 ]; then
+    go_install_fallback "no prebuilt binary for ${OS}-${ARCH}"
+fi
+
+# Resolve target version + download URL
+if [ "$VERSION" = "latest" ]; then
+    RESOLVED="$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
+        "https://github.com/${OWNER}/${REPO}/releases/latest" 2>/dev/null || true)"
+    if [ -n "$RESOLVED" ]; then
+        TAG="${RESOLVED##*/}"
+        info "latest version resolved to ${TAG}"
+    else
+        warn "could not resolve latest tag; using /releases/latest/download/ URL anyway"
+        TAG="latest"
+    fi
+    DL_PREFIX="https://github.com/${OWNER}/${REPO}/releases/latest/download"
+else
+    TAG="$VERSION"
+    DL_PREFIX="https://github.com/${OWNER}/${REPO}/releases/download/${VERSION}"
+fi
+
+# Detect existing install
+if [ -x "${INSTALL_DIR}/${BINARY}" ]; then
+    EXISTING_RAW="$("${INSTALL_DIR}/${BINARY}" version 2>/dev/null || true)"
+    EXISTING="$(printf '%s' "$EXISTING_RAW" | tr -d '[:space:]')"
+    if [ -n "$EXISTING" ]; then
+        EXISTING_NORM="v${EXISTING#v}"
+        if [ "$TAG" != "latest" ] && [ "$EXISTING_NORM" = "$TAG" ]; then
+            info "${BINARY} ${EXISTING_NORM} is already installed at ${INSTALL_DIR}/${BINARY}"
+            exit 0
+        fi
+        info "updating ${BINARY} ${EXISTING_NORM} -> ${TAG}"
+    fi
+fi
+
+# Download zip + checksums into a temp dir
+TMPDIR="$(mktemp -d 2>/dev/null || mktemp -d -t locksmith)"
+cleanup() { rm -rf "$TMPDIR"; }
+trap cleanup EXIT INT TERM
+
+ZIP_NAME="${BINARY}-${OS}-${ARCH}.zip"
+ZIP_URL="${DL_PREFIX}/${ZIP_NAME}"
+CHECKSUMS_URL="${DL_PREFIX}/checksums.txt"
+
+info "downloading ${ZIP_URL}"
+if ! curl -fsSL -o "${TMPDIR}/${ZIP_NAME}" "$ZIP_URL"; then
+    go_install_fallback "download failed for ${ZIP_URL}"
+fi
+
+info "downloading checksums"
+if ! curl -fsSL -o "${TMPDIR}/checksums.txt" "$CHECKSUMS_URL"; then
+    err "checksums download failed: ${CHECKSUMS_URL}"
+fi
+
+# Verify sha256
+EXPECTED="$(awk -v zip="${ZIP_NAME}" '$2==zip || $2=="*"zip {print $1; exit}' "${TMPDIR}/checksums.txt")"
+[ -n "$EXPECTED" ] || err "no checksum for ${ZIP_NAME} in checksums.txt"
+
+ACTUAL="$($SHA256_CMD "${TMPDIR}/${ZIP_NAME}" | awk '{print $1}')"
+[ "$ACTUAL" = "$EXPECTED" ] || err "sha256 mismatch: expected ${EXPECTED}, got ${ACTUAL}"
+
+# Extract and install
+unzip -q -o "${TMPDIR}/${ZIP_NAME}" -d "${TMPDIR}"
+[ -f "${TMPDIR}/${BINARY}" ] || err "binary '${BINARY}' not found in archive"
+chmod +x "${TMPDIR}/${BINARY}"
+mkdir -p "$INSTALL_DIR"
+mv "${TMPDIR}/${BINARY}" "${INSTALL_DIR}/${BINARY}"
+
+# PATH hint
+case ":${PATH:-}:" in
+    *":${INSTALL_DIR}:"*) ;;
+    *)
+        info ""
+        info "${INSTALL_DIR} is not in your PATH. Add this line to your shell config (~/.zshrc, ~/.bashrc):"
+        info ""
+        info "    export PATH=\"${INSTALL_DIR}:\$PATH\""
+        info ""
+        ;;
+esac
+
+# Plugins / pinentry refresh
+if [ "$NO_PLUGINS_UPDATE" != "1" ]; then
+    info "refreshing bundled plugins and pinentry"
+    PLUGINS_LOG="$(mktemp)"
+    if "${INSTALL_DIR}/${BINARY}" plugins update --force >"$PLUGINS_LOG" 2>&1; then
+        :
+    else
+        if grep -q -i "config" "$PLUGINS_LOG"; then
+            info "config not yet initialized; run '${BINARY} init' to set up plugins"
+        else
+            warn "plugins update failed (non-fatal):"
+            cat "$PLUGINS_LOG" >&2 || true
+        fi
+    fi
+    rm -f "$PLUGINS_LOG"
+fi
+
+info ""
+info "Installed ${BINARY} ${TAG} to ${INSTALL_DIR}/${BINARY}"

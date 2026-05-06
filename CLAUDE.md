@@ -32,6 +32,10 @@ When conversing with the user, always respond in the user's language.
 - `.worktrees/` - git worktrees (gitignored, default worktree location)
 
 ## Superpowers Conventions
+- **Plans and specs MUST be saved under `docs/superpowers/`. Never save them
+  under `.claude/`, the user's home directory, `/tmp`, or anywhere else.**
+  This applies to every agent and skill that writes superpowers artefacts,
+  regardless of any built-in default the agent may have.
 - Plans: save to `docs/superpowers/plans/YYYY-MM-DD-<feature>.md`
 - Specs: save to `docs/superpowers/specs/YYYY-MM-DD-<feature>-design.md`
 - Both directories are gitignored and MUST NOT be committed to git.

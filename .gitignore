@@ -3,6 +3,8 @@ bin/
 docs/superpowers/
 .worktrees/
 .reports/
+# Release artifact staging directory (rendered install.sh, zips, checksums).
+dist/
 *.sock
 TODO.md
 # Track local skills but nothing else under .claude/

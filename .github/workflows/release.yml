@@ -1,0 +1,210 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: false
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum', 'go.work', 'go.work.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Initialize tools and protobuf
+        run: make init
+
+      - name: Verify version
+        run: make check-version
+
+      - name: Lint
+        run: make lint
+
+      - name: Race tests
+        run: make test-race
+
+  build:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            goos: linux
+            goarch: amd64
+          - runner: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+          - runner: macos-13
+            goos: darwin
+            goarch: amd64
+          - runner: macos-14
+            goos: darwin
+            goarch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: false
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum', 'go.work', 'go.work.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Initialize tools and protobuf
+        run: make init
+
+      - name: Build release binary
+        run: make build-release
+
+      - name: Package zip
+        run: |
+          mkdir -p dist
+          cd bin && zip -j "../dist/locksmith-${{ matrix.goos }}-${{ matrix.goarch }}.zip" locksmith
+
+      - name: Upload zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: zip-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/locksmith-${{ matrix.goos }}-${{ matrix.goarch }}.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  package:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: false
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum', 'go.work', 'go.work.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install shellcheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Render install script
+        run: make install-script
+
+      - name: Shellcheck install script
+        run: shellcheck -S error dist/install.sh
+
+      - name: Extract release notes
+        run: make extract-changelog VERSION=${GITHUB_REF_NAME}
+
+      - name: Upload install.sh
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-sh
+          path: dist/install.sh
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload release notes
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: dist/release-notes.md
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: [build, package]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Stage release files
+        run: |
+          mkdir -p dist
+          cp artifacts/zip-*/*.zip dist/
+          cp artifacts/install-sh/install.sh dist/
+          cp artifacts/release-notes/release-notes.md dist/
+
+      - name: Generate checksums
+        working-directory: dist
+        run: |
+          sha256sum *.zip install.sh > checksums.txt
+          cat checksums.txt
+
+      - name: Import GPG release key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.LOCKSMITH_RELEASE_GPG_KEY }}
+        run: |
+          if [ -z "$GPG_PRIVATE_KEY" ]; then
+            echo "::error::LOCKSMITH_RELEASE_GPG_KEY secret is not set. See CONTRIBUTING.md 'Release signing setup'."
+            exit 1
+          fi
+          mkdir -p ~/.gnupg
+          chmod 700 ~/.gnupg
+          echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
+          printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
+
+      - name: Sign checksums
+        env:
+          GPG_PASSPHRASE: ${{ secrets.LOCKSMITH_RELEASE_GPG_PASSPHRASE }}
+        working-directory: dist
+        run: |
+          gpg --batch --yes --pinentry-mode loopback \
+              --passphrase "$GPG_PASSPHRASE" \
+              --detach-sign --armor \
+              --output checksums.txt.asc \
+              checksums.txt
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file dist/release-notes.md \
+            dist/locksmith-*.zip \
+            dist/install.sh \
+            dist/checksums.txt \
+            dist/checksums.txt.asc
