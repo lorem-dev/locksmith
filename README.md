@@ -4,8 +4,6 @@ Secure middleware that gives AI agents access to secrets stored in vault provide
 (macOS Keychain, gopass), with per-session caching and
 vault-delegated authorization (Touch ID, GPG passphrase).
 
-**Repository:** https://github.com/lorem-dev/locksmith
-
 ## Installation
 
 ```sh
@@ -15,7 +13,7 @@ curl -fsSL https://github.com/lorem-dev/locksmith/releases/latest/download/insta
 Pin a specific version:
 
 ```sh
-LOCKSMITH_VERSION=v0.2.0 curl -fsSL https://github.com/lorem-dev/locksmith/releases/download/v0.2.0/install.sh | sh
+LOCKSMITH_VERSION=v0.2.0 curl -fsSL https://github.com/lorem-dev/locksmith/releases/latest/download/install.sh | sh
 ```
 
 Custom install dir (default `~/.local/bin`):
@@ -35,27 +33,103 @@ happens on first `locksmith init`; see [PLUGINS.md](PLUGINS.md).
 ## Quick Start
 
 ```bash
-# Print the installed version (embedded from sdk/version/VERSION)
-locksmith version
-
-# 1. Initialize (interactive TUI)
 locksmith init
-
-# 2. Start the daemon
-locksmith serve &
-
-# 3. Retrieve a secret - a session starts automatically on first use
-locksmith get --key my-api-key
-
-# Optional: start a session explicitly to reuse it across calls
-# (avoids repeated vault authorization for the same task)
-export LOCKSMITH_SESSION=$(locksmith session start | jq -r .session_id)
-# Sessions expire automatically by TTL - no need to end them manually
 ```
 
-The version is read from `sdk/version/VERSION` and embedded into the
-binary at build time via `//go:embed`. See [CONTRIBUTING.md](CONTRIBUTING.md#version-bumps)
-for the release process.
+`locksmith init` is an interactive wizard: it detects your available vaults
+(Keychain, gopass), writes a starter config, and installs hooks for the AI
+agents you use (Claude Code, Cursor, Copilot, Codex, Gemini CLI) so they get
+a `LOCKSMITH_SESSION` automatically. The daemon is started by the installed
+shell hook on the next shell session.
+
+## Configuration
+
+After `init`, your config lives at `~/.config/locksmith/config.yaml`. A
+minimal example with two vaults (gopass for work, macOS Keychain for
+personal) and three named keys:
+
+```yaml
+defaults:
+  session_ttl: 3h
+
+vaults:
+  work:
+    type: gopass
+    store: work-secrets
+  personal:
+    type: keychain
+    service: locksmith    # macOS only; Keychain service name
+
+keys:
+  github-token:
+    vault: work
+    path: github/personal-access-token
+  openai-key:
+    vault: work
+    path: ai/openai-api-key
+  slack-webhook:
+    vault: personal
+    path: slack-incoming-webhook
+```
+
+Retrieve a secret by alias:
+
+```bash
+locksmith get --key github-token
+```
+
+Reload after editing the file (the daemon also auto-detects changes within
+~1 second):
+
+```bash
+locksmith reload
+```
+
+See the [Configuration Reference](docs/configuration.md) for all fields,
+vault types, defaults, logging, and security notes.
+
+## MCP Integration
+
+Inject secrets into MCP servers at startup. The example below shows the
+three common forms in one listing:
+
+- `github` - local MCP server, secret injected via env var by alias from
+  `config.yaml`.
+- `my-api` - remote MCP server, secret injected into an Authorization
+  header.
+- `ad-hoc` - direct vault path with `--vault`/`--path`, no alias in
+  `config.yaml` required.
+
+```json
+{
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "$(locksmith get --key github-token)"
+      }
+    },
+    "my-api": {
+      "url": "https://api.example.com",
+      "headers": {
+        "Authorization": "Bearer $(locksmith get --key openai-key)"
+      }
+    },
+    "ad-hoc": {
+      "command": "my-mcp-tool",
+      "env": {
+        "API_KEY": "$(locksmith get --vault work --path some/secret/path)"
+      }
+    }
+  }
+}
+```
+
+The shell hook installed by `locksmith init` exports `LOCKSMITH_SESSION`
+before the agent starts, so `locksmith get` resolves without an extra prompt.
+For client-specific notes (Claude Code, Cursor, Copilot, Codex, Gemini CLI),
+see [Agent Integration](docs/agent-integration.md).
 
 ## Agent Usage
 
@@ -86,41 +160,6 @@ LOCKSMITH_SESSION=$LOCKSMITH_SESSION some-subagent-tool
 
 Session delegation to sub-agents is controlled by `agent.pass_session_to_subagents`
 in `~/.config/locksmith/config.yaml` (default: `true`).
-
-## MCP Integration
-
-In your MCP server config:
-
-```json
-{
-  "mcpServers": {
-    "my-server": {
-      "url": "https://api.example.com",
-      "headers": {
-        "Authorization": "Bearer $(locksmith get --key my-api-key)"
-      }
-    }
-  }
-}
-```
-
-### Reloading configuration
-
-Apply config changes (new vaults, keys, defaults) without restarting the daemon:
-
-```bash
-# Via CLI command
-locksmith reload
-
-# Via UNIX signal
-kill -HUP $(pgrep locksmith)
-```
-
-The daemon also watches `~/.config/locksmith/config.yaml` automatically and reloads
-within one second of a detected change - no manual action needed.
-
-Active sessions and their secret caches are preserved across reloads. If the new
-config file is invalid, the daemon keeps the previous configuration and logs an error.
 
 ## Supported Vaults
 
