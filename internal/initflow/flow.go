@@ -86,6 +86,12 @@ type InitResult struct {
 	ClaudeHookAlreadyPresent bool            // hook was already in settings.json; install skipped
 }
 
+var fmtTitle = color.New(color.Bold)
+var fmtPaths = color.New(color.FgBlue)
+var fmtErrors = color.New(color.FgRed)
+var fmtLists = color.New(color.FgCyan)
+var fmtBooleans = color.New(color.FgMagenta)
+
 // RunInit runs the interactive setup wizard. In --auto mode all prompts are
 // skipped and detected defaults are applied. In --no-tui mode huh's accessible
 // mode is used (plain text prompts), which also activates automatically when
@@ -416,7 +422,7 @@ func applyInit(result *InitResult, homeDir string, prompter Prompter, auto bool)
 // writeConfigFile writes the YAML config or skips if it pre-existed.
 func writeConfigFile(result *InitResult, homeDir string) error {
 	if result.ConfigPreexisted {
-		fmt.Printf("  config kept at %s\n", result.ConfigPath)
+		fmt.Printf("  config kept at %s\n", fmtPaths.Sprint(result.ConfigPath))
 		return nil
 	}
 
@@ -481,7 +487,7 @@ func applyClaudeHook(result *InitResult, homeDir string) error {
 	)
 	switch {
 	case result.ClaudeHookAlreadyPresent:
-		fmt.Println("  Claude Code: hook already present in ~/.claude/settings.json")
+		fmt.Printf("  Claude Code: hook already present in %s\n", fmtPaths.Sprint("~/.claude/settings.json"))
 	case result.ClaudeHookConfirmed:
 		if err := installer.Install(); err != nil {
 			return fmt.Errorf("installing Claude Code hook: %w", err)
@@ -506,13 +512,13 @@ func applyClaudeHook(result *InitResult, homeDir string) error {
 func applyShellHook(result *InitResult) {
 	switch {
 	case result.ShellHookAlreadyPresent:
-		fmt.Printf("  shell hook already installed (%s)\n", result.ShellHookRCFile)
+		fmt.Printf("  shell hook already installed (%s)\n", fmtPaths.Sprint(result.ShellHookRCFile))
 	case result.ShellHookInstall:
 		if err := shellhook.Install(result.ShellHookRCFile, result.ShellHookShell); err != nil {
-			fmt.Printf("  warning: could not write to %s: %v\n", result.ShellHookRCFile, err)
+			fmt.Printf("  warning: could not write to %s: %v\n", fmtPaths.Sprint(result.ShellHookRCFile), err)
 			printShellFallback(result.ShellHookShell, result.ShellHookRCFile)
 		} else {
-			fmt.Printf("  shell hook added to %s\n", result.ShellHookRCFile)
+			fmt.Printf("  shell hook added to %s\n", fmtPaths.Sprint(result.ShellHookRCFile))
 		}
 	default:
 		printShellFallback(result.ShellHookShell, result.ShellHookRCFile)
@@ -685,18 +691,12 @@ func (p *huhPrompter) Summary(result *InitResult) (bool, error) {
 		agentNames[i] = a.Name
 	}
 
-	titles := color.New(color.Bold)
+	fmtTitle.Printf("-- Summary --\n")
 
-	titles.Printf("-- Summary --\n")
-
-	paths := color.New(color.FgBlue)
-	lists := color.New(color.FgCyan)
-	booleans := color.New(color.FgMagenta)
-
-	fmt.Printf("%s:  %s\n", titles.Sprint("Config"), paths.Sprint(result.ConfigPath))
-	fmt.Printf("%s:  %s\n", titles.Sprint("Vaults"), lists.Sprint(result.SelectedVaults))
-	fmt.Printf("%s:  %s\n", titles.Sprint("Agents"), lists.Sprint(agentNames))
-	fmt.Printf("%s: %s\n", titles.Sprint("Sandbox"), booleans.Sprint(result.SandboxEnabled))
+	fmt.Printf("%s %s\n", fmtTitle.Sprint("Config: "), fmtPaths.Sprint(result.ConfigPath))
+	fmt.Printf("%s %s\n", fmtTitle.Sprint("Vaults: "), fmtLists.Sprint(result.SelectedVaults))
+	fmt.Printf("%s %s\n", fmtTitle.Sprint("Agents: "), fmtLists.Sprint(agentNames))
+	fmt.Printf("%s %s\n", fmtTitle.Sprint("Sandbox:  "), fmtBooleans.Sprint(result.SandboxEnabled))
 
 	var confirmed bool
 	form := p.formWith(huh.NewForm(huh.NewGroup(
@@ -717,7 +717,7 @@ func (p *huhPrompter) ExistingConfig(path string, validErr error) (ExistingConfi
 	if validErr == nil {
 		desc = "The existing config is valid."
 	} else {
-		desc = fmt.Sprintf("The existing config is invalid: %v", validErr)
+		desc = fmt.Sprintf("The existing config is invalid: %v", fmtErrors.Sprint(validErr))
 		continueLabel = "Continue with invalid config (not recommended)"
 	}
 	var selected ExistingConfigAction
@@ -865,7 +865,7 @@ func isTerminal() bool {
 func printShellFallback(s shellhook.Shell, rcFile string) {
 	snippet := shellhook.Snippet(s)
 	if rcFile != "" {
-		fmt.Printf("\nTo start the daemon automatically, add to %s:\n\n  %s\n\n", rcFile, snippet)
+		fmt.Printf("\nTo start the daemon automatically, add to %s:\n\n  %s\n\n", fmtPaths.Sprint(rcFile), snippet)
 	} else {
 		fmt.Printf("\nTo start the daemon automatically, add to your shell config:\n\n  %s\n\n", snippet)
 	}
