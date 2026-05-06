@@ -86,11 +86,13 @@ type InitResult struct {
 	ClaudeHookAlreadyPresent bool            // hook was already in settings.json; install skipped
 }
 
-var fmtTitle = color.New(color.Bold)
-var fmtPaths = color.New(color.FgBlue)
-var fmtErrors = color.New(color.FgRed)
-var fmtLists = color.New(color.FgCyan)
-var fmtBooleans = color.New(color.FgMagenta)
+var (
+	fmtTitle    = color.New(color.Bold)
+	fmtPaths    = color.New(color.FgBlue)
+	fmtErrors   = color.New(color.FgRed)
+	fmtLists    = color.New(color.FgCyan)
+	fmtBooleans = color.New(color.FgMagenta)
+)
 
 // RunInit runs the interactive setup wizard. In --auto mode all prompts are
 // skipped and detected defaults are applied. In --no-tui mode huh's accessible
@@ -691,7 +693,7 @@ func (p *huhPrompter) Summary(result *InitResult) (bool, error) {
 		agentNames[i] = a.Name
 	}
 
-	fmtTitle.Printf("-- Summary --\n")
+	fmt.Println(fmtTitle.Sprint("-- Summary --"))
 
 	fmt.Printf("%s %s\n", fmtTitle.Sprint("Config: "), fmtPaths.Sprint(result.ConfigPath))
 	fmt.Printf("%s %s\n", fmtTitle.Sprint("Vaults: "), fmtLists.Sprint(result.SelectedVaults))
@@ -762,7 +764,8 @@ func (p *huhPrompter) GPGPinentry(existingPinentry string) (bool, error) {
 				"  The existing line will be commented out and replaced.\n"+
 				"  You can restore it manually at any time.\n\n"+
 				"Configure locksmith-pinentry?",
-			existingPinentry)
+			existingPinentry,
+		)
 	}
 	var confirmed bool
 	form := p.formWith(huh.NewForm(huh.NewGroup(
