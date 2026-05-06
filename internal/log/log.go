@@ -14,6 +14,13 @@ import (
 
 var globalLogger atomic.Pointer[zerolog.Logger]
 
+func init() {
+	// Provide a safe default so callers that run before Init() (e.g. locksmith
+	// init) do not crash with a nil-pointer dereference on the zerolog Logger.
+	l := zerolog.New(os.Stderr).Level(zerolog.InfoLevel).With().Timestamp().Logger()
+	globalLogger.Store(&l)
+}
+
 // Init configures the global logger. Must be called before any logging.
 // w is the destination writer (from sdk.NewLogWriter); nil defaults to os.Stdout.
 func Init(w io.Writer, level, format string) {
