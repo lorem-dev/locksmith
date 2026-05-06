@@ -120,3 +120,19 @@
   integration test for the full session lifecycle.
 
 - Documentation: README, architecture, configuration, plugins guide.
+
+- Added GitHub Actions CI/CD: `.github/workflows/ci.yml` runs lint,
+  race tests, and coverage on linux + darwin for every push and PR;
+  `.github/workflows/release.yml` cross-builds for linux/amd64,
+  linux/arm64, darwin/amd64, darwin/arm64 on tag push and publishes a
+  GitHub release with per-platform zip archives, SHA-256 checksums, a
+  GPG-signed `checksums.txt.asc`, and a generated POSIX `install.sh`.
+  The install script is rendered from
+  `.scripts/install-template/install.sh.tmpl` via
+  `.scripts/render-install`. New `make build-release`,
+  `make install-script`, and `make extract-changelog` targets. README
+  install section now leads with `curl ... | sh`; long-form install
+  instructions moved to `docs/install.md`; release procedure
+  documented in `docs/release.md`; release-signing setup, plugin
+  versioning/compatibility policy, and CHANGES.md / BREAKING-change
+  rules documented in `CONTRIBUTING.md`.
