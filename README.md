@@ -8,22 +8,29 @@ vault-delegated authorization (Touch ID, GPG passphrase).
 
 ## Installation
 
-```bash
-go install github.com/lorem-dev/locksmith/cmd/locksmith@latest
+```sh
+curl -fsSL https://github.com/lorem-dev/locksmith/releases/latest/download/install.sh | sh
 ```
 
-Or build from source:
+Pin a specific version:
 
-```bash
-git clone https://github.com/lorem-dev/locksmith
-cd locksmith
-make init        # install tools and generate protobuf code (required after clone)
-make build-all
+```sh
+LOCKSMITH_VERSION=v0.2.0 curl -fsSL https://github.com/lorem-dev/locksmith/releases/download/v0.2.0/install.sh | sh
 ```
 
-After install, `locksmith init` extracts the default vault plugins and
-`locksmith-pinentry` from the embedded bundle into `~/.config/locksmith/`.
-See [PLUGINS.md](PLUGINS.md).
+Custom install dir (default `~/.local/bin`):
+
+```sh
+LOCKSMITH_INSTALL_DIR=/usr/local/bin curl -fsSL https://github.com/lorem-dev/locksmith/releases/latest/download/install.sh | sudo sh
+```
+
+Re-running the same command updates an existing install in place and
+refreshes bundled plugins / `locksmith-pinentry`. Supported platforms:
+linux/amd64, linux/arm64, darwin/amd64, darwin/arm64. See
+[docs/install.md](docs/install.md) for manual download, GPG signature
+verification, build-from-source, the `go install` fallback, and the
+full list of install-script flags. Plugin and pinentry extraction
+happens on first `locksmith init`; see [PLUGINS.md](PLUGINS.md).
 
 ## Quick Start
 
