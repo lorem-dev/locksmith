@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/charmbracelet/huh"
+	"github.com/fatih/color"
 	"gopkg.in/yaml.v3"
 
 	"github.com/lorem-dev/locksmith/internal/bundled"
@@ -367,7 +368,7 @@ func ExtractBundled(selectedVaults []string, prompter Prompter, auto bool) error
 			}
 		},
 		OnExtracted: func(name string) {
-			log.Info().Str("entry", name).Msg("extracted from bundle")
+			fmt.Printf("  Binary extracted from bundle: %s\n", name)
 		},
 	}); err != nil {
 		return fmt.Errorf("extracting bundled entries: %w", err)
@@ -584,7 +585,13 @@ func (p *huhPrompter) VaultSelection(vaults []DetectedVault) ([]string, error) {
 		}
 		options = append(options, huh.NewOption(label, v.Type))
 	}
+	// Pre-select all vaults that were detected and are available on this platform.
 	var selected []string
+	for _, v := range vaults {
+		if v.Detected && v.Available {
+			selected = append(selected, v.Type)
+		}
+	}
 	form := p.formWith(huh.NewForm(huh.NewGroup(
 		huh.NewMultiSelect[string]().
 			Title("Which vault backends do you use?").
@@ -677,8 +684,19 @@ func (p *huhPrompter) Summary(result *InitResult) (bool, error) {
 	for i, a := range result.SelectedAgents {
 		agentNames[i] = a.Name
 	}
-	fmt.Printf("\n-- Summary --\nConfig:  %s\nVaults:  %v\nAgents:  %v\nSandbox: %v\n",
-		result.ConfigPath, result.SelectedVaults, agentNames, result.SandboxEnabled)
+
+	titles := color.New(color.Bold)
+
+	titles.Printf("-- Summary --\n")
+
+	paths := color.New(color.FgBlue)
+	lists := color.New(color.FgCyan)
+	booleans := color.New(color.FgMagenta)
+
+	fmt.Printf("%s:  %s\n", titles.Sprint("Config"), paths.Sprint(result.ConfigPath))
+	fmt.Printf("%s:  %s\n", titles.Sprint("Vaults"), lists.Sprint(result.SelectedVaults))
+	fmt.Printf("%s:  %s\n", titles.Sprint("Agents"), lists.Sprint(agentNames))
+	fmt.Printf("%s: %s\n", titles.Sprint("Sandbox"), booleans.Sprint(result.SandboxEnabled))
 
 	var confirmed bool
 	form := p.formWith(huh.NewForm(huh.NewGroup(
