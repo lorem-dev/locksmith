@@ -72,8 +72,8 @@ func TestHuhPrompter_ConfigLocation_CustomPath(t *testing.T) {
 }
 
 func TestHuhPrompter_VaultSelection_SelectOne(t *testing.T) {
-	// MultiSelect: pick option 1, then 0 to confirm.
-	p := newHuhWithInput("1\n0\n")
+	// gopass is detected and available, so it is pre-selected; enter 0 to confirm.
+	p := newHuhWithInput("0\n")
 	vaults := []initflow.DetectedVault{
 		{Type: "gopass", Available: true, Detected: true},
 		{Type: "keychain", Available: true, Detected: false},
