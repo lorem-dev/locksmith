@@ -98,6 +98,23 @@ extract-changelog:
 	go run ./.scripts/extract-changelog -version "$(VERSION)" -o dist/release-notes.md
 	@echo "wrote dist/release-notes.md"
 
+# Render the POSIX install script from its template into dist/install.sh.
+# Used by the release workflow to publish install.sh as a GitHub-release
+# asset.
+install-script:
+	@mkdir -p dist
+	go run ./.scripts/render-install -o dist/install.sh
+	@echo "rendered dist/install.sh"
+
+# Build the release-flavoured locksmith binary (production flags:
+# -trimpath, -ldflags="-s -w") with the per-platform plugin/pinentry
+# bundle embedded. Depends on build-all-plugins (which produces the
+# bin/ inputs build-bundle reads) and build-bundle (which writes the
+# embedded zip). Pinentry is NOT rebuilt with -trimpath here - the
+# bundle already carries the copy locksmith.init extracts.
+build-release: build-all-plugins build-bundle
+	go build -trimpath -ldflags="-s -w" -o bin/locksmith ./cmd/locksmith
+
 # Regenerate protobuf Go code and verify linting.
 # Installs pinned tool versions into GOPATH/bin on each run (no-op if already at correct version).
 proto: install-tools
