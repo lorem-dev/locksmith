@@ -9,6 +9,11 @@
   `os.Remove` deterministically fails on both platforms before the
   listen step.
 
+- Keychain plugin: `provider_test.go` referenced Darwin-only symbols
+  (`keychainGetPasswordFunc`, `keychainError`, `parseKeychainPath`)
+  without a build tag, breaking compilation on Linux. Added
+  `//go:build darwin` to match the production `provider_darwin.go`.
+
 - Release tooling: canonical version moved to `sdk/version/VERSION`
   (with a `VERSION` symlink in the repo root) and embedded into
   `sdk/version.Current` via `//go:embed`; new `locksmith version`
