@@ -54,6 +54,46 @@ Write the chosen version to `sdk/version/VERSION` with a single
 trailing newline. The `VERSION` symlink in repo root resolves to this
 file automatically.
 
+### Step 5b - Sync README.md install pin
+
+The README's "Pin a specific version" example must match `VERSION`.
+The pin lives in the Installation section as:
+
+```
+LOCKSMITH_VERSION=vX.Y.Z curl -fsSL https://github.com/lorem-dev/locksmith/releases/download/vX.Y.Z/install.sh | sh
+```
+
+Both occurrences of `vX.Y.Z` on that line must equal the new version
+(with a leading `v`).
+
+1. Find the current pin:
+
+   ```bash
+   grep -nE 'LOCKSMITH_VERSION=v[0-9]+\.[0-9]+\.[0-9]+' README.md
+   ```
+
+2. If the version on that line already equals the new `vX.Y.Z`, do
+   nothing.
+
+3. Otherwise, replace BOTH occurrences on that line with the new
+   `vX.Y.Z`. Use the `Edit` tool with the full line as `old_string`
+   so only the install pin is touched. Other version mentions in the
+   README (e.g. "added in v0.1.0" notes) must NOT be rewritten.
+
+4. Verify:
+
+   ```bash
+   grep -nE 'v[0-9]+\.[0-9]+\.[0-9]+' README.md
+   ```
+
+   Every match on the `LOCKSMITH_VERSION=` line and the
+   `releases/download/` URL must show the new version. Historical
+   references in changelog snippets or "since" notes are unaffected.
+
+If a pre-existing drift is detected here (the previous release left
+the README out of sync), fix it during this bump - do NOT carry the
+drift forward.
+
 ### Step 6 - Compress the changelog
 
 Invoke the `changelog` skill via the `Skill` tool. It prompts for the
@@ -73,7 +113,7 @@ Print verbatim:
 
 ```
 Version bumped to vX.Y.Z. Review the diff, then:
-  git add sdk/version/VERSION CHANGES.md LICENSE
+  git add sdk/version/VERSION CHANGES.md LICENSE README.md
   git commit -S -m "release: vX.Y.Z"
   git tag -s vX.Y.Z -m "vX.Y.Z"
   git push --follow-tags
