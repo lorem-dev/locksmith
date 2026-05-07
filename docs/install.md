@@ -57,30 +57,25 @@ If you prefer to inspect everything yourself:
 ## Verifying release integrity
 
 Each release ships `checksums.txt` and a detached GPG signature
-`checksums.txt.asc`. Verify the signature once you have imported the
-release public key.
+`checksums.txt.asc`. The install script verifies the SHA-256 checksum
+automatically; the GPG step is opt-in and currently manual.
+
+The full step-by-step verification flow, the public-key fingerprint,
+and the rotation history live in
+[`verification.md`](verification.md). Quick summary:
 
 ```sh
-# 1. Import the public key (one-time).
 curl -fsSL https://raw.githubusercontent.com/lorem-dev/locksmith/main/.github/release-key.asc \
   | gpg --import
+gpg --list-keys --fingerprint contact@lorem.dev      # compare to verification.md
 
-# 2. Confirm the fingerprint matches the value committed to the repo
-#    at .github/release-key.asc and reproduced in CONTRIBUTING.md.
-gpg --list-keys --fingerprint contact@lorem.dev
-
-# 3. Verify the signature.
-curl -fsSLO https://github.com/lorem-dev/locksmith/releases/latest/download/checksums.txt
-curl -fsSLO https://github.com/lorem-dev/locksmith/releases/latest/download/checksums.txt.asc
+TAG=v0.1.0
+BASE="https://github.com/lorem-dev/locksmith/releases/download/${TAG}"
+curl -fsSLO "${BASE}/checksums.txt"
+curl -fsSLO "${BASE}/checksums.txt.asc"
 gpg --verify checksums.txt.asc checksums.txt
-
-# 4. Verify the zip you downloaded.
-sha256sum -c checksums.txt --ignore-missing   # or shasum -a 256 -c ... on macOS
+sha256sum -c checksums.txt --ignore-missing          # shasum -a 256 -c on macOS
 ```
-
-A green signature plus a green sha256 check is the same trust chain
-the install script relies on (the script does the sha256 step
-automatically; the GPG step is opt-in and currently manual).
 
 ## `go install` fallback
 

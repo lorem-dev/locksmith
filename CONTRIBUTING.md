@@ -195,6 +195,13 @@ compromise.
    git commit -S -m "chore(release): add release-signing public key"
    ```
 
+   Reproduce the fingerprint and expiry in
+   [`docs/verification.md`](docs/verification.md) so users have an
+   out-of-band reference. The current key is:
+
+   - Fingerprint: `CFE6 485E 2351 9A25 A475  B900 AD0F 7A29 E439 8670`
+   - Generated: 2026-05-07; expires 2031-05-06.
+
 4. Add the GitHub Actions secrets in
    `Settings -> Secrets and variables -> Actions`:
 
