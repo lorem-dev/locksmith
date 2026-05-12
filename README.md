@@ -72,6 +72,18 @@ keys:
   slack-webhook:
     vault: personal
     path: slack-incoming-webhook
+
+mcp:
+  servers:
+    github:
+      command: ["npx", "-y", "@modelcontextprotocol/server-github"]
+      env:
+        GITHUB_TOKEN: github-token        # alias from keys:
+    my-api:
+      url: https://api.example.com
+      transport: auto                     # sse | http | auto (default: auto)
+      headers:
+        Authorization: "Bearer {key:openai-key}"
 ```
 
 Retrieve a secret by alias:
