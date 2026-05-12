@@ -32,6 +32,7 @@ func NewRootCmd() *cobra.Command {
 		newReloadCmd(),
 		newPluginsCmd(),
 		newVersionCmd(),
+		newMCPCmd(),
 	)
 	return root
 }
