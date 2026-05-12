@@ -19,7 +19,7 @@ type StreamableHTTP struct {
 }
 
 func (t *StreamableHTTP) Connect(ctx context.Context) (<-chan []byte, error) {
-	t.msgCh = make(chan []byte, 64)
+	t.msgCh = make(chan []byte, msgChanBuf)
 	getCtx, cancel := context.WithCancel(ctx)
 	t.cancel = cancel
 	go t.runGetStream(getCtx)
@@ -69,7 +69,7 @@ func (t *StreamableHTTP) Send(ctx context.Context, msg []byte) error {
 		return fmt.Errorf("sending message: %w", err)
 	}
 	defer resp.Body.Close() //nolint:errcheck
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode >= http.StatusBadRequest {
 		return &httpStatusError{StatusCode: resp.StatusCode, URL: t.baseURL}
 	}
 	ct := resp.Header.Get("Content-Type")
@@ -78,7 +78,7 @@ func (t *StreamableHTTP) Send(ctx context.Context, msg []byte) error {
 			select {
 			case t.msgCh <- []byte(event.Data):
 			case <-ctx.Done():
-				return ctx.Err()
+				return fmt.Errorf("forwarding SSE response: %w", ctx.Err())
 			}
 		}
 	} else {
@@ -90,7 +90,7 @@ func (t *StreamableHTTP) Send(ctx context.Context, msg []byte) error {
 			select {
 			case t.msgCh <- body:
 			case <-ctx.Done():
-				return ctx.Err()
+				return fmt.Errorf("forwarding JSON response: %w", ctx.Err())
 			}
 		}
 	}
@@ -117,7 +117,7 @@ type AutoTransport struct {
 }
 
 func (t *AutoTransport) Connect(ctx context.Context) (<-chan []byte, error) {
-	t.outCh = make(chan []byte, 64)
+	t.outCh = make(chan []byte, msgChanBuf)
 	fwdCtx, cancel := context.WithCancel(ctx)
 	t.cancel = cancel
 
@@ -125,7 +125,7 @@ func (t *AutoTransport) Connect(ctx context.Context) (<-chan []byte, error) {
 	innerCh, err := t.inner.Connect(fwdCtx)
 	if err != nil {
 		cancel()
-		return nil, err
+		return nil, fmt.Errorf("connecting Streamable HTTP transport: %w", err)
 	}
 	go t.forwardFrom(fwdCtx, innerCh)
 	return t.outCh, nil
@@ -155,18 +155,25 @@ func (t *AutoTransport) Send(ctx context.Context, msg []byte) error {
 		return nil
 	}
 	var httpErr *httpStatusError
-	if errors.As(err, &httpErr) && (httpErr.StatusCode == http.StatusNotFound || httpErr.StatusCode == http.StatusMethodNotAllowed) {
-		t.inner.Close() //nolint:errcheck
+	if errors.As(err, &httpErr) && isFallbackStatus(httpErr.StatusCode) {
+		t.inner.Close() //nolint:errcheck // fallback path; close error not actionable
 		sse := &SSETransport{baseURL: t.baseURL, headers: t.headers, client: t.client}
 		sseCh, connectErr := sse.Connect(ctx)
 		if connectErr != nil {
-			return connectErr
+			return fmt.Errorf("falling back to SSE transport: %w", connectErr)
 		}
 		t.inner = sse
 		go t.forwardFrom(ctx, sseCh)
-		return sse.Send(ctx, msg)
+		if sendErr := sse.Send(ctx, msg); sendErr != nil {
+			return fmt.Errorf("sending via SSE fallback: %w", sendErr)
+		}
+		return nil
 	}
-	return err
+	return fmt.Errorf("sending via Streamable HTTP: %w", err)
+}
+
+func isFallbackStatus(code int) bool {
+	return code == http.StatusNotFound || code == http.StatusMethodNotAllowed
 }
 
 func (t *AutoTransport) Close() error {
@@ -174,7 +181,9 @@ func (t *AutoTransport) Close() error {
 		t.cancel()
 	}
 	if t.inner != nil {
-		return t.inner.Close()
+		if err := t.inner.Close(); err != nil {
+			return fmt.Errorf("closing inner transport: %w", err)
+		}
 	}
 	return nil
 }

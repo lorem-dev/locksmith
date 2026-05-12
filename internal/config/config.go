@@ -112,7 +112,7 @@ func (v *MCPEnvValue) UnmarshalYAML(value *yaml.Node) error {
 		Path  string `yaml:"path"`
 	}
 	if err := value.Decode(&s); err != nil {
-		return err
+		return fmt.Errorf("decoding MCP env value: %w", err)
 	}
 	v.VaultName = s.Vault
 	v.Path = s.Path

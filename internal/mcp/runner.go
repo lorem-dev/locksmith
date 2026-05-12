@@ -33,5 +33,8 @@ func Run(ctx context.Context, fetcher SecretFetcher, envMappings []EnvMapping, c
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("running %s: %w", command[0], err)
+	}
+	return nil
 }

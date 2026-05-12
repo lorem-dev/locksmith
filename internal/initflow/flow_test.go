@@ -113,9 +113,6 @@ func TestRunInit_Auto_NoAgents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunInit() error: %v", err)
 	}
-	if result == nil {
-		t.Fatal("RunInit() returned nil result")
-	}
 	if _, err := os.Stat(result.ConfigPath); err != nil {
 		t.Errorf("config file not created at %s: %v", result.ConfigPath, err)
 	}

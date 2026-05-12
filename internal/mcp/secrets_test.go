@@ -22,8 +22,8 @@ func TestParseRef(t *testing.T) {
 		{"{vault:gopass path:work/api/key}", mcp.SecretRef{VaultName: "gopass", Path: "work/api/key"}, ""},
 		{"{vault:keychain path:org/id}", mcp.SecretRef{VaultName: "keychain", Path: "org/id"}, ""},
 		{"{key:}", mcp.SecretRef{}, "key alias cannot be empty"},
-		{"{vault:gopass}", mcp.SecretRef{}, "vault reference requires both vault: and path:"},
-		{"{path:foo}", mcp.SecretRef{}, "vault reference requires both vault: and path:"},
+		{"{vault:gopass}", mcp.SecretRef{}, "vault reference requires both 'vault' and 'path'"},
+		{"{path:foo}", mcp.SecretRef{}, "vault reference requires both 'vault' and 'path'"},
 		{"{unknown:x}", mcp.SecretRef{}, "unknown reference field"},
 		{"{unclosed", mcp.SecretRef{}, "unclosed {"},
 	}

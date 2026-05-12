@@ -10,6 +10,13 @@ import (
 	"time"
 )
 
+const (
+	sseEventChanBuf  = 16
+	msgChanBuf       = 64
+	httpClientTimout = 30 * time.Second
+	sseEndpointWait  = 10 * time.Second
+)
+
 // Transport abstracts the HTTP transport for a remote MCP server.
 type Transport interface {
 	// Connect establishes the connection and returns a channel of server messages.
@@ -29,7 +36,7 @@ type SSEEvent struct {
 // parseSSE reads SSE events from r, sending each complete event to the returned channel.
 // The channel is closed when r is exhausted or returns an error.
 func parseSSE(r io.Reader) <-chan SSEEvent {
-	ch := make(chan SSEEvent, 16)
+	ch := make(chan SSEEvent, sseEventChanBuf)
 	go func() {
 		defer close(ch)
 		scanner := bufio.NewScanner(r)
@@ -93,7 +100,7 @@ func readBody(resp *http.Response) ([]byte, error) {
 // NewTransport creates the appropriate Transport for the given transport string.
 // transport must be "auto", "sse", or "http".
 func NewTransport(baseURL string, headers http.Header, transport string) (Transport, error) {
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := &http.Client{Timeout: httpClientTimout}
 	switch transport {
 	case "http":
 		return &StreamableHTTP{baseURL: baseURL, headers: headers, client: client}, nil

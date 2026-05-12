@@ -85,7 +85,7 @@ func parseInnerRef(inner string) (SecretRef, error) {
 		}
 	}
 	if ref.KeyAlias == "" && (ref.VaultName == "" || ref.Path == "") {
-		return SecretRef{}, fmt.Errorf("vault reference requires both vault: and path:")
+		return SecretRef{}, fmt.Errorf("vault reference requires both 'vault' and 'path' fields")
 	}
 	return ref, nil
 }

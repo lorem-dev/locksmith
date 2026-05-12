@@ -38,60 +38,7 @@ func newMCPRunCmd() *cobra.Command {
 		Use:   "run [-- command [args...]]",
 		Short: "Run or proxy an MCP server with secrets injected",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			hasURL := urlArg != ""
-			hasCommand := len(args) > 0
-			hasServer := serverName != ""
-			hasInlineFlags := len(envArgs) > 0 || len(headerArgs) > 0 || hasURL || hasCommand
-
-			if hasURL && hasCommand {
-				return fmt.Errorf("--url and -- are mutually exclusive: use --url for proxy mode or -- for local mode")
-			}
-			if hasServer && hasInlineFlags {
-				return fmt.Errorf("--server cannot be combined with --env, --header, --url, or a command")
-			}
-			if !hasURL && !hasCommand && !hasServer {
-				return fmt.Errorf("specify --url, --server, or a command after --")
-			}
-
-			if hasServer {
-				// no-op: skip parsing inline flags
-			} else {
-				if hasURL {
-					if _, err := parseHeaderArgs(headerArgs); err != nil {
-						return err
-					}
-				}
-				if hasCommand {
-					if _, err := parseEnvArgs(envArgs); err != nil {
-						return err
-					}
-				}
-			}
-
-			initCtx, initCancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer initCancel()
-
-			client, conn, err := dialDaemon()
-			if err != nil {
-				return err
-			}
-			defer conn.Close() //nolint:errcheck
-
-			sessionID, err := ensureMCPSession(initCtx, client)
-			if err != nil {
-				return err
-			}
-			fetcher := &mcp.GRPCFetcher{Client: client, SessionID: sessionID}
-
-			runCtx := context.Background()
-
-			if hasServer {
-				return runFromConfig(runCtx, fetcher, serverName)
-			}
-			if hasURL {
-				return runProxyMode(runCtx, fetcher, urlArg, headerArgs, transport)
-			}
-			return runLocalMode(runCtx, fetcher, envArgs, args)
+			return runMCPRun(serverName, envArgs, headerArgs, urlArg, transport, args)
 		},
 	}
 
@@ -102,6 +49,68 @@ func newMCPRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&transport, "transport", "auto", "HTTP transport: auto|sse|http")
 
 	return cmd
+}
+
+const mcpInitTimeout = 30 * time.Second
+
+func runMCPRun(serverName string, envArgs, headerArgs []string, urlArg, transport string, args []string) error {
+	hasURL := urlArg != ""
+	hasCommand := len(args) > 0
+	hasServer := serverName != ""
+
+	if err := validateMCPRunFlags(hasURL, hasCommand, hasServer, envArgs, headerArgs); err != nil {
+		return err
+	}
+	if !hasServer {
+		if hasURL {
+			if _, err := parseHeaderArgs(headerArgs); err != nil {
+				return err
+			}
+		}
+		if hasCommand {
+			if _, err := parseEnvArgs(envArgs); err != nil {
+				return err
+			}
+		}
+	}
+
+	initCtx, initCancel := context.WithTimeout(context.Background(), mcpInitTimeout)
+	defer initCancel()
+
+	client, conn, err := dialDaemon()
+	if err != nil {
+		return err
+	}
+	defer conn.Close() //nolint:errcheck // gRPC connection close error not actionable
+
+	sessionID, err := ensureMCPSession(initCtx, client)
+	if err != nil {
+		return err
+	}
+	fetcher := &mcp.GRPCFetcher{Client: client, SessionID: sessionID}
+
+	runCtx := context.Background()
+	if hasServer {
+		return runFromConfig(runCtx, fetcher, serverName)
+	}
+	if hasURL {
+		return runProxyMode(runCtx, fetcher, urlArg, headerArgs, transport)
+	}
+	return runLocalMode(runCtx, fetcher, envArgs, args)
+}
+
+func validateMCPRunFlags(hasURL, hasCommand, hasServer bool, envArgs, headerArgs []string) error {
+	hasInlineFlags := len(envArgs) > 0 || len(headerArgs) > 0 || hasURL || hasCommand
+	if hasURL && hasCommand {
+		return fmt.Errorf("--url and -- are mutually exclusive: use --url for proxy mode or -- for local mode")
+	}
+	if hasServer && hasInlineFlags {
+		return fmt.Errorf("--server cannot be combined with --env, --header, --url, or a command")
+	}
+	if !hasURL && !hasCommand && !hasServer {
+		return fmt.Errorf("specify --url, --server, or a command after --")
+	}
+	return nil
 }
 
 func ensureMCPSession(ctx context.Context, client locksmithv1.LocksmithServiceClient) (string, error) {
@@ -131,7 +140,13 @@ func runLocalMode(ctx context.Context, fetcher mcp.SecretFetcher, envArgs, comma
 	return mcp.Run(ctx, fetcher, mappings, command)
 }
 
-func runProxyMode(ctx context.Context, fetcher mcp.SecretFetcher, url string, headerArgs []string, transport string) error {
+func runProxyMode(
+	ctx context.Context,
+	fetcher mcp.SecretFetcher,
+	url string,
+	headerArgs []string,
+	transport string,
+) error {
 	headers, err := parseHeaderArgs(headerArgs)
 	if err != nil {
 		return err

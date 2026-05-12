@@ -31,7 +31,7 @@ func TestSSETransport_RoundTrip(t *testing.T) {
 	})
 	mux.HandleFunc("/messages", func(w http.ResponseWriter, r *http.Request) {
 		body := make([]byte, r.ContentLength)
-		r.Body.Read(body) //nolint:errcheck
+		_, _ = r.Body.Read(body)
 		received = body
 		w.WriteHeader(http.StatusAccepted)
 	})
@@ -40,8 +40,7 @@ func TestSSETransport_RoundTrip(t *testing.T) {
 
 	transport, err := mcp.NewTransport(srv.URL, nil, "sse")
 	require.NoError(t, err)
-	defer transport.Close() //nolint:errcheck
-
+	defer transport.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
@@ -79,8 +78,7 @@ func TestSSETransport_AuthHeader(t *testing.T) {
 	headers := http.Header{"Authorization": {"Bearer tok-123"}}
 	transport, err := mcp.NewTransport(srv.URL, headers, "sse")
 	require.NoError(t, err)
-	defer transport.Close() //nolint:errcheck
-
+	defer transport.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 

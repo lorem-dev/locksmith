@@ -22,7 +22,7 @@ type SSETransport struct {
 }
 
 func (t *SSETransport) Connect(ctx context.Context) (<-chan []byte, error) {
-	t.msgCh = make(chan []byte, 64)
+	t.msgCh = make(chan []byte, msgChanBuf)
 
 	sseURL := strings.TrimRight(t.baseURL, "/") + "/sse"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, sseURL, nil)
@@ -35,7 +35,7 @@ func (t *SSETransport) Connect(ctx context.Context) (<-chan []byte, error) {
 		req.Header[k] = vs
 	}
 
-	resp, err := t.client.Do(req)
+	resp, err := t.client.Do(req) //nolint:bodyclose // body is closed by the goroutine started below
 	if err != nil {
 		return nil, fmt.Errorf("connecting to %s: %w", sseURL, err)
 	}
@@ -45,7 +45,7 @@ func (t *SSETransport) Connect(ctx context.Context) (<-chan []byte, error) {
 	t.cancel = cancel
 
 	go func() {
-		defer resp.Body.Close()
+		defer resp.Body.Close() //nolint:errcheck // close in stream goroutine; error not actionable
 		defer close(t.msgCh)
 		endpointSent := false
 		for event := range parseSSE(resp.Body) {
@@ -76,12 +76,12 @@ func (t *SSETransport) Connect(ctx context.Context) (<-chan []byte, error) {
 		}
 		t.endpoint = base.ResolveReference(epURL).String()
 		return t.msgCh, nil
-	case <-time.After(10 * time.Second):
+	case <-time.After(sseEndpointWait):
 		cancel()
 		return nil, fmt.Errorf("timeout waiting for endpoint event from %s", sseURL)
 	case <-ctx.Done():
 		cancel()
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("context canceled before endpoint received: %w", ctx.Err())
 	}
 }
 

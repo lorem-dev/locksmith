@@ -40,7 +40,13 @@ func RunProxy(ctx context.Context, fetcher SecretFetcher, cfg ProxyConfig, in io
 // RunProxyWithTransport runs the proxy loop with a pre-built transport.
 // Exposed for testing with mock transports. The transport's message channel
 // must be closed when the server disconnects for runLoop to drain and return.
-func RunProxyWithTransport(ctx context.Context, cfg ProxyConfig, transport Transport, in io.Reader, out io.Writer) error {
+func RunProxyWithTransport(
+	ctx context.Context,
+	cfg ProxyConfig,
+	transport Transport,
+	in io.Reader,
+	out io.Writer,
+) error {
 	msgCh, err := transport.Connect(ctx)
 	if err != nil {
 		return fmt.Errorf("connecting to %s: %w", cfg.URL, err)
@@ -91,5 +97,8 @@ func runLoop(ctx context.Context, transport Transport, msgCh <-chan []byte, in i
 		}
 	}
 	wg.Wait()
-	return scanner.Err()
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("reading stdin: %w", err)
+	}
+	return nil
 }
