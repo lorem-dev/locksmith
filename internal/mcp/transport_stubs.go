@@ -5,20 +5,7 @@ import (
 	"net/http"
 )
 
-// Stubs - replaced by transport_sse.go (Task 6) and transport_http.go (Task 7).
-
-type SSETransport struct {
-	baseURL  string
-	headers  http.Header
-	client   *http.Client
-	endpoint string
-	msgCh    chan []byte
-	cancel   context.CancelFunc
-}
-
-func (t *SSETransport) Connect(_ context.Context) (<-chan []byte, error) { return nil, nil }
-func (t *SSETransport) Send(_ context.Context, _ []byte) error           { return nil }
-func (t *SSETransport) Close() error                                      { return nil }
+// Stubs - replaced by transport_http.go (Task 7).
 
 type StreamableHTTP struct {
 	baseURL string
