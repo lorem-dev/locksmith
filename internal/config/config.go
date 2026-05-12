@@ -17,6 +17,7 @@ type Config struct {
 	Agent    AgentConfig      `yaml:"agent"`
 	Vaults   map[string]Vault `yaml:"vaults"`
 	Keys     map[string]Key   `yaml:"keys"`
+	MCP      MCPConfig        `yaml:"mcp"`
 }
 
 // Defaults holds daemon-level defaults.
@@ -68,6 +69,54 @@ type Vault struct {
 type Key struct {
 	Vault string `yaml:"vault"`
 	Path  string `yaml:"path"`
+}
+
+// MCPConfig holds MCP server wrapper configurations.
+type MCPConfig struct {
+	Servers map[string]MCPServerConfig `yaml:"servers"`
+}
+
+// MCPServerConfig configures one MCP server entry.
+// Exactly one of Command or URL must be set.
+type MCPServerConfig struct {
+	// Local mode
+	Command []string               `yaml:"command,omitempty"`
+	Env     map[string]MCPEnvValue `yaml:"env,omitempty"`
+	// Proxy mode
+	URL       string            `yaml:"url,omitempty"`
+	Transport string            `yaml:"transport,omitempty"`
+	Headers   map[string]string `yaml:"headers,omitempty"`
+}
+
+// MCPEnvValue is the value of an env mapping: either a key alias string
+// or a vault+path struct. Custom YAML unmarshaling handles both forms.
+type MCPEnvValue struct {
+	KeyAlias  string // set when unmarshaled from a plain string
+	VaultName string // set when unmarshaled from vault: field
+	Path      string // set when unmarshaled from path: field
+}
+
+// UnmarshalYAML supports both string and struct forms:
+//
+//	GITHUB_TOKEN: my-key-alias
+//	API_KEY:
+//	  vault: gopass
+//	  path: work/api/key
+func (v *MCPEnvValue) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.ScalarNode {
+		v.KeyAlias = value.Value
+		return nil
+	}
+	var s struct {
+		Vault string `yaml:"vault"`
+		Path  string `yaml:"path"`
+	}
+	if err := value.Decode(&s); err != nil {
+		return err
+	}
+	v.VaultName = s.Vault
+	v.Path = s.Path
+	return nil
 }
 
 // Load reads and validates the config file at path.
@@ -122,6 +171,21 @@ func (c *Config) Validate() error {
 				name,
 				key.Path,
 			)
+		}
+	}
+
+	for name, server := range c.MCP.Servers {
+		if server.Command == nil && server.URL == "" {
+			return fmt.Errorf("mcp.servers.%s: must specify either command or url", name)
+		}
+		if server.Command != nil && server.URL != "" {
+			return fmt.Errorf("mcp.servers.%s: cannot specify both command and url", name)
+		}
+		if server.Transport != "" &&
+			server.Transport != "auto" &&
+			server.Transport != "sse" &&
+			server.Transport != "http" {
+			return fmt.Errorf("mcp.servers.%s: transport must be auto, sse, or http", name)
 		}
 	}
 

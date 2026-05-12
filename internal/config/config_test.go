@@ -254,3 +254,117 @@ vaults:
 		t.Error("Agent.PassSubagents() should be true when explicitly set")
 	}
 }
+
+func TestConfig_MCPSection(t *testing.T) {
+	yml := `
+vaults:
+  work:
+    type: gopass
+keys:
+  openai-key:
+    vault: work
+    path: ai/openai
+mcp:
+  servers:
+    github:
+      command: ["npx", "-y", "@github/mcp"]
+      env:
+        GITHUB_TOKEN: github-token
+    my-api:
+      url: https://api.example.com
+      transport: auto
+      headers:
+        Authorization: "Bearer {key:openai-key}"
+    ad-hoc:
+      command: ["my-tool"]
+      env:
+        API_KEY:
+          vault: gopass
+          path: work/api/key
+`
+	cfg, err := config.LoadFromBytes([]byte(yml))
+	if err != nil {
+		t.Fatalf("LoadFromBytes() error: %v", err)
+	}
+
+	github := cfg.MCP.Servers["github"]
+	wantCmd := []string{"npx", "-y", "@github/mcp"}
+	if len(github.Command) != len(wantCmd) {
+		t.Fatalf("github.Command = %v, want %v", github.Command, wantCmd)
+	}
+	for i, v := range wantCmd {
+		if github.Command[i] != v {
+			t.Errorf("github.Command[%d] = %q, want %q", i, github.Command[i], v)
+		}
+	}
+	wantEnv := config.MCPEnvValue{KeyAlias: "github-token"}
+	if github.Env["GITHUB_TOKEN"] != wantEnv {
+		t.Errorf("github.Env[GITHUB_TOKEN] = %+v, want %+v", github.Env["GITHUB_TOKEN"], wantEnv)
+	}
+
+	api := cfg.MCP.Servers["my-api"]
+	if api.URL != "https://api.example.com" {
+		t.Errorf("api.URL = %q, want %q", api.URL, "https://api.example.com")
+	}
+	if api.Transport != "auto" {
+		t.Errorf("api.Transport = %q, want %q", api.Transport, "auto")
+	}
+	if api.Headers["Authorization"] != "Bearer {key:openai-key}" {
+		t.Errorf("api.Headers[Authorization] = %q, want %q", api.Headers["Authorization"], "Bearer {key:openai-key}")
+	}
+
+	adhoc := cfg.MCP.Servers["ad-hoc"]
+	wantAdhocEnv := config.MCPEnvValue{VaultName: "gopass", Path: "work/api/key"}
+	if adhoc.Env["API_KEY"] != wantAdhocEnv {
+		t.Errorf("adhoc.Env[API_KEY] = %+v, want %+v", adhoc.Env["API_KEY"], wantAdhocEnv)
+	}
+}
+
+func TestConfig_MCP_Validation(t *testing.T) {
+	tests := []struct {
+		name    string
+		yml     string
+		wantErr string
+	}{
+		{
+			name: "command and url both set",
+			yml: `
+mcp:
+  servers:
+    bad:
+      command: ["npx"]
+      url: https://example.com`,
+			wantErr: "mcp.servers.bad: cannot specify both command and url",
+		},
+		{
+			name: "neither command nor url",
+			yml: `
+mcp:
+  servers:
+    bad:
+      transport: sse`,
+			wantErr: "mcp.servers.bad: must specify either command or url",
+		},
+		{
+			name: "invalid transport",
+			yml: `
+mcp:
+  servers:
+    bad:
+      url: https://example.com
+      transport: grpc`,
+			wantErr: "mcp.servers.bad: transport must be auto, sse, or http",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := config.LoadFromBytes([]byte(tc.yml))
+			if err == nil {
+				t.Fatalf("LoadFromBytes() expected error containing %q, got nil", tc.wantErr)
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("error = %q, want it to contain %q", err.Error(), tc.wantErr)
+			}
+		})
+	}
+}
