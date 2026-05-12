@@ -11,6 +11,7 @@ import (
 
 	locksmithv1 "github.com/lorem-dev/locksmith/gen/proto/locksmith/v1"
 	"github.com/lorem-dev/locksmith/internal/config"
+	"github.com/lorem-dev/locksmith/internal/log"
 	"github.com/lorem-dev/locksmith/internal/mcp"
 )
 
@@ -53,10 +54,43 @@ func newMCPRunCmd() *cobra.Command {
 
 const mcpInitTimeout = 30 * time.Second
 
+// initMCPLogging configures the global logger for `mcp run` so debug output
+// goes to STDERR. Stdout is reserved for MCP JSON-RPC traffic and must never
+// receive log lines. The log level is taken from logging.level in
+// ~/.config/locksmith/config.yaml; if the config is unreadable, level defaults
+// to info. logging.file is intentionally ignored here - a misconfigured file
+// path should never fall back to stdout.
+func initMCPLogging() {
+	level := "info"
+	format := "text"
+	if cfg, err := config.Load(config.DefaultConfigPath()); err == nil {
+		if cfg.Logging.Level != "" {
+			level = cfg.Logging.Level
+		}
+		if cfg.Logging.Format != "" {
+			format = cfg.Logging.Format
+		}
+	}
+	log.Init(os.Stderr, level, format)
+}
+
 func runMCPRun(serverName string, envArgs, headerArgs []string, urlArg, transport string, args []string) error {
+	initMCPLogging()
+
 	hasURL := urlArg != ""
 	hasCommand := len(args) > 0
 	hasServer := serverName != ""
+
+	log.Debug().
+		Bool("has_url", hasURL).
+		Bool("has_command", hasCommand).
+		Bool("has_server", hasServer).
+		Str("server", serverName).
+		Str("url", mcp.RedactURL(urlArg)).
+		Str("transport", transport).
+		Int("env_args", len(envArgs)).
+		Int("header_args", len(headerArgs)).
+		Msg("mcp run: invoked")
 
 	if err := validateMCPRunFlags(hasURL, hasCommand, hasServer, envArgs, headerArgs); err != nil {
 		return err
@@ -77,16 +111,21 @@ func runMCPRun(serverName string, envArgs, headerArgs []string, urlArg, transpor
 	initCtx, initCancel := context.WithTimeout(context.Background(), mcpInitTimeout)
 	defer initCancel()
 
+	log.Debug().Msg("mcp run: dialing daemon")
 	client, conn, err := dialDaemon()
 	if err != nil {
+		log.Debug().Err(err).Msg("mcp run: dial failed")
 		return err
 	}
 	defer conn.Close() //nolint:errcheck // gRPC connection close error not actionable
 
+	log.Debug().Msg("mcp run: ensuring session")
 	sessionID, err := ensureMCPSession(initCtx, client)
 	if err != nil {
+		log.Debug().Err(err).Msg("mcp run: session ensure failed")
 		return err
 	}
+	log.Debug().Msg("mcp run: session ready")
 	fetcher := &mcp.GRPCFetcher{Client: client, SessionID: sessionID}
 
 	runCtx := context.Background()

@@ -6,9 +6,21 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
+
+// RedactURL returns u with any embedded credentials masked.
+// Falls back to a generic placeholder when u is not a parseable URL,
+// so log lines never echo a token that lives in the userinfo segment.
+func RedactURL(u string) string {
+	parsed, err := url.Parse(u)
+	if err != nil {
+		return "<unparseable URL>"
+	}
+	return parsed.Redacted()
+}
 
 const (
 	sseEventChanBuf  = 16

@@ -13,6 +13,11 @@
 - Remove `$(locksmith ...)` shell-substitution pattern from documentation
   (it did not work; MCP clients read mcp.json as plain JSON without shell
   evaluation).
+- `locksmith mcp run` now emits zerolog diagnostics at the level configured
+  by `logging.level` in `config.yaml`. Output always goes to stderr (never
+  stdout, which carries MCP JSON-RPC traffic), and any user-info segment in
+  URLs is masked so credentials accidentally embedded in `--url` do not
+  appear in logs or error messages.
 - Bump version to v0.2.0.
 
 ## Version v0.1.0 - 2026-05-07

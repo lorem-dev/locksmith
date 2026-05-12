@@ -32,3 +32,22 @@ func TestNewTransport_InvalidType(t *testing.T) {
 	_, err := mcp.NewTransport("https://example.com", nil, "grpc")
 	require.ErrorContains(t, err, "unknown transport")
 }
+
+func TestRedactURL(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"no credentials", "https://api.example.com/v1", "https://api.example.com/v1"},
+		{"password masked", "https://user:supersecret@api.example.com/v1", "https://user:xxxxx@api.example.com/v1"},
+		{"userinfo without password kept", "https://user@api.example.com", "https://user@api.example.com"},
+		{"unparseable", "://broken", "<unparseable URL>"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, mcp.RedactURL(tc.input))
+			assert.NotContains(t, mcp.RedactURL(tc.input), "supersecret")
+		})
+	}
+}

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/lorem-dev/locksmith/internal/log"
 )
 
 // StreamableHTTP implements the MCP Streamable HTTP transport (spec 2025-03-26).
@@ -35,10 +37,13 @@ func (t *StreamableHTTP) runGetStream(ctx context.Context) {
 	for k, vs := range t.headers {
 		req.Header[k] = vs
 	}
+	log.Debug().Str("url", RedactURL(t.baseURL)).Msg("HTTP: GET (server notifications stream)")
 	resp, err := t.client.Do(req)
 	if err != nil {
+		log.Debug().Err(err).Str("url", RedactURL(t.baseURL)).Msg("HTTP: GET stream failed")
 		return
 	}
+	log.Debug().Str("url", RedactURL(t.baseURL)).Int("status", resp.StatusCode).Msg("HTTP: GET stream response")
 	if resp.StatusCode == http.StatusMethodNotAllowed || resp.StatusCode == http.StatusNotFound {
 		resp.Body.Close() //nolint:errcheck
 		return
@@ -64,15 +69,22 @@ func (t *StreamableHTTP) Send(ctx context.Context, msg []byte) error {
 	for k, vs := range t.headers {
 		req.Header[k] = vs
 	}
+	log.Debug().Str("url", RedactURL(t.baseURL)).Int("len", len(msg)).Msg("HTTP: POST")
 	resp, err := t.client.Do(req)
 	if err != nil {
+		log.Debug().Err(err).Str("url", RedactURL(t.baseURL)).Msg("HTTP: POST failed")
 		return fmt.Errorf("sending message: %w", err)
 	}
 	defer resp.Body.Close() //nolint:errcheck
+	ct := resp.Header.Get("Content-Type")
+	log.Debug().
+		Str("url", RedactURL(t.baseURL)).
+		Int("status", resp.StatusCode).
+		Str("content_type", ct).
+		Msg("HTTP: POST response")
 	if resp.StatusCode >= http.StatusBadRequest {
 		return &httpStatusError{StatusCode: resp.StatusCode, URL: t.baseURL}
 	}
-	ct := resp.Header.Get("Content-Type")
 	if strings.HasPrefix(ct, "text/event-stream") {
 		for event := range parseSSE(resp.Body) {
 			select {
@@ -121,6 +133,7 @@ func (t *AutoTransport) Connect(ctx context.Context) (<-chan []byte, error) {
 	fwdCtx, cancel := context.WithCancel(ctx)
 	t.cancel = cancel
 
+	log.Debug().Str("url", RedactURL(t.baseURL)).Msg("Auto: trying Streamable HTTP first")
 	t.inner = &StreamableHTTP{baseURL: t.baseURL, headers: t.headers, client: t.client}
 	innerCh, err := t.inner.Connect(fwdCtx)
 	if err != nil {
@@ -156,6 +169,7 @@ func (t *AutoTransport) Send(ctx context.Context, msg []byte) error {
 	}
 	var httpErr *httpStatusError
 	if errors.As(err, &httpErr) && isFallbackStatus(httpErr.StatusCode) {
+		log.Debug().Int("status", httpErr.StatusCode).Str("url", RedactURL(t.baseURL)).Msg("Auto: falling back to SSE")
 		t.inner.Close() //nolint:errcheck // fallback path; close error not actionable
 		sse := &SSETransport{baseURL: t.baseURL, headers: t.headers, client: t.client}
 		sseCh, connectErr := sse.Connect(ctx)
@@ -195,5 +209,5 @@ type httpStatusError struct {
 }
 
 func (e *httpStatusError) Error() string {
-	return fmt.Sprintf("HTTP %d from %s", e.StatusCode, e.URL)
+	return fmt.Sprintf("HTTP %d from %s", e.StatusCode, RedactURL(e.URL))
 }
