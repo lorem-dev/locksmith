@@ -86,6 +86,32 @@ default TTL from config and prints the session ID to stderr so the caller can
 optionally export it for reuse. Returns an error with a helpful hint if the daemon
 is not running.
 
+### MCP wrapper (`internal/mcp`)
+
+`locksmith mcp run` is the integration surface for AI agents that speak the
+Model Context Protocol. It dials the daemon, ensures a session, resolves
+secret references via `GetSecret`, then runs in one of two modes:
+
+- **Local mode** (`-- command args...`): exec the subprocess with resolved
+  secrets injected as environment variables. The subprocess owns stdin,
+  stdout, and stderr - locksmith does not touch the MCP JSON-RPC stream.
+- **Proxy mode** (`--url URL`): stdio<->HTTP proxy. The wrapper opens a
+  Streamable HTTP or SSE transport to the remote MCP server (per MCP spec
+  2025-03-26 with auto-detect fallback to legacy SSE), forwards each JSON-RPC
+  line from stdin as a request, and writes server responses back to stdout.
+  Secrets are injected into HTTP headers using `{key:alias}` /
+  `{vault:name path:value}` templates.
+
+A third invocation form, `--server NAME`, reads the named entry from
+`mcp.servers` in `config.yaml` and dispatches to local or proxy mode based
+on the config.
+
+Diagnostics are emitted via the shared zerolog instance at the level
+configured in `logging.level`. Output is forced to stderr so it cannot
+corrupt the MCP JSON-RPC channel on stdout; URLs in log lines and error
+messages are passed through `url.URL.Redacted()` to mask any credentials
+accidentally embedded in `userinfo`.
+
 ## Session Delegation
 
 Sub-agents inherit the parent session by receiving `LOCKSMITH_SESSION` as an

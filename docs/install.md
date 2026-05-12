@@ -69,7 +69,7 @@ curl -fsSL https://raw.githubusercontent.com/lorem-dev/locksmith/main/.github/re
   | gpg --import
 gpg --list-keys --fingerprint contact@lorem.dev      # compare to verification.md
 
-TAG=v0.1.0
+TAG=v0.2.0
 BASE="https://github.com/lorem-dev/locksmith/releases/download/${TAG}"
 curl -fsSLO "${BASE}/checksums.txt"
 curl -fsSLO "${BASE}/checksums.txt.asc"

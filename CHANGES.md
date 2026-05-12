@@ -2,23 +2,73 @@
 
 ## Development
 
-- Add `locksmith mcp run` subcommand: injects secrets into local MCP server
-  processes via environment variables (local mode) and into remote MCP
-  servers via HTTP headers through a stdio<->HTTP proxy (proxy mode).
-  Supports both SSE and Streamable HTTP (MCP spec 2025-03-26) transports
-  with auto-detection. Secret references use `{key:alias}` or
-  `{vault:name path:value}` syntax.
-- Add `mcp.servers` config section to `config.yaml` for named server
-  definitions (`locksmith mcp run --server <name>`).
-- Remove `$(locksmith ...)` shell-substitution pattern from documentation
-  (it did not work; MCP clients read mcp.json as plain JSON without shell
-  evaluation).
-- `locksmith mcp run` now emits zerolog diagnostics at the level configured
-  by `logging.level` in `config.yaml`. Output always goes to stderr (never
-  stdout, which carries MCP JSON-RPC traffic), and any user-info segment in
-  URLs is masked so credentials accidentally embedded in `--url` do not
-  appear in logs or error messages.
-- Bump version to v0.2.0.
+## Version v0.2.0 - 2026-05-13
+
+Locksmith v0.2.0 introduces a first-class MCP server wrapper so AI
+clients can inject secrets into Model Context Protocol servers without
+relying on shell substitution. It also tightens diagnostics for the new
+wrapper and refreshes the configuration documentation.
+
+### BREAKING CHANGES
+
+- **MCP integration format changed.** The previously documented
+  `$(locksmith get --key X)` shell-substitution pattern inside
+  `mcp.json` is removed - MCP clients read `mcp.json` as plain JSON and
+  never evaluated the expression. Replace every such entry with a
+  `locksmith mcp run` invocation:
+  - Local MCP server: `locksmith mcp run --env VAR=alias -- <command>`
+  - Remote MCP server: `locksmith mcp run --url <URL> --header "Name=Bearer {key:alias}"`
+  - From `config.yaml`: `locksmith mcp run --server <name>`
+
+  See the rewritten MCP Integration section in `README.md` and the new
+  `MCP servers` section in `docs/configuration.md` for full examples.
+  The agent-session bootstrap (`$(locksmith session ensure --quiet)`
+  in shell hooks) is unchanged and still in use.
+
+### MCP server wrapper
+
+- New `locksmith mcp run` subcommand resolves secrets from the daemon
+  at startup and dispatches to one of two modes:
+  - **Local mode** (`-- command args...`): execs the subprocess with
+    resolved secrets injected as environment variables; stdin, stdout,
+    and stderr pass through unchanged.
+  - **Proxy mode** (`--url URL`): stdio<->HTTP proxy. Each JSON-RPC
+    line from stdin is forwarded as a request and server responses are
+    written back to stdout. Secrets are injected into HTTP headers via
+    `{key:alias}` and `{vault:name path:value}` templates.
+- Streamable HTTP transport (per MCP spec 2025-03-26) plus the legacy
+  SSE transport. `--transport auto` (default) tries Streamable HTTP
+  first and falls back to SSE on `404`/`405` responses.
+- New `mcp.servers` section in `config.yaml` defines named server
+  entries consumable via `locksmith mcp run --server <name>`. Env
+  values accept either a key alias string or a `{vault, path}` struct;
+  headers accept the same template tokens as `--header`.
+- Diagnostics emitted via the shared zerolog logger at the level
+  configured by `logging.level`. Output is forced to stderr so it
+  cannot corrupt the MCP JSON-RPC channel on stdout. Any `userinfo`
+  segment in URLs is masked via `url.URL.Redacted()` so credentials
+  accidentally inlined into `--url` do not appear in logs or error
+  messages.
+
+### Documentation
+
+- `README.md` MCP section rewritten to use `locksmith mcp run`; the
+  minimal configuration example now includes an `mcp.servers` block
+  alongside vaults and keys.
+- New `MCP servers` reference section in `docs/configuration.md`
+  documents every `mcp.servers.<name>` field.
+- `docs/architecture.md` adds an `MCP wrapper` component description
+  covering local mode, proxy mode, transport auto-detect, and the
+  stderr-only logging contract.
+- Install and verification examples in `docs/install.md` and
+  `docs/verification.md` pinned to `v0.2.0`.
+
+### Dependencies
+
+- Added `github.com/stretchr/testify v1.7.2` as a direct dependency
+  (MIT). It was already pulled in transitively; the move makes the
+  intent explicit. `LICENSE` `## Third-Party Notices` is updated
+  accordingly.
 
 ## Version v0.1.0 - 2026-05-07
 

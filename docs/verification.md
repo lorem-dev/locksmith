@@ -37,7 +37,7 @@ curl -fsSL https://raw.githubusercontent.com/lorem-dev/locksmith/main/.github/re
 gpg --list-keys --fingerprint contact@lorem.dev
 
 # 3. Download the checksum file and its detached signature
-TAG=v0.1.0
+TAG=v0.2.0
 BASE="https://github.com/lorem-dev/locksmith/releases/download/${TAG}"
 curl -fsSLO "${BASE}/checksums.txt"
 curl -fsSLO "${BASE}/checksums.txt.asc"

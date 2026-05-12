@@ -264,6 +264,12 @@ license.
 - Source: https://github.com/spf13/cobra
 - License text: https://github.com/spf13/cobra/blob/v1.10.2/LICENSE.txt
 
+### github.com/stretchr/testify
+- Version: v1.7.2
+- License: MIT
+- Source: https://github.com/stretchr/testify
+- License text: https://github.com/stretchr/testify/blob/v1.7.2/LICENSE
+
 ### golang.org/x/term
 - Version: v0.42.0
 - License: BSD-3-Clause
