@@ -116,6 +116,11 @@ elif grep -q "^## Development" CHANGES.md; then
   if [ "$ENTRIES" -gt 0 ]; then
     WORD=$([ "$ENTRIES" -eq 1 ] && echo "entry" || echo "entries")
     gate_pass "CHANGES.md has $ENTRIES $WORD under ## Development"
+  elif grep -q "^## Version v" CHANGES.md; then
+    # Empty ## Development immediately after a release is the documented
+    # post-release state produced by the version-bump and changelog skills.
+    # The next feature commit on the new development branch repopulates it.
+    gate_pass "CHANGES.md has an empty ## Development (post-release state)"
   else
     gate_fail "CHANGES.md has a '## Development' section but no bullet entries - add at least one entry describing what changed"
   fi
