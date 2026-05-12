@@ -2,6 +2,19 @@
 
 ## Development
 
+- Add `locksmith mcp run` subcommand: injects secrets into local MCP server
+  processes via environment variables (local mode) and into remote MCP
+  servers via HTTP headers through a stdio<->HTTP proxy (proxy mode).
+  Supports both SSE and Streamable HTTP (MCP spec 2025-03-26) transports
+  with auto-detection. Secret references use `{key:alias}` or
+  `{vault:name path:value}` syntax.
+- Add `mcp.servers` config section to `config.yaml` for named server
+  definitions (`locksmith mcp run --server <name>`).
+- Remove `$(locksmith ...)` shell-substitution pattern from documentation
+  (it did not work; MCP clients read mcp.json as plain JSON without shell
+  evaluation).
+- Bump version to v0.2.0.
+
 ## Version v0.1.0 - 2026-05-07
 
 Locksmith v0.1.0 is the first public release. It ships the secret-management

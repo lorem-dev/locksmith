@@ -13,7 +13,7 @@ curl -fsSL https://github.com/lorem-dev/locksmith/releases/latest/download/insta
 Pin a specific version:
 
 ```sh
-LOCKSMITH_VERSION=v0.1.0 curl -fsSL https://github.com/lorem-dev/locksmith/releases/download/v0.1.0/install.sh | sh
+LOCKSMITH_VERSION=v0.2.0 curl -fsSL https://github.com/lorem-dev/locksmith/releases/download/v0.2.0/install.sh | sh
 ```
 
 Custom install dir (default `~/.local/bin`):
