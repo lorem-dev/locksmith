@@ -92,46 +92,66 @@ vault types, defaults, logging, and security notes.
 
 ## MCP Integration
 
-Inject secrets into MCP servers at startup. The example below shows the
-three common forms in one listing:
+`locksmith mcp run` injects secrets into MCP servers at startup. No shell
+substitution required - all values in `mcp.json` are static strings.
 
-- `github` - local MCP server, secret injected via env var by alias from
-  `config.yaml`.
-- `my-api` - remote MCP server, secret injected into an Authorization
-  header.
-- `ad-hoc` - direct vault path with `--vault`/`--path`, no alias in
-  `config.yaml` required.
+**Local MCP server** (secret injected as environment variable):
 
 ```json
 {
   "mcpServers": {
     "github": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "$(locksmith get --key github-token)"
-      }
-    },
-    "my-api": {
-      "url": "https://api.example.com",
-      "headers": {
-        "Authorization": "Bearer $(locksmith get --key openai-key)"
-      }
-    },
-    "ad-hoc": {
-      "command": "my-mcp-tool",
-      "env": {
-        "API_KEY": "$(locksmith get --vault work --path some/secret/path)"
-      }
+      "command": "locksmith",
+      "args": ["mcp", "run", "--env", "GITHUB_TOKEN=github-token", "--", "npx", "-y", "@modelcontextprotocol/server-github"]
     }
   }
 }
 ```
 
-The shell hook installed by `locksmith init` exports `LOCKSMITH_SESSION`
-before the agent starts, so `locksmith get` resolves without an extra prompt.
-For client-specific notes (Claude Code, Cursor, Copilot, Codex, Gemini CLI),
-see [Agent Integration](docs/agent-integration.md).
+**Remote MCP server** (secret injected as HTTP header, stdio<->HTTP proxy):
+
+```json
+{
+  "mcpServers": {
+    "my-api": {
+      "command": "locksmith",
+      "args": ["mcp", "run", "--url", "https://api.example.com", "--header", "Authorization=Bearer {key:openai-key}"]
+    }
+  }
+}
+```
+
+**Named server from config** (secrets configured in `~/.config/locksmith/config.yaml`):
+
+```json
+{
+  "mcpServers": {
+    "github": {
+      "command": "locksmith",
+      "args": ["mcp", "run", "--server", "github"]
+    }
+  }
+}
+```
+
+### Secret reference syntax
+
+| Format | Description |
+|--------|-------------|
+| `alias` | Key alias from `keys:` in `config.yaml` (for `--env` only) |
+| `{key:alias}` | Key alias (template form, works in `--header` and `--env`) |
+| `{vault:vault-name path:some/path}` | Direct vault + path, no alias required |
+
+### Supported transports
+
+`locksmith mcp run` supports both SSE (legacy) and Streamable HTTP (MCP spec
+2025-03-26). Use `--transport sse|http|auto` (default: `auto`). In `auto` mode,
+Streamable HTTP is tried first; on `404`/`405` the proxy falls back to SSE.
+
+See the [Configuration Reference](docs/configuration.md#mcp-servers) for
+configuring named servers in `config.yaml`. For client-specific notes
+(Claude Code, Cursor, Copilot, Codex, Gemini CLI), see
+[Agent Integration](docs/agent-integration.md).
 
 ## Agent Usage
 

@@ -210,6 +210,73 @@ See [Agent Integration](agent-integration.md) for the full protocol.
 
 ---
 
+## MCP servers
+
+Configure named MCP servers under `mcp.servers`. Use
+`locksmith mcp run --server <name>` to start them with secrets injected.
+
+```yaml
+mcp:
+  servers:
+    github:
+      command: ["npx", "-y", "@github/mcp"]
+      env:
+        GITHUB_TOKEN: github-token        # key alias from keys:
+
+    my-api:
+      url: https://api.example.com
+      transport: auto                     # sse | http | auto (default: auto)
+      headers:
+        Authorization: "Bearer {key:openai-key}"
+        X-Org-ID: "{vault:keychain path:org/id}"
+
+    ad-hoc:
+      command: ["my-tool"]
+      env:
+        API_KEY:
+          vault: gopass
+          path: work/api/key
+```
+
+### mcp.servers.\<name\>.command
+
+**Required (local mode).** List of strings: executable followed by
+arguments. Mutually exclusive with `url`.
+
+### mcp.servers.\<name\>.env
+
+**Optional (local mode).** Map of environment variable names to secret
+references.
+
+Each value is either:
+- A string: key alias from `keys:` in this config file.
+- A struct with `vault:` and `path:` fields for direct vault access.
+
+### mcp.servers.\<name\>.url
+
+**Required (proxy mode).** Remote MCP server URL. Mutually exclusive
+with `command`.
+
+### mcp.servers.\<name\>.transport
+
+**Optional (proxy mode).** HTTP transport to use. Default: `auto`.
+
+- `auto` - try Streamable HTTP (MCP spec 2025-03-26); fall back to SSE on `404`/`405`
+- `http` - Streamable HTTP only
+- `sse` - SSE only (legacy)
+
+### mcp.servers.\<name\>.headers
+
+**Optional (proxy mode).** Map of HTTP header names to value templates.
+Template tokens:
+
+| Token | Description |
+|-------|-------------|
+| `{key:alias}` | Key alias from `keys:` |
+| `{vault:name path:value}` | Direct vault + path |
+
+---
+
 ## Vault types
 
 | type | Description |
