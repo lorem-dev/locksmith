@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/lorem-dev/locksmith/internal/log"
@@ -37,18 +38,17 @@ type transportSetup func(ctx context.Context) (Transport, <-chan []byte, error)
 // client message, then forwards stdio<->HTTP for the lifetime of the
 // connection.
 func RunProxy(ctx context.Context, fetcher SecretFetcher, cfg ProxyConfig, in io.Reader, out io.Writer) error {
+	static, templates := splitHeaders(cfg.Headers)
+	resolver := buildAuthResolver(fetcher, templates)
 	log.Debug().
 		Str("url", RedactURL(cfg.URL)).
 		Str("transport", cfg.Transport).
-		Int("header_injections", len(cfg.Headers)).
-		Msg("mcp proxy: starting (lazy)")
+		Int("static_headers", len(static)).
+		Int("templated_headers", len(templates)).
+		Msg("mcp proxy: starting (lazy auth)")
+
 	setup := func(ctx context.Context) (Transport, <-chan []byte, error) {
-		headers, err := resolveHeaders(ctx, fetcher, cfg.Headers)
-		if err != nil {
-			log.Debug().Err(err).Msg("mcp proxy: header resolution failed")
-			return nil, nil, err
-		}
-		transport, err := NewTransport(cfg.URL, headers, nil, cfg.Transport)
+		transport, err := NewTransport(cfg.URL, static, resolver, cfg.Transport)
 		if err != nil {
 			log.Debug().Err(err).Msg("mcp proxy: creating transport failed")
 			return nil, nil, err
@@ -84,19 +84,45 @@ func RunProxyWithTransport(
 	return runLoop(ctx, setup, in, out)
 }
 
-func resolveHeaders(ctx context.Context, fetcher SecretFetcher, mappings []HeaderMapping) (http.Header, error) {
-	headers := make(http.Header)
+// splitHeaders partitions cfg.Headers by whether the template contains a
+// vault reference token. Static entries are pre-built into a full
+// http.Header; templated entries are returned unchanged for lazy
+// resolution.
+func splitHeaders(mappings []HeaderMapping) (http.Header, []HeaderMapping) {
+	static := make(http.Header)
+	var templates []HeaderMapping
 	for _, h := range mappings {
-		log.Debug().Str("header", h.Name).Msg("mcp proxy: resolving header")
-		value, err := ResolveTemplate(ctx, h.Template, fetcher)
-		if err != nil {
-			log.Debug().Err(err).Str("header", h.Name).Msg("mcp proxy: header resolution failed")
-			return nil, fmt.Errorf("resolving header %s: %w", h.Name, err)
+		if strings.Contains(h.Template, "{") {
+			templates = append(templates, h)
+			continue
 		}
-		log.Debug().Str("header", h.Name).Int("len", len(value)).Msg("mcp proxy: header resolved")
-		headers.Set(h.Name, value)
+		static.Set(h.Name, h.Template)
 	}
-	return headers, nil
+	return static, templates
+}
+
+// buildAuthResolver returns a HeaderResolver closure that resolves the
+// supplied templated headers via fetcher on first call. Returns nil if
+// templates is empty - signalling to NewTransport that no auth-retry is
+// possible for this proxy session.
+func buildAuthResolver(fetcher SecretFetcher, templates []HeaderMapping) HeaderResolver {
+	if len(templates) == 0 {
+		return nil
+	}
+	return func(ctx context.Context) (http.Header, error) {
+		log.Debug().Int("count", len(templates)).Msg("mcp proxy: resolving deferred auth headers")
+		headers := make(http.Header, len(templates))
+		for _, h := range templates {
+			value, err := ResolveTemplate(ctx, h.Template, fetcher)
+			if err != nil {
+				log.Debug().Err(err).Str("header", h.Name).Msg("mcp proxy: deferred header resolution failed")
+				return nil, fmt.Errorf("resolving header %s: %w", h.Name, err)
+			}
+			headers.Set(h.Name, value)
+		}
+		log.Debug().Int("count", len(headers)).Msg("mcp proxy: deferred auth headers resolved")
+		return headers, nil
+	}
 }
 
 func runLoop(ctx context.Context, setup transportSetup, in io.Reader, out io.Writer) error {
@@ -127,20 +153,25 @@ func runLoop(ctx context.Context, setup transportSetup, in io.Reader, out io.Wri
 		out.Write(append(msg, '\n')) //nolint:errcheck
 	}
 
-	var serverMsgCount uint64
+	done := make(chan struct{})
+	shutdown := func() {
+		select {
+		case <-done:
+		default:
+			close(done)
+		}
+		transport.Close() //nolint:errcheck // best-effort shutdown
+	}
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for msg := range msgCh {
-			serverMsgCount++
-			log.Debug().Uint64("seq", serverMsgCount).Int("len", len(msg)).Msg("mcp proxy: server -> client")
-			writeMsg(msg)
-		}
-		log.Debug().Uint64("count", serverMsgCount).Msg("mcp proxy: server channel closed")
+		forwardServerMessages(msgCh, done, writeMsg)
 	}()
 
 	var clientMsgCount uint64
 	if err := sendClientMessage(ctx, transport, firstLine, &clientMsgCount); err != nil {
+		shutdown()
 		wg.Wait()
 		return err
 	}
@@ -151,6 +182,7 @@ func runLoop(ctx context.Context, setup transportSetup, in io.Reader, out io.Wri
 			trimmed := bytes.TrimRight(line, "\r\n")
 			if len(trimmed) > 0 {
 				if err := sendClientMessage(ctx, transport, trimmed, &clientMsgCount); err != nil {
+					shutdown()
 					wg.Wait()
 					return err
 				}
@@ -160,11 +192,13 @@ func runLoop(ctx context.Context, setup transportSetup, in io.Reader, out io.Wri
 			break
 		}
 		if readErr != nil {
+			shutdown()
 			wg.Wait()
 			return fmt.Errorf("reading stdin: %w", readErr)
 		}
 	}
 	log.Debug().Uint64("count", clientMsgCount).Msg("mcp proxy: stdin scanner exited")
+	shutdown()
 	wg.Wait()
 	return nil
 }
@@ -186,6 +220,43 @@ func readFirstNonEmptyLine(reader *bufio.Reader) ([]byte, error) {
 		}
 		if err != nil {
 			return nil, fmt.Errorf("reading stdin: %w", err)
+		}
+	}
+}
+
+// forwardServerMessages reads server messages from msgCh and dispatches
+// them to writeMsg until either msgCh closes or done fires. When done
+// fires it first drains any messages already buffered in msgCh so late
+// responses still reach the client before shutdown.
+func forwardServerMessages(msgCh <-chan []byte, done <-chan struct{}, writeMsg func([]byte)) {
+	var count uint64
+	forward := func(msg []byte) {
+		count++
+		log.Debug().Uint64("seq", count).Int("len", len(msg)).Msg("mcp proxy: server -> client")
+		writeMsg(msg)
+	}
+	for {
+		select {
+		case msg, ok := <-msgCh:
+			if !ok {
+				log.Debug().Uint64("count", count).Msg("mcp proxy: server channel closed")
+				return
+			}
+			forward(msg)
+		case <-done:
+			for {
+				select {
+				case msg, ok := <-msgCh:
+					if !ok {
+						log.Debug().Uint64("count", count).Msg("mcp proxy: server channel closed during drain")
+						return
+					}
+					forward(msg)
+				default:
+					log.Debug().Uint64("count", count).Msg("mcp proxy: server reader stopped")
+					return
+				}
+			}
 		}
 	}
 }
