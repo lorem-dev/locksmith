@@ -1,8 +1,10 @@
 package mcp
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 
@@ -54,5 +56,40 @@ func Run(ctx context.Context, fetcher SecretFetcher, envMappings []EnvMapping, c
 		return fmt.Errorf("running %s: %w", command[0], err)
 	}
 	log.Debug().Msg("mcp local: subprocess exited cleanly")
+	return nil
+}
+
+// PumpStdio drives the stdio shim for local mode. It writes firstLine
+// to stdinPipe, then concurrently copies reader -> stdinPipe and
+// stdoutPipe -> stdout. The function returns when stdoutPipe reaches
+// EOF (the child closed its stdout, typically because the child
+// exited). The stdin pump goroutine may still be blocked on reader at
+// that point; the operating system reaps it when the process exits.
+//
+// PumpStdio does NOT call cmd.Wait. The caller invokes cmd.Wait after
+// PumpStdio returns so the exec contract for StdoutPipe is satisfied
+// (the pipe must be drained before Wait).
+func PumpStdio(
+	stdinPipe io.WriteCloser,
+	stdoutPipe io.Reader,
+	reader *bufio.Reader,
+	firstLine []byte,
+	stdout io.Writer,
+) error {
+	go func() {
+		defer stdinPipe.Close() //nolint:errcheck // child observes EOF on stdin
+		if len(firstLine) > 0 {
+			if _, err := stdinPipe.Write(firstLine); err != nil {
+				log.Debug().Err(err).Msg("mcp local: writing buffered first line to child failed")
+				return
+			}
+		}
+		if _, err := io.Copy(stdinPipe, reader); err != nil {
+			log.Debug().Err(err).Msg("mcp local: copying parent stdin to child failed")
+		}
+	}()
+	if _, err := io.Copy(stdout, stdoutPipe); err != nil {
+		return fmt.Errorf("copying child stdout: %w", err)
+	}
 	return nil
 }
