@@ -50,7 +50,13 @@ func (t *StreamableHTTP) runGetStream(ctx context.Context) {
 		return
 	}
 	log.Debug().Str("url", RedactURL(t.baseURL)).Int("status", resp.StatusCode).Msg("HTTP: GET stream response")
-	if resp.StatusCode == http.StatusMethodNotAllowed || resp.StatusCode == http.StatusNotFound {
+	if resp.StatusCode == http.StatusMethodNotAllowed ||
+		resp.StatusCode == http.StatusNotFound ||
+		resp.StatusCode == http.StatusUnauthorized ||
+		resp.StatusCode == http.StatusForbidden {
+		log.Debug().
+			Int("status", resp.StatusCode).
+			Msg("HTTP: GET stream rejected; closing quietly, POST will handle auth")
 		resp.Body.Close() //nolint:errcheck
 		return
 	}
@@ -65,21 +71,9 @@ func (t *StreamableHTTP) runGetStream(ctx context.Context) {
 }
 
 func (t *StreamableHTTP) Send(ctx context.Context, msg []byte) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.baseURL, bytesReader(msg))
+	resp, err := t.postOnce(ctx, msg)
 	if err != nil {
-		return fmt.Errorf("building POST request: %w", err)
-	}
-	req.ContentLength = int64(len(msg))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json, text/event-stream")
-	for k, vs := range t.effectiveHeaders() {
-		req.Header[k] = vs
-	}
-	log.Debug().Str("url", RedactURL(t.baseURL)).Int("len", len(msg)).Msg("HTTP: POST")
-	resp, err := t.client.Do(req)
-	if err != nil {
-		log.Debug().Err(err).Str("url", RedactURL(t.baseURL)).Msg("HTTP: POST failed")
-		return fmt.Errorf("sending message: %w", err)
+		return err
 	}
 	defer resp.Body.Close() //nolint:errcheck
 	ct := resp.Header.Get("Content-Type")
@@ -88,6 +82,25 @@ func (t *StreamableHTTP) Send(ctx context.Context, msg []byte) error {
 		Int("status", resp.StatusCode).
 		Str("content_type", ct).
 		Msg("HTTP: POST response")
+
+	if t.shouldRetryWithAuth(resp.StatusCode) {
+		resp.Body.Close() //nolint:errcheck // body of the failed request not needed
+		ok, authErr := t.ensureAuth(ctx)
+		if authErr != nil {
+			return authErr
+		}
+		if !ok {
+			return &httpStatusError{StatusCode: resp.StatusCode, URL: t.baseURL}
+		}
+		log.Debug().Int("status", resp.StatusCode).Msg("HTTP: 401/403 received, retrying with auth")
+		resp, err = t.postOnce(ctx, msg)
+		if err != nil {
+			return fmt.Errorf("retrying after auth: %w", err)
+		}
+		defer resp.Body.Close() //nolint:errcheck
+		ct = resp.Header.Get("Content-Type")
+		log.Debug().Int("status", resp.StatusCode).Str("content_type", ct).Msg("HTTP: retry response")
+	}
 	if resp.StatusCode >= http.StatusBadRequest {
 		return &httpStatusError{StatusCode: resp.StatusCode, URL: t.baseURL}
 	}
@@ -113,6 +126,43 @@ func (t *StreamableHTTP) Send(ctx context.Context, msg []byte) error {
 		}
 	}
 	return nil
+}
+
+// postOnce builds and dispatches one POST with the transport's effective
+// headers. It does NOT retry. The caller is responsible for closing
+// resp.Body.
+func (t *StreamableHTTP) postOnce(ctx context.Context, msg []byte) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.baseURL, bytesReader(msg))
+	if err != nil {
+		return nil, fmt.Errorf("building POST request: %w", err)
+	}
+	req.ContentLength = int64(len(msg))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	for k, vs := range t.effectiveHeaders() {
+		req.Header[k] = vs
+	}
+	log.Debug().Str("url", RedactURL(t.baseURL)).Int("len", len(msg)).Msg("HTTP: POST")
+	resp, err := t.client.Do(req)
+	if err != nil {
+		log.Debug().Err(err).Str("url", RedactURL(t.baseURL)).Msg("HTTP: POST failed")
+		return nil, fmt.Errorf("sending message: %w", err)
+	}
+	return resp, nil
+}
+
+// shouldRetryWithAuth reports whether the given HTTP status is an
+// auth-related rejection that warrants resolving the auth header and
+// retrying once. Only valid before ensureAuth has succeeded; afterwards
+// 401/403 from the server is a genuine failure (the cached auth is
+// wrong or expired) and is propagated.
+func (t *StreamableHTTP) shouldRetryWithAuth(status int) bool {
+	if status != http.StatusUnauthorized && status != http.StatusForbidden {
+		return false
+	}
+	t.authMu.Lock()
+	defer t.authMu.Unlock()
+	return t.cachedAuth == nil
 }
 
 func (t *StreamableHTTP) Close() error {
@@ -143,8 +193,6 @@ func (t *StreamableHTTP) effectiveHeaders() http.Header {
 // yet. It returns true if auth is available (already cached or just
 // resolved), false if no resolver is configured. A non-nil error means
 // the resolver itself failed; the caller should propagate it.
-//
-//nolint:unused // wired in a follow-up commit that adds 401/403 retry
 func (t *StreamableHTTP) ensureAuth(ctx context.Context) (bool, error) {
 	if t.resolveAuth == nil {
 		return false, nil
