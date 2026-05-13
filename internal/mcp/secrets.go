@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	locksmithv1 "github.com/lorem-dev/locksmith/gen/proto/locksmith/v1"
 )
@@ -24,23 +25,74 @@ type SecretFetcher interface {
 }
 
 // GRPCFetcher retrieves secrets via the locksmith gRPC daemon.
+//
+// When the daemon reports "invalid session" (the user's
+// LOCKSMITH_SESSION expired between mcp run startup and the first lazy
+// fetch), GRPCFetcher calls RefreshSession to obtain a new session ID
+// and retries the request once. RefreshSession may be nil if the
+// caller does not want this recovery behaviour.
 type GRPCFetcher struct {
-	Client    locksmithv1.LocksmithServiceClient
-	SessionID string
+	Client         locksmithv1.LocksmithServiceClient
+	SessionID      string
+	RefreshSession func(context.Context) (string, error)
+
+	mu sync.Mutex // guards SessionID
 }
 
 // Fetch implements SecretFetcher.
 func (f *GRPCFetcher) Fetch(ctx context.Context, ref SecretRef) (string, error) {
+	f.mu.Lock()
+	sid := f.SessionID
+	f.mu.Unlock()
+
 	resp, err := f.Client.GetSecret(ctx, &locksmithv1.GetSecretRequest{
-		SessionId: f.SessionID,
+		SessionId: sid,
+		KeyAlias:  ref.KeyAlias,
+		VaultName: ref.VaultName,
+		Path:      ref.Path,
+	})
+	if err == nil {
+		return string(resp.Secret), nil
+	}
+	if !isSessionExpiredError(err) || f.RefreshSession == nil {
+		return "", fmt.Errorf("getting secret: %w", err)
+	}
+
+	f.mu.Lock()
+	if f.SessionID == sid {
+		newSID, refreshErr := f.RefreshSession(ctx)
+		if refreshErr != nil {
+			f.mu.Unlock()
+			return "", fmt.Errorf("refreshing expired session: %w", refreshErr)
+		}
+		f.SessionID = newSID
+	}
+	sid = f.SessionID
+	f.mu.Unlock()
+
+	resp, err = f.Client.GetSecret(ctx, &locksmithv1.GetSecretRequest{
+		SessionId: sid,
 		KeyAlias:  ref.KeyAlias,
 		VaultName: ref.VaultName,
 		Path:      ref.Path,
 	})
 	if err != nil {
-		return "", fmt.Errorf("getting secret: %w", err)
+		return "", fmt.Errorf("getting secret after session refresh: %w", err)
 	}
 	return string(resp.Secret), nil
+}
+
+// isSessionExpiredError reports whether err's wrapped chain indicates
+// the daemon rejected the session ID as unknown. The daemon currently
+// returns fmt.Errorf("invalid session: %w", store.Get(...)). When the
+// daemon switches to status.Error(codes.Unauthenticated, ...), replace
+// this helper with a status-code check.
+func isSessionExpiredError(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "invalid session") || strings.Contains(s, "session for prefix")
 }
 
 // ParseRef parses a secret reference string.
