@@ -2,7 +2,9 @@ package mcp
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -25,31 +27,46 @@ type ProxyConfig struct {
 	Headers   []HeaderMapping
 }
 
-// RunProxy resolves secrets, builds HTTP headers, creates the transport,
-// and runs the stdio<->HTTP proxy loop.
+// transportSetup is called on the first non-empty stdin line. It is
+// responsible for resolving any deferred work (header secret lookups,
+// transport construction, Connect) and returning the transport plus
+// its server-message channel.
+type transportSetup func(ctx context.Context) (Transport, <-chan []byte, error)
+
+// RunProxy resolves secrets lazily, builds the transport on the first
+// client message, then forwards stdio<->HTTP for the lifetime of the
+// connection.
 func RunProxy(ctx context.Context, fetcher SecretFetcher, cfg ProxyConfig, in io.Reader, out io.Writer) error {
 	log.Debug().
 		Str("url", RedactURL(cfg.URL)).
 		Str("transport", cfg.Transport).
 		Int("header_injections", len(cfg.Headers)).
-		Msg("mcp proxy: starting")
-	headers, err := resolveHeaders(ctx, fetcher, cfg.Headers)
-	if err != nil {
-		log.Debug().Err(err).Msg("mcp proxy: header resolution failed")
-		return err
+		Msg("mcp proxy: starting (lazy)")
+	setup := func(ctx context.Context) (Transport, <-chan []byte, error) {
+		headers, err := resolveHeaders(ctx, fetcher, cfg.Headers)
+		if err != nil {
+			log.Debug().Err(err).Msg("mcp proxy: header resolution failed")
+			return nil, nil, err
+		}
+		transport, err := NewTransport(cfg.URL, headers, cfg.Transport)
+		if err != nil {
+			log.Debug().Err(err).Msg("mcp proxy: creating transport failed")
+			return nil, nil, err
+		}
+		msgCh, err := transport.Connect(ctx)
+		if err != nil {
+			log.Debug().Err(err).Msg("mcp proxy: connect failed")
+			return nil, nil, fmt.Errorf("connecting to %s: %w", RedactURL(cfg.URL), err)
+		}
+		return transport, msgCh, nil
 	}
-	transport, err := NewTransport(cfg.URL, headers, cfg.Transport)
-	if err != nil {
-		log.Debug().Err(err).Msg("mcp proxy: creating transport failed")
-		return err
-	}
-	log.Debug().Msg("mcp proxy: transport created, entering proxy loop")
-	return RunProxyWithTransport(ctx, cfg, transport, in, out)
+	return runLoop(ctx, setup, in, out)
 }
 
-// RunProxyWithTransport runs the proxy loop with a pre-built transport.
-// Exposed for testing with mock transports. The transport's message channel
-// must be closed when the server disconnects for runLoop to drain and return.
+// RunProxyWithTransport runs the proxy loop against a pre-constructed
+// Transport. Used by tests that inject a mock. The transport's Connect
+// is still deferred to the first non-empty stdin line so the lazy
+// contract is identical to RunProxy.
 func RunProxyWithTransport(
 	ctx context.Context,
 	cfg ProxyConfig,
@@ -57,14 +74,14 @@ func RunProxyWithTransport(
 	in io.Reader,
 	out io.Writer,
 ) error {
-	log.Debug().Str("url", RedactURL(cfg.URL)).Msg("mcp proxy: connecting")
-	msgCh, err := transport.Connect(ctx)
-	if err != nil {
-		log.Debug().Err(err).Msg("mcp proxy: connect failed")
-		return fmt.Errorf("connecting to %s: %w", RedactURL(cfg.URL), err)
+	setup := func(ctx context.Context) (Transport, <-chan []byte, error) {
+		msgCh, err := transport.Connect(ctx)
+		if err != nil {
+			return nil, nil, fmt.Errorf("connecting to %s: %w", RedactURL(cfg.URL), err)
+		}
+		return transport, msgCh, nil
 	}
-	log.Debug().Msg("mcp proxy: connected; starting stdio loop")
-	return runLoop(ctx, transport, msgCh, in, out)
+	return runLoop(ctx, setup, in, out)
 }
 
 func resolveHeaders(ctx context.Context, fetcher SecretFetcher, mappings []HeaderMapping) (http.Header, error) {
@@ -82,7 +99,24 @@ func resolveHeaders(ctx context.Context, fetcher SecretFetcher, mappings []Heade
 	return headers, nil
 }
 
-func runLoop(ctx context.Context, transport Transport, msgCh <-chan []byte, in io.Reader, out io.Writer) error {
+func runLoop(ctx context.Context, setup transportSetup, in io.Reader, out io.Writer) error {
+	reader := bufio.NewReader(in)
+
+	firstLine, err := readFirstNonEmptyLine(reader)
+	if err != nil {
+		return err
+	}
+	if firstLine == nil {
+		// EOF before any non-empty line; nothing to proxy.
+		return nil
+	}
+
+	transport, msgCh, err := setup(ctx)
+	if err != nil {
+		return err
+	}
+	log.Debug().Msg("mcp proxy: connected; starting stdio loop")
+
 	var (
 		mu sync.Mutex
 		wg sync.WaitGroup
@@ -105,26 +139,63 @@ func runLoop(ctx context.Context, transport Transport, msgCh <-chan []byte, in i
 		log.Debug().Uint64("count", serverMsgCount).Msg("mcp proxy: server channel closed")
 	}()
 
-	scanner := bufio.NewScanner(in)
 	var clientMsgCount uint64
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
+	if err := sendClientMessage(ctx, transport, firstLine, &clientMsgCount); err != nil {
+		wg.Wait()
+		return err
+	}
+
+	for {
+		line, readErr := reader.ReadBytes('\n')
+		if len(line) > 0 {
+			trimmed := bytes.TrimRight(line, "\r\n")
+			if len(trimmed) > 0 {
+				if err := sendClientMessage(ctx, transport, trimmed, &clientMsgCount); err != nil {
+					wg.Wait()
+					return err
+				}
+			}
 		}
-		clientMsgCount++
-		log.Debug().Uint64("seq", clientMsgCount).Int("len", len(line)).Msg("mcp proxy: client -> server")
-		if err := transport.Send(ctx, line); err != nil {
-			log.Debug().Err(err).Uint64("seq", clientMsgCount).Msg("mcp proxy: transport.Send failed")
+		if errors.Is(readErr, io.EOF) {
+			break
+		}
+		if readErr != nil {
 			wg.Wait()
-			return fmt.Errorf("sending message: %w", err)
+			return fmt.Errorf("reading stdin: %w", readErr)
 		}
 	}
 	log.Debug().Uint64("count", clientMsgCount).Msg("mcp proxy: stdin scanner exited")
 	wg.Wait()
-	if err := scanner.Err(); err != nil {
-		log.Debug().Err(err).Msg("mcp proxy: stdin scanner error")
-		return fmt.Errorf("reading stdin: %w", err)
+	return nil
+}
+
+// readFirstNonEmptyLine consumes empty lines from reader and returns
+// the first line that contains non-whitespace content (without trailing
+// CR/LF). Returns (nil, nil) on EOF before any non-empty line.
+func readFirstNonEmptyLine(reader *bufio.Reader) ([]byte, error) {
+	for {
+		line, err := reader.ReadBytes('\n')
+		if len(line) > 0 {
+			trimmed := bytes.TrimRight(line, "\r\n")
+			if len(trimmed) > 0 {
+				return trimmed, nil
+			}
+		}
+		if errors.Is(err, io.EOF) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, fmt.Errorf("reading stdin: %w", err)
+		}
+	}
+}
+
+func sendClientMessage(ctx context.Context, transport Transport, line []byte, count *uint64) error {
+	*count++
+	log.Debug().Uint64("seq", *count).Int("len", len(line)).Msg("mcp proxy: client -> server")
+	if err := transport.Send(ctx, line); err != nil {
+		log.Debug().Err(err).Uint64("seq", *count).Msg("mcp proxy: transport.Send failed")
+		return fmt.Errorf("sending message: %w", err)
 	}
 	return nil
 }
