@@ -33,23 +33,30 @@ func (t *SSETransport) Connect(ctx context.Context) (<-chan []byte, error) {
 	t.msgCh = make(chan []byte, msgChanBuf)
 
 	sseURL := strings.TrimRight(t.baseURL, "/") + "/sse"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, sseURL, nil)
+	//nolint:bodyclose // body is closed by the stream goroutine or explicitly on retry
+	resp, err := t.openSSEStream(ctx, sseURL)
 	if err != nil {
-		return nil, fmt.Errorf("building SSE request: %w", err)
+		return nil, err
 	}
-	req.Header.Set("Accept", "text/event-stream")
-	req.Header.Set("Cache-Control", "no-cache")
-	for k, vs := range t.effectiveHeaders() {
-		req.Header[k] = vs
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		resp.Body.Close() //nolint:errcheck
+		ok, authErr := t.ensureAuth(ctx)
+		if authErr != nil {
+			return nil, authErr
+		}
+		if !ok {
+			return nil, &httpStatusError{StatusCode: resp.StatusCode, URL: sseURL}
+		}
+		log.Debug().Int("status", resp.StatusCode).Msg("SSE: 401/403 on GET, reopening with auth")
+		resp, err = t.openSSEStream(ctx, sseURL) //nolint:bodyclose // body is closed by the goroutine started below
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			resp.Body.Close() //nolint:errcheck
+			return nil, &httpStatusError{StatusCode: resp.StatusCode, URL: sseURL}
+		}
 	}
-
-	log.Debug().Str("url", RedactURL(sseURL)).Msg("SSE: GET")
-	resp, err := t.client.Do(req) //nolint:bodyclose // body is closed by the goroutine started below
-	if err != nil {
-		log.Debug().Err(err).Str("url", RedactURL(sseURL)).Msg("SSE: GET failed")
-		return nil, fmt.Errorf("connecting to %s: %w", RedactURL(sseURL), err)
-	}
-	log.Debug().Str("url", RedactURL(sseURL)).Int("status", resp.StatusCode).Msg("SSE: GET response")
 
 	endpointCh := make(chan string, 1)
 	streamCtx, cancel := context.WithCancel(ctx)
@@ -103,9 +110,43 @@ func (t *SSETransport) Send(ctx context.Context, msg []byte) error {
 	if t.endpoint == "" {
 		return fmt.Errorf("SSE transport not connected: call Connect first")
 	}
+	resp, err := t.postEndpointOnce(ctx, msg)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close() //nolint:errcheck
+	log.Debug().Str("endpoint", RedactURL(t.endpoint)).Int("status", resp.StatusCode).Msg("SSE: POST response")
+
+	if t.shouldRetryWithAuth(resp.StatusCode) {
+		resp.Body.Close() //nolint:errcheck
+		ok, authErr := t.ensureAuth(ctx)
+		if authErr != nil {
+			return authErr
+		}
+		if !ok {
+			return fmt.Errorf("unexpected status %d from %s", resp.StatusCode, RedactURL(t.endpoint))
+		}
+		log.Debug().Int("status", resp.StatusCode).Msg("SSE: 401/403 on POST, retrying with auth")
+		resp, err = t.postEndpointOnce(ctx, msg)
+		if err != nil {
+			return fmt.Errorf("retrying after auth: %w", err)
+		}
+		defer resp.Body.Close() //nolint:errcheck
+		log.Debug().Int("status", resp.StatusCode).Msg("SSE: retry response")
+	}
+	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status %d from %s", resp.StatusCode, RedactURL(t.endpoint))
+	}
+	return nil
+}
+
+// postEndpointOnce builds and dispatches one POST to t.endpoint with
+// the transport's effective headers. It does NOT retry. The caller is
+// responsible for closing resp.Body.
+func (t *SSETransport) postEndpointOnce(ctx context.Context, msg []byte) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.endpoint, bytesReader(msg))
 	if err != nil {
-		return fmt.Errorf("building POST request: %w", err)
+		return nil, fmt.Errorf("building POST request: %w", err)
 	}
 	req.ContentLength = int64(len(msg))
 	req.Header.Set("Content-Type", "application/json")
@@ -116,14 +157,20 @@ func (t *SSETransport) Send(ctx context.Context, msg []byte) error {
 	resp, err := t.client.Do(req)
 	if err != nil {
 		log.Debug().Err(err).Str("endpoint", RedactURL(t.endpoint)).Msg("SSE: POST failed")
-		return fmt.Errorf("sending message: %w", err)
+		return nil, fmt.Errorf("sending message: %w", err)
 	}
-	defer resp.Body.Close() //nolint:errcheck
-	log.Debug().Str("endpoint", RedactURL(t.endpoint)).Int("status", resp.StatusCode).Msg("SSE: POST response")
-	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status %d from %s", resp.StatusCode, RedactURL(t.endpoint))
+	return resp, nil
+}
+
+// shouldRetryWithAuth reports whether the response status warrants an
+// auth resolve and retry. Mirrors StreamableHTTP.shouldRetryWithAuth.
+func (t *SSETransport) shouldRetryWithAuth(status int) bool {
+	if status != http.StatusUnauthorized && status != http.StatusForbidden {
+		return false
 	}
-	return nil
+	t.authMu.Lock()
+	defer t.authMu.Unlock()
+	return t.cachedAuth == nil
 }
 
 func (t *SSETransport) Close() error {
@@ -131,6 +178,30 @@ func (t *SSETransport) Close() error {
 		t.cancel()
 	}
 	return nil
+}
+
+// openSSEStream issues GET <baseURL>/sse with the transport's effective
+// headers and returns the response on success. The caller takes
+// ownership of resp.Body (must close it). 4xx responses are returned to
+// the caller for retry / error decisions; they do NOT auto-close.
+func (t *SSETransport) openSSEStream(ctx context.Context, sseURL string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, sseURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("building SSE request: %w", err)
+	}
+	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("Cache-Control", "no-cache")
+	for k, vs := range t.effectiveHeaders() {
+		req.Header[k] = vs
+	}
+	log.Debug().Str("url", RedactURL(sseURL)).Msg("SSE: GET")
+	resp, err := t.client.Do(req)
+	if err != nil {
+		log.Debug().Err(err).Str("url", RedactURL(sseURL)).Msg("SSE: GET failed")
+		return nil, fmt.Errorf("connecting to %s: %w", RedactURL(sseURL), err)
+	}
+	log.Debug().Str("url", RedactURL(sseURL)).Int("status", resp.StatusCode).Msg("SSE: GET response")
+	return resp, nil
 }
 
 func (t *SSETransport) effectiveHeaders() http.Header {
@@ -146,7 +217,6 @@ func (t *SSETransport) effectiveHeaders() http.Header {
 	return out
 }
 
-//nolint:unused // wired in a follow-up commit that adds 401/403 retry
 func (t *SSETransport) ensureAuth(ctx context.Context) (bool, error) {
 	if t.resolveAuth == nil {
 		return false, nil
