@@ -93,3 +93,24 @@ func PumpStdio(
 	}
 	return nil
 }
+
+// ForwardSignals relays SIGTERM and SIGINT (as delivered on sigCh) to
+// proc and returns when done is closed. The caller is responsible for
+// registering sigCh with signal.Notify in production code and closing
+// done after cmd.Wait returns. Tests drive sigCh directly so the host
+// signal handlers are not touched.
+func ForwardSignals(proc *os.Process, sigCh <-chan os.Signal, done <-chan struct{}) {
+	for {
+		select {
+		case sig, ok := <-sigCh:
+			if !ok {
+				return
+			}
+			if err := proc.Signal(sig); err != nil {
+				log.Debug().Err(err).Stringer("signal", sig).Msg("mcp local: forwarding signal to child failed")
+			}
+		case <-done:
+			return
+		}
+	}
+}

@@ -7,7 +7,9 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -81,4 +83,39 @@ func TestPumpStdio_ForwardsFirstLineAndStdinThroughChild(t *testing.T) {
 	require.NoError(t, cmd.Wait())
 
 	assert.Equal(t, "hello\nworld\n", out.String())
+}
+
+func TestForwardSignals_DeliversSIGTERMToChild(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("SIGTERM semantics differ on Windows")
+	}
+	// The child prints "ready\n" once the TERM trap is installed so we
+	// can avoid a race where SIGTERM arrives before sh has set up the
+	// handler (in which case sh dies with the default action instead of
+	// running the trap). The sleep is backgrounded and waited on with
+	// `wait` so the trap can interrupt `wait` immediately - if sleep ran
+	// in the foreground sh would not service the trap until sleep
+	// returned, making the test take 30 s.
+	cmd := exec.Command("sh", "-c", `trap 'exit 42' TERM; echo ready; sleep 30 & wait`)
+	stdoutPipe, err := cmd.StdoutPipe()
+	require.NoError(t, err)
+	require.NoError(t, cmd.Start())
+
+	rd := bufio.NewReader(stdoutPipe)
+	line, err := rd.ReadString('\n')
+	require.NoError(t, err)
+	require.Equal(t, "ready\n", line)
+
+	sigCh := make(chan os.Signal, 1)
+	done := make(chan struct{})
+	go mcp.ForwardSignals(cmd.Process, sigCh, done)
+
+	sigCh <- syscall.SIGTERM
+
+	waitErr := cmd.Wait()
+	close(done)
+
+	var exitErr *exec.ExitError
+	require.ErrorAs(t, waitErr, &exitErr, "child should have exited with non-zero")
+	assert.Equal(t, 42, exitErr.ExitCode(), "child trap should have produced exit 42")
 }
