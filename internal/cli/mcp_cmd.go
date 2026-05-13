@@ -126,7 +126,18 @@ func runMCPRun(serverName string, envArgs, headerArgs []string, urlArg, transpor
 		return err
 	}
 	log.Debug().Msg("mcp run: session ready")
-	fetcher := &mcp.GRPCFetcher{Client: client, SessionID: sessionID}
+	fetcher := &mcp.GRPCFetcher{
+		Client:    client,
+		SessionID: sessionID,
+		RefreshSession: func(ctx context.Context) (string, error) {
+			resp, err := client.SessionStart(ctx, &locksmithv1.SessionStartRequest{})
+			if err != nil {
+				return "", fmt.Errorf("starting refreshed session: %w", err)
+			}
+			log.Debug().Msg("mcp run: session refreshed after expiry")
+			return resp.SessionId, nil
+		},
+	}
 
 	runCtx := context.Background()
 	if hasServer {
