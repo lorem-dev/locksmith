@@ -238,6 +238,16 @@ mcp:
           path: work/api/key
 ```
 
+### Lazy secret resolution
+
+The first `GetSecret` call for any `mcp.servers.<name>` entry fires
+on the first MCP request from the AI client, not at `locksmith mcp
+run` startup. If a configured MCP server is never invoked, its
+secrets are never fetched and no vault prompt is shown. Locksmith
+will also transparently start a fresh session and retry once if the
+session held by `mcp run` expires between startup and the first
+fetch.
+
 ### mcp.servers.\<name\>.command
 
 **Required (local mode).** List of strings: executable followed by

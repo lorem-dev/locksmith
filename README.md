@@ -160,6 +160,25 @@ substitution required - all values in `mcp.json` are static strings.
 2025-03-26). Use `--transport sse|http|auto` (default: `auto`). In `auto` mode,
 Streamable HTTP is tried first; on `404`/`405` the proxy falls back to SSE.
 
+### Lazy secret resolution
+
+`locksmith mcp run` does not contact the vault at startup. The first
+vault prompt (Touch ID dialog, GPG passphrase) for a given MCP server
+fires only when the AI client sends its first MCP request to that
+server. MCP servers configured but never used in a session never
+trigger a prompt.
+
+In local mode (`-- command`) locksmith stays resident as the parent
+of the MCP server child. The process tree becomes:
+
+```
+AI client -> locksmith mcp run -> <MCP server binary>
+```
+
+This adds roughly 5-10 MB RAM per server. Signals (SIGTERM, SIGINT)
+sent by the AI client to locksmith are forwarded to the child so
+graceful shutdown works as expected.
+
 See the [Configuration Reference](docs/configuration.md#mcp-servers) for
 configuring named servers in `config.yaml`. For client-specific notes
 (Claude Code, Cursor, Copilot, Codex, Gemini CLI), see
