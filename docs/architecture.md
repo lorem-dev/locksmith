@@ -88,29 +88,48 @@ is not running.
 
 ### MCP wrapper (`internal/mcp`)
 
-`locksmith mcp run` is the integration surface for AI agents that speak the
-Model Context Protocol. It dials the daemon, ensures a session, resolves
-secret references via `GetSecret`, then runs in one of two modes:
+`locksmith mcp run` is the integration surface for AI agents that
+speak the Model Context Protocol. It dials the daemon, ensures a
+session, and then defers all vault-touching work until the AI client
+sends its first MCP request:
 
-- **Local mode** (`-- command args...`): exec the subprocess with resolved
-  secrets injected as environment variables. The subprocess owns stdin,
-  stdout, and stderr - locksmith does not touch the MCP JSON-RPC stream.
-- **Proxy mode** (`--url URL`): stdio<->HTTP proxy. The wrapper opens a
-  Streamable HTTP or SSE transport to the remote MCP server (per MCP spec
-  2025-03-26 with auto-detect fallback to legacy SSE), forwards each JSON-RPC
-  line from stdin as a request, and writes server responses back to stdout.
-  Secrets are injected into HTTP headers using `{key:alias}` /
-  `{vault:name path:value}` templates.
+- **Local mode** (`-- command args...`): locksmith reads stdin via
+  `bufio.Reader.ReadBytes('\n')`. On the first non-empty line it
+  resolves the configured env mappings via `GetSecret`, spawns the
+  subprocess with the resolved values, then runs as a stdio shim:
+  `PumpStdio` writes the buffered first line into the child's stdin,
+  copies the rest of the parent's stdin to the child, and copies the
+  child's stdout back to the parent. Locksmith remains the child's
+  parent until exit (process tree: client -> locksmith -> child,
+  ~5-10 MB residency overhead).
+- **Proxy mode** (`--url URL`): same first-line gate. On the first
+  non-empty line locksmith resolves header templates, builds the
+  Transport (Streamable HTTP, SSE, or Auto), and calls Connect. The
+  forwarding loop then sends the buffered first line and continues
+  for the lifetime of the connection.
 
-A third invocation form, `--server NAME`, reads the named entry from
-`mcp.servers` in `config.yaml` and dispatches to local or proxy mode based
-on the config.
+Each mode resolves its secrets exactly once - lazily, but not
+repeatedly. Subsequent client requests reuse the env vars or HTTP
+headers established on the first message.
 
-Diagnostics are emitted via the shared zerolog instance at the level
-configured in `logging.level`. Output is forced to stderr so it cannot
-corrupt the MCP JSON-RPC channel on stdout; URLs in log lines and error
-messages are passed through `url.URL.Redacted()` to mask any credentials
-accidentally embedded in `userinfo`.
+`GRPCFetcher` recovers from session expiry. If a lazy fetch lands
+after the original `LOCKSMITH_SESSION` has expired, `GetSecret`
+returns an `"invalid session"` error; the fetcher invokes a
+`RefreshSession` closure (provided by the CLI, backed by
+`SessionStart`), updates its stored session ID under a mutex with a
+compare-and-swap to avoid double refreshes, and retries the request
+once. A second failure is propagated to the caller.
+
+In local mode locksmith installs `signal.Notify` for SIGTERM and
+SIGINT while the child is running and forwards each received signal
+to the child via `ForwardSignals`. SIGHUP and other signals are not
+forwarded.
+
+Diagnostics flow through the shared zerolog instance at the level
+configured by `logging.level`. Output is forced to stderr so it
+cannot corrupt MCP JSON-RPC on stdout; URLs in log lines and error
+messages are passed through `url.URL.Redacted()` to mask any
+credentials accidentally embedded in `userinfo`.
 
 ## Session Delegation
 
