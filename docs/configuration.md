@@ -248,6 +248,14 @@ will also transparently start a fresh session and retry once if the
 session held by `mcp run` expires between startup and the first
 fetch.
 
+Within proxy mode, locksmith also defers individual auth headers
+(those whose value template references the vault via `{key:...}` or
+`{vault:... path:...}`) until the remote server demands them. Static
+header values - those without any `{` token - are sent from the very
+first request. The auth-deferral is automatic and has no config
+knob; servers that do not require auth on the MCP handshake therefore
+never trigger a vault prompt for that connection.
+
 ### mcp.servers.\<name\>.command
 
 **Required (local mode).** List of strings: executable followed by

@@ -179,6 +179,22 @@ This adds roughly 5-10 MB RAM per server. Signals (SIGTERM, SIGINT)
 sent by the AI client to locksmith are forwarded to the child so
 graceful shutdown works as expected.
 
+In proxy mode, locksmith goes one step further: templated `Authorization`
+(or other vault-referencing) headers are not sent on the first request.
+If the remote MCP server accepts the handshake unauthenticated (a
+common pattern - `initialize` and capability negotiation usually do
+not require auth), no vault prompt fires. Locksmith only resolves and
+sends the auth headers after the server responds `401` or `403`,
+after which it remembers the resolved value for the rest of the
+proxy session.
+
+The optional long-lived SSE GET stream that some servers use for
+notifications is opened with the headers available at that time.
+If a server happens to authorise the GET without credentials but
+later demands them on POST, the GET is NOT reopened with auth;
+that server should be configured with `--transport http` (Streamable
+HTTP) instead, which has no long-lived GET.
+
 See the [Configuration Reference](docs/configuration.md#mcp-servers) for
 configuring named servers in `config.yaml`. For client-specific notes
 (Claude Code, Cursor, Copilot, Codex, Gemini CLI), see
