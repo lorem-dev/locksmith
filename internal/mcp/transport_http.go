@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/lorem-dev/locksmith/internal/log"
 )
@@ -14,10 +15,15 @@ import (
 // Each client message is sent as a POST; the response may be JSON or SSE.
 type StreamableHTTP struct {
 	baseURL string
-	headers http.Header
 	client  *http.Client
 	msgCh   chan []byte
 	cancel  context.CancelFunc
+
+	staticHeaders http.Header
+	resolveAuth   HeaderResolver
+
+	authMu     sync.Mutex
+	cachedAuth http.Header
 }
 
 func (t *StreamableHTTP) Connect(ctx context.Context) (<-chan []byte, error) {
@@ -34,7 +40,7 @@ func (t *StreamableHTTP) runGetStream(ctx context.Context) {
 		return
 	}
 	req.Header.Set("Accept", "text/event-stream")
-	for k, vs := range t.headers {
+	for k, vs := range t.effectiveHeaders() {
 		req.Header[k] = vs
 	}
 	log.Debug().Str("url", RedactURL(t.baseURL)).Msg("HTTP: GET (server notifications stream)")
@@ -44,7 +50,13 @@ func (t *StreamableHTTP) runGetStream(ctx context.Context) {
 		return
 	}
 	log.Debug().Str("url", RedactURL(t.baseURL)).Int("status", resp.StatusCode).Msg("HTTP: GET stream response")
-	if resp.StatusCode == http.StatusMethodNotAllowed || resp.StatusCode == http.StatusNotFound {
+	if resp.StatusCode == http.StatusMethodNotAllowed ||
+		resp.StatusCode == http.StatusNotFound ||
+		resp.StatusCode == http.StatusUnauthorized ||
+		resp.StatusCode == http.StatusForbidden {
+		log.Debug().
+			Int("status", resp.StatusCode).
+			Msg("HTTP: GET stream rejected; closing quietly, POST will handle auth")
 		resp.Body.Close() //nolint:errcheck
 		return
 	}
@@ -59,21 +71,9 @@ func (t *StreamableHTTP) runGetStream(ctx context.Context) {
 }
 
 func (t *StreamableHTTP) Send(ctx context.Context, msg []byte) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.baseURL, bytesReader(msg))
+	resp, err := t.postOnce(ctx, msg)
 	if err != nil {
-		return fmt.Errorf("building POST request: %w", err)
-	}
-	req.ContentLength = int64(len(msg))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json, text/event-stream")
-	for k, vs := range t.headers {
-		req.Header[k] = vs
-	}
-	log.Debug().Str("url", RedactURL(t.baseURL)).Int("len", len(msg)).Msg("HTTP: POST")
-	resp, err := t.client.Do(req)
-	if err != nil {
-		log.Debug().Err(err).Str("url", RedactURL(t.baseURL)).Msg("HTTP: POST failed")
-		return fmt.Errorf("sending message: %w", err)
+		return err
 	}
 	defer resp.Body.Close() //nolint:errcheck
 	ct := resp.Header.Get("Content-Type")
@@ -82,6 +82,25 @@ func (t *StreamableHTTP) Send(ctx context.Context, msg []byte) error {
 		Int("status", resp.StatusCode).
 		Str("content_type", ct).
 		Msg("HTTP: POST response")
+
+	if t.shouldRetryWithAuth(resp.StatusCode) {
+		resp.Body.Close() //nolint:errcheck // body of the failed request not needed
+		ok, authErr := t.ensureAuth(ctx)
+		if authErr != nil {
+			return authErr
+		}
+		if !ok {
+			return &httpStatusError{StatusCode: resp.StatusCode, URL: t.baseURL}
+		}
+		log.Debug().Int("status", resp.StatusCode).Msg("HTTP: 401/403 received, retrying with auth")
+		resp, err = t.postOnce(ctx, msg)
+		if err != nil {
+			return fmt.Errorf("retrying after auth: %w", err)
+		}
+		defer resp.Body.Close() //nolint:errcheck
+		ct = resp.Header.Get("Content-Type")
+		log.Debug().Int("status", resp.StatusCode).Str("content_type", ct).Msg("HTTP: retry response")
+	}
 	if resp.StatusCode >= http.StatusBadRequest {
 		return &httpStatusError{StatusCode: resp.StatusCode, URL: t.baseURL}
 	}
@@ -109,6 +128,43 @@ func (t *StreamableHTTP) Send(ctx context.Context, msg []byte) error {
 	return nil
 }
 
+// postOnce builds and dispatches one POST with the transport's effective
+// headers. It does NOT retry. The caller is responsible for closing
+// resp.Body.
+func (t *StreamableHTTP) postOnce(ctx context.Context, msg []byte) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.baseURL, bytesReader(msg))
+	if err != nil {
+		return nil, fmt.Errorf("building POST request: %w", err)
+	}
+	req.ContentLength = int64(len(msg))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	for k, vs := range t.effectiveHeaders() {
+		req.Header[k] = vs
+	}
+	log.Debug().Str("url", RedactURL(t.baseURL)).Int("len", len(msg)).Msg("HTTP: POST")
+	resp, err := t.client.Do(req)
+	if err != nil {
+		log.Debug().Err(err).Str("url", RedactURL(t.baseURL)).Msg("HTTP: POST failed")
+		return nil, fmt.Errorf("sending message: %w", err)
+	}
+	return resp, nil
+}
+
+// shouldRetryWithAuth reports whether the given HTTP status is an
+// auth-related rejection that warrants resolving the auth header and
+// retrying once. Only valid before ensureAuth has succeeded; afterwards
+// 401/403 from the server is a genuine failure (the cached auth is
+// wrong or expired) and is propagated.
+func (t *StreamableHTTP) shouldRetryWithAuth(status int) bool {
+	if status != http.StatusUnauthorized && status != http.StatusForbidden {
+		return false
+	}
+	t.authMu.Lock()
+	defer t.authMu.Unlock()
+	return t.cachedAuth == nil
+}
+
 func (t *StreamableHTTP) Close() error {
 	if t.cancel != nil {
 		t.cancel()
@@ -116,16 +172,57 @@ func (t *StreamableHTTP) Close() error {
 	return nil
 }
 
+// effectiveHeaders returns the headers to attach to the next request:
+// staticHeaders alone before authentication, staticHeaders + cachedAuth
+// after. The returned header is a fresh copy safe for the caller to
+// mutate (e.g. set Content-Type) without affecting future calls.
+func (t *StreamableHTTP) effectiveHeaders() http.Header {
+	out := make(http.Header, len(t.staticHeaders))
+	for k, vs := range t.staticHeaders {
+		out[k] = append([]string(nil), vs...)
+	}
+	t.authMu.Lock()
+	for k, vs := range t.cachedAuth {
+		out[k] = append([]string(nil), vs...)
+	}
+	t.authMu.Unlock()
+	return out
+}
+
+// ensureAuth resolves the auth headers if they have not been resolved
+// yet. It returns true if auth is available (already cached or just
+// resolved), false if no resolver is configured. A non-nil error means
+// the resolver itself failed; the caller should propagate it.
+func (t *StreamableHTTP) ensureAuth(ctx context.Context) (bool, error) {
+	if t.resolveAuth == nil {
+		return false, nil
+	}
+	t.authMu.Lock()
+	defer t.authMu.Unlock()
+	if t.cachedAuth != nil {
+		return true, nil
+	}
+	h, err := t.resolveAuth(ctx)
+	if err != nil {
+		return false, fmt.Errorf("resolving auth headers: %w", err)
+	}
+	t.cachedAuth = h
+	return true, nil
+}
+
 // AutoTransport tries Streamable HTTP first; falls back to SSE on 404/405.
 // It owns a single output channel (outCh) and forwards messages from whichever
 // underlying transport is active, so the caller always reads from the same channel.
 type AutoTransport struct {
 	baseURL string
-	headers http.Header
 	client  *http.Client
-	inner   Transport
-	outCh   chan []byte
-	cancel  context.CancelFunc
+
+	staticHeaders http.Header
+	resolveAuth   HeaderResolver
+
+	inner  Transport
+	outCh  chan []byte
+	cancel context.CancelFunc
 }
 
 func (t *AutoTransport) Connect(ctx context.Context) (<-chan []byte, error) {
@@ -134,7 +231,12 @@ func (t *AutoTransport) Connect(ctx context.Context) (<-chan []byte, error) {
 	t.cancel = cancel
 
 	log.Debug().Str("url", RedactURL(t.baseURL)).Msg("Auto: trying Streamable HTTP first")
-	t.inner = &StreamableHTTP{baseURL: t.baseURL, headers: t.headers, client: t.client}
+	t.inner = &StreamableHTTP{
+		baseURL:       t.baseURL,
+		staticHeaders: t.staticHeaders,
+		resolveAuth:   t.resolveAuth,
+		client:        t.client,
+	}
 	innerCh, err := t.inner.Connect(fwdCtx)
 	if err != nil {
 		cancel()
@@ -171,7 +273,12 @@ func (t *AutoTransport) Send(ctx context.Context, msg []byte) error {
 	if errors.As(err, &httpErr) && isFallbackStatus(httpErr.StatusCode) {
 		log.Debug().Int("status", httpErr.StatusCode).Str("url", RedactURL(t.baseURL)).Msg("Auto: falling back to SSE")
 		t.inner.Close() //nolint:errcheck // fallback path; close error not actionable
-		sse := &SSETransport{baseURL: t.baseURL, headers: t.headers, client: t.client}
+		sse := &SSETransport{
+			baseURL:       t.baseURL,
+			staticHeaders: t.staticHeaders,
+			resolveAuth:   t.resolveAuth,
+			client:        t.client,
+		}
 		sseCh, connectErr := sse.Connect(ctx)
 		if connectErr != nil {
 			return fmt.Errorf("falling back to SSE transport: %w", connectErr)

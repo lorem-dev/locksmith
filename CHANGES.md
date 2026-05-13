@@ -14,6 +14,17 @@
   error it calls a `RefreshSession` closure (backed by `SessionStart`
   on the daemon), updates the session ID under a mutex, and retries
   the request once. Non-expiry errors propagate unchanged.
+- Proxy mode (`locksmith mcp run --url`) no longer sends vault-resolved
+  HTTP headers on the very first request. Static headers (those whose
+  value template contains no `{` token) are sent from the start;
+  templated headers are resolved and attached only after the remote
+  server responds `401` or `403`. Subsequent requests reuse the
+  resolved headers for the lifetime of the proxy session. Servers
+  that authorise the MCP `initialize` handshake without auth never
+  trigger a vault prompt for that connection. Known limitation: when
+  auth resolves late while a long-lived SSE GET stream is already
+  open, the GET is not reopened - operators of such servers should
+  set `--transport http`.
 
 ## Version v0.2.0 - 2026-05-13
 
