@@ -31,7 +31,7 @@ func TestStreamableHTTP_JSONResponse(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	transport, err := mcp.NewTransport(srv.URL, nil, "http")
+	transport, err := mcp.NewTransport(srv.URL, nil, nil, "http")
 	require.NoError(t, err)
 	defer transport.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -72,7 +72,7 @@ func TestStreamableHTTP_SSEResponse(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	transport, err := mcp.NewTransport(srv.URL, nil, "http")
+	transport, err := mcp.NewTransport(srv.URL, nil, nil, "http")
 	require.NoError(t, err)
 	defer transport.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -123,7 +123,7 @@ func TestAutoTransport_FallsBackToSSE(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	transport, err := mcp.NewTransport(srv.URL, nil, "auto")
+	transport, err := mcp.NewTransport(srv.URL, nil, nil, "auto")
 	require.NoError(t, err)
 	defer transport.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)

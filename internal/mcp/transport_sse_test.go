@@ -38,7 +38,7 @@ func TestSSETransport_RoundTrip(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	transport, err := mcp.NewTransport(srv.URL, nil, "sse")
+	transport, err := mcp.NewTransport(srv.URL, nil, nil, "sse")
 	require.NoError(t, err)
 	defer transport.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -76,7 +76,7 @@ func TestSSETransport_AuthHeader(t *testing.T) {
 	defer srv.Close()
 
 	headers := http.Header{"Authorization": {"Bearer tok-123"}}
-	transport, err := mcp.NewTransport(srv.URL, headers, "sse")
+	transport, err := mcp.NewTransport(srv.URL, headers, nil, "sse")
 	require.NoError(t, err)
 	defer transport.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)

@@ -48,7 +48,7 @@ func RunProxy(ctx context.Context, fetcher SecretFetcher, cfg ProxyConfig, in io
 			log.Debug().Err(err).Msg("mcp proxy: header resolution failed")
 			return nil, nil, err
 		}
-		transport, err := NewTransport(cfg.URL, headers, cfg.Transport)
+		transport, err := NewTransport(cfg.URL, headers, nil, cfg.Transport)
 		if err != nil {
 			log.Debug().Err(err).Msg("mcp proxy: creating transport failed")
 			return nil, nil, err

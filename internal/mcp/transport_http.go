@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/lorem-dev/locksmith/internal/log"
 )
@@ -14,10 +15,15 @@ import (
 // Each client message is sent as a POST; the response may be JSON or SSE.
 type StreamableHTTP struct {
 	baseURL string
-	headers http.Header
 	client  *http.Client
 	msgCh   chan []byte
 	cancel  context.CancelFunc
+
+	staticHeaders http.Header
+	resolveAuth   HeaderResolver
+
+	authMu     sync.Mutex
+	cachedAuth http.Header
 }
 
 func (t *StreamableHTTP) Connect(ctx context.Context) (<-chan []byte, error) {
@@ -34,7 +40,7 @@ func (t *StreamableHTTP) runGetStream(ctx context.Context) {
 		return
 	}
 	req.Header.Set("Accept", "text/event-stream")
-	for k, vs := range t.headers {
+	for k, vs := range t.effectiveHeaders() {
 		req.Header[k] = vs
 	}
 	log.Debug().Str("url", RedactURL(t.baseURL)).Msg("HTTP: GET (server notifications stream)")
@@ -66,7 +72,7 @@ func (t *StreamableHTTP) Send(ctx context.Context, msg []byte) error {
 	req.ContentLength = int64(len(msg))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
-	for k, vs := range t.headers {
+	for k, vs := range t.effectiveHeaders() {
 		req.Header[k] = vs
 	}
 	log.Debug().Str("url", RedactURL(t.baseURL)).Int("len", len(msg)).Msg("HTTP: POST")
@@ -116,16 +122,59 @@ func (t *StreamableHTTP) Close() error {
 	return nil
 }
 
+// effectiveHeaders returns the headers to attach to the next request:
+// staticHeaders alone before authentication, staticHeaders + cachedAuth
+// after. The returned header is a fresh copy safe for the caller to
+// mutate (e.g. set Content-Type) without affecting future calls.
+func (t *StreamableHTTP) effectiveHeaders() http.Header {
+	out := make(http.Header, len(t.staticHeaders))
+	for k, vs := range t.staticHeaders {
+		out[k] = append([]string(nil), vs...)
+	}
+	t.authMu.Lock()
+	for k, vs := range t.cachedAuth {
+		out[k] = append([]string(nil), vs...)
+	}
+	t.authMu.Unlock()
+	return out
+}
+
+// ensureAuth resolves the auth headers if they have not been resolved
+// yet. It returns true if auth is available (already cached or just
+// resolved), false if no resolver is configured. A non-nil error means
+// the resolver itself failed; the caller should propagate it.
+//
+//nolint:unused // wired in a follow-up commit that adds 401/403 retry
+func (t *StreamableHTTP) ensureAuth(ctx context.Context) (bool, error) {
+	if t.resolveAuth == nil {
+		return false, nil
+	}
+	t.authMu.Lock()
+	defer t.authMu.Unlock()
+	if t.cachedAuth != nil {
+		return true, nil
+	}
+	h, err := t.resolveAuth(ctx)
+	if err != nil {
+		return false, fmt.Errorf("resolving auth headers: %w", err)
+	}
+	t.cachedAuth = h
+	return true, nil
+}
+
 // AutoTransport tries Streamable HTTP first; falls back to SSE on 404/405.
 // It owns a single output channel (outCh) and forwards messages from whichever
 // underlying transport is active, so the caller always reads from the same channel.
 type AutoTransport struct {
 	baseURL string
-	headers http.Header
 	client  *http.Client
-	inner   Transport
-	outCh   chan []byte
-	cancel  context.CancelFunc
+
+	staticHeaders http.Header
+	resolveAuth   HeaderResolver
+
+	inner  Transport
+	outCh  chan []byte
+	cancel context.CancelFunc
 }
 
 func (t *AutoTransport) Connect(ctx context.Context) (<-chan []byte, error) {
@@ -134,7 +183,12 @@ func (t *AutoTransport) Connect(ctx context.Context) (<-chan []byte, error) {
 	t.cancel = cancel
 
 	log.Debug().Str("url", RedactURL(t.baseURL)).Msg("Auto: trying Streamable HTTP first")
-	t.inner = &StreamableHTTP{baseURL: t.baseURL, headers: t.headers, client: t.client}
+	t.inner = &StreamableHTTP{
+		baseURL:       t.baseURL,
+		staticHeaders: t.staticHeaders,
+		resolveAuth:   t.resolveAuth,
+		client:        t.client,
+	}
 	innerCh, err := t.inner.Connect(fwdCtx)
 	if err != nil {
 		cancel()
@@ -171,7 +225,12 @@ func (t *AutoTransport) Send(ctx context.Context, msg []byte) error {
 	if errors.As(err, &httpErr) && isFallbackStatus(httpErr.StatusCode) {
 		log.Debug().Int("status", httpErr.StatusCode).Str("url", RedactURL(t.baseURL)).Msg("Auto: falling back to SSE")
 		t.inner.Close() //nolint:errcheck // fallback path; close error not actionable
-		sse := &SSETransport{baseURL: t.baseURL, headers: t.headers, client: t.client}
+		sse := &SSETransport{
+			baseURL:       t.baseURL,
+			staticHeaders: t.staticHeaders,
+			resolveAuth:   t.resolveAuth,
+			client:        t.client,
+		}
 		sseCh, connectErr := sse.Connect(ctx)
 		if connectErr != nil {
 			return fmt.Errorf("falling back to SSE transport: %w", connectErr)

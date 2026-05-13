@@ -29,7 +29,7 @@ func TestParseSSE_DataOnly(t *testing.T) {
 }
 
 func TestNewTransport_InvalidType(t *testing.T) {
-	_, err := mcp.NewTransport("https://example.com", nil, "grpc")
+	_, err := mcp.NewTransport("https://example.com", nil, nil, "grpc")
 	require.ErrorContains(t, err, "unknown transport")
 }
 

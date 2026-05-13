@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/lorem-dev/locksmith/internal/log"
@@ -16,11 +17,16 @@ import (
 // URL received in the initial "endpoint" SSE event.
 type SSETransport struct {
 	baseURL  string
-	headers  http.Header
 	client   *http.Client
 	endpoint string
 	msgCh    chan []byte
 	cancel   context.CancelFunc
+
+	staticHeaders http.Header
+	resolveAuth   HeaderResolver
+
+	authMu     sync.Mutex
+	cachedAuth http.Header
 }
 
 func (t *SSETransport) Connect(ctx context.Context) (<-chan []byte, error) {
@@ -33,7 +39,7 @@ func (t *SSETransport) Connect(ctx context.Context) (<-chan []byte, error) {
 	}
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Cache-Control", "no-cache")
-	for k, vs := range t.headers {
+	for k, vs := range t.effectiveHeaders() {
 		req.Header[k] = vs
 	}
 
@@ -103,7 +109,7 @@ func (t *SSETransport) Send(ctx context.Context, msg []byte) error {
 	}
 	req.ContentLength = int64(len(msg))
 	req.Header.Set("Content-Type", "application/json")
-	for k, vs := range t.headers {
+	for k, vs := range t.effectiveHeaders() {
 		req.Header[k] = vs
 	}
 	log.Debug().Str("endpoint", RedactURL(t.endpoint)).Int("len", len(msg)).Msg("SSE: POST")
@@ -125,4 +131,35 @@ func (t *SSETransport) Close() error {
 		t.cancel()
 	}
 	return nil
+}
+
+func (t *SSETransport) effectiveHeaders() http.Header {
+	out := make(http.Header, len(t.staticHeaders))
+	for k, vs := range t.staticHeaders {
+		out[k] = append([]string(nil), vs...)
+	}
+	t.authMu.Lock()
+	for k, vs := range t.cachedAuth {
+		out[k] = append([]string(nil), vs...)
+	}
+	t.authMu.Unlock()
+	return out
+}
+
+//nolint:unused // wired in a follow-up commit that adds 401/403 retry
+func (t *SSETransport) ensureAuth(ctx context.Context) (bool, error) {
+	if t.resolveAuth == nil {
+		return false, nil
+	}
+	t.authMu.Lock()
+	defer t.authMu.Unlock()
+	if t.cachedAuth != nil {
+		return true, nil
+	}
+	h, err := t.resolveAuth(ctx)
+	if err != nil {
+		return false, fmt.Errorf("resolving auth headers: %w", err)
+	}
+	t.cachedAuth = h
+	return true, nil
 }
