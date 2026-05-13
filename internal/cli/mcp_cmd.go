@@ -187,7 +187,7 @@ func runLocalMode(ctx context.Context, fetcher mcp.SecretFetcher, envArgs, comma
 	if err != nil {
 		return err
 	}
-	return mcp.Run(ctx, fetcher, mappings, command)
+	return mcp.Run(ctx, fetcher, mappings, command, os.Stdin, os.Stdout)
 }
 
 func runProxyMode(
@@ -239,7 +239,7 @@ func runFromConfig(ctx context.Context, fetcher mcp.SecretFetcher, serverName st
 		}
 		mappings = append(mappings, mcp.EnvMapping{Var: varName, Ref: ref})
 	}
-	return mcp.Run(ctx, fetcher, mappings, server.Command)
+	return mcp.Run(ctx, fetcher, mappings, server.Command, os.Stdin, os.Stdout)
 }
 
 func parseEnvArgs(args []string) ([]mcp.EnvMapping, error) {

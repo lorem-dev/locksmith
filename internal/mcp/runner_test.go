@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
@@ -23,28 +24,22 @@ func TestRun_InjectsEnvVar(t *testing.T) {
 	mappings := []mcp.EnvMapping{
 		{Var: "MY_SECRET", Ref: mcp.SecretRef{KeyAlias: "my-key"}},
 	}
+	// Stdin must contain at least one non-empty line so the lazy shim
+	// resolves env and spawns the child. The child prints MY_SECRET and
+	// exits; locksmith propagates exit 0.
+	in := strings.NewReader("trigger\n")
+	var out bytes.Buffer
 
-	r, w, err := os.Pipe()
-	require.NoError(t, err)
-
-	oldStdout := os.Stdout
-	os.Stdout = w
-
-	runErr := mcp.Run(context.Background(), fetcher, mappings, []string{"sh", "-c", "printf '%s' \"$MY_SECRET\""})
-
-	w.Close()
-	os.Stdout = oldStdout
-
-	var buf bytes.Buffer
-	_, _ = io.Copy(&buf, r)
-
+	runErr := mcp.Run(
+		context.Background(),
+		fetcher,
+		mappings,
+		[]string{"sh", "-c", "printf '%s' \"$MY_SECRET\""},
+		in,
+		&out,
+	)
 	require.NoError(t, runErr)
-	assert.Equal(t, "super-secret", buf.String())
-}
-
-func TestRun_NoCommand(t *testing.T) {
-	err := mcp.Run(context.Background(), staticFetcher{}, nil, nil)
-	require.ErrorContains(t, err, "no command specified")
+	assert.Equal(t, "super-secret", out.String())
 }
 
 func TestRun_FetchError(t *testing.T) {
@@ -52,8 +47,29 @@ func TestRun_FetchError(t *testing.T) {
 	mappings := []mcp.EnvMapping{
 		{Var: "X", Ref: mcp.SecretRef{KeyAlias: "missing-key"}},
 	}
-	err := mcp.Run(context.Background(), fetcher, mappings, []string{"sh", "-c", "true"})
+	in := strings.NewReader("trigger\n") // forces lazy resolve
+	var out bytes.Buffer
+	err := mcp.Run(
+		context.Background(),
+		fetcher,
+		mappings,
+		[]string{"sh", "-c", "true"},
+		in,
+		&out,
+	)
 	require.ErrorContains(t, err, "missing-key")
+}
+
+func TestRun_NoCommand(t *testing.T) {
+	err := mcp.Run(
+		context.Background(),
+		staticFetcher{},
+		nil,
+		nil,
+		strings.NewReader(""),
+		io.Discard,
+	)
+	require.ErrorContains(t, err, "no command specified")
 }
 
 func TestPumpStdio_ForwardsFirstLineAndStdinThroughChild(t *testing.T) {
@@ -118,4 +134,63 @@ func TestForwardSignals_DeliversSIGTERMToChild(t *testing.T) {
 	var exitErr *exec.ExitError
 	require.ErrorAs(t, waitErr, &exitErr, "child should have exited with non-zero")
 	assert.Equal(t, 42, exitErr.ExitCode(), "child trap should have produced exit 42")
+}
+
+func TestRun_LazyFetch_NoStdin_NoChild(t *testing.T) {
+	sentinel := filepath.Join(t.TempDir(), "child-ran")
+	fetcher := recordingFetcher{}
+	in := strings.NewReader("") // immediate EOF
+	var out bytes.Buffer
+
+	err := mcp.Run(
+		context.Background(),
+		&fetcher,
+		nil,
+		[]string{"sh", "-c", "touch " + sentinel},
+		in,
+		&out,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, 0, fetcher.calls, "fetcher must not be called when stdin is empty")
+
+	_, statErr := os.Stat(sentinel)
+	assert.True(t, os.IsNotExist(statErr), "child must not have been spawned")
+}
+
+func TestRun_LazyFetch_FirstLineTriggersChild(t *testing.T) {
+	fetcher := recordingFetcher{inner: staticFetcher{"my-key": "super-secret"}}
+	mappings := []mcp.EnvMapping{
+		{Var: "MY_SECRET", Ref: mcp.SecretRef{KeyAlias: "my-key"}},
+	}
+	in := strings.NewReader("hello\n")
+	var out bytes.Buffer
+
+	err := mcp.Run(
+		context.Background(),
+		&fetcher,
+		mappings,
+		// Child echoes its stdin (including the buffered "hello\n") and
+		// then exits when stdin closes.
+		[]string{"sh", "-c", "cat"},
+		in,
+		&out,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, 1, fetcher.calls)
+	assert.Equal(t, "hello\n", out.String())
+}
+
+// recordingFetcher wraps a SecretFetcher and counts Fetch calls so
+// lazy-fetch tests can assert when (and whether) the vault was hit.
+type recordingFetcher struct {
+	inner staticFetcher
+	calls int
+}
+
+func (r *recordingFetcher) Fetch(ctx context.Context, ref mcp.SecretRef) (string, error) {
+	r.calls++
+	if r.inner == nil {
+		return "", nil
+	}
+	return r.inner.Fetch(ctx, ref)
 }
