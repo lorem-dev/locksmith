@@ -2,13 +2,11 @@
 
 ## Development
 
-- `locksmith init` interactive vault selection now hides planned (unimplemented)
-  vault backends from the multi-select list and shows them as a description note
-  instead. Only vaults with `Implemented: true` appear as selectable options.
-- `locksmith init --auto` no longer selects vault backends that have no
-  working plugin (1password, gnome-keyring). A new `Implemented bool` field
-  on `DetectedVault` distinguishes detection from plugin availability; only
-  vaults with both `Detected` and `Implemented` true are auto-selected.
+- `locksmith init` no longer offers vault backends without a working plugin.
+  `1password` and `gnome-keyring` are listed as "Planned (not yet supported)"
+  below the selectable list and cannot be chosen. Auto mode (`--auto`) also
+  skips them even when the underlying CLI binary (`op`, `secret-tool`) is
+  present in `$PATH`.
 - `locksmith mcp run` no longer contacts the vault at startup. The
   first `GetSecret` call for a given MCP server fires on the first
   MCP request from the AI client, so unused MCP servers never trigger
