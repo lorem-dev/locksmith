@@ -821,3 +821,50 @@ func TestRunInit_ShellHook_Error(t *testing.T) {
 		t.Errorf("RunInit() error = %v, want %v", err, wantErr)
 	}
 }
+
+func TestRunInit_Auto_SkipsPlannedVaults(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	// Override DetectVaultsFn to return a controlled set:
+	// - 1password: detected but not implemented
+	// - gopass: detected and implemented
+	orig := initflow.DetectVaultsFn
+	initflow.DetectVaultsFn = func() []initflow.DetectedVault {
+		return []initflow.DetectedVault{
+			{Type: "1password", Detected: true, Available: true, Implemented: false},
+			{Type: "gopass", Detected: true, Available: true, Implemented: true},
+		}
+	}
+	t.Cleanup(func() { initflow.DetectVaultsFn = orig })
+
+	result, err := initflow.RunInit(initflow.InitOptions{
+		Auto:       true,
+		SkipAgents: true,
+	})
+	if err != nil {
+		t.Fatalf("RunInit() error: %v", err)
+	}
+
+	// gopass must be selected
+	foundGopass := false
+	for _, v := range result.SelectedVaults {
+		if v == "gopass" {
+			foundGopass = true
+		}
+	}
+	if !foundGopass {
+		t.Errorf("SelectedVaults = %v, want to contain gopass", result.SelectedVaults)
+	}
+
+	// 1password must NOT be selected
+	for _, v := range result.SelectedVaults {
+		if v == "1password" {
+			t.Errorf("SelectedVaults = %v, must not contain 1password (not implemented)", result.SelectedVaults)
+		}
+	}
+
+	if len(result.SelectedVaults) != 1 {
+		t.Errorf("SelectedVaults = %v, want exactly [gopass]", result.SelectedVaults)
+	}
+}

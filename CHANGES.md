@@ -2,6 +2,10 @@
 
 ## Development
 
+- `locksmith init --auto` no longer selects vault backends that have no
+  working plugin (1password, gnome-keyring). A new `Implemented bool` field
+  on `DetectedVault` distinguishes detection from plugin availability; only
+  vaults with both `Detected` and `Implemented` true are auto-selected.
 - `locksmith mcp run` no longer contacts the vault at startup. The
   first `GetSecret` call for a given MCP server fires on the first
   MCP request from the AI client, so unused MCP servers never trigger

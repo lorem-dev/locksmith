@@ -94,6 +94,13 @@ var (
 	fmtBooleans = color.New(color.FgMagenta)
 )
 
+// DetectVaultsFnType is the function signature for detecting vault backends.
+type DetectVaultsFnType func() []DetectedVault
+
+// DetectVaultsFn is the function used to detect vault backends. Replaced in
+// tests to inject a stub without touching the real filesystem.
+var DetectVaultsFn DetectVaultsFnType = DetectVaults
+
 // RunInit runs the interactive setup wizard. In --auto mode all prompts are
 // skipped and detected defaults are applied. In --no-tui mode huh's accessible
 // mode is used (plain text prompts), which also activates automatically when
@@ -215,10 +222,10 @@ func RunInit(opts InitOptions) (*InitResult, error) {
 
 // selectVaults fills result.SelectedVaults based on detection and prompting.
 func selectVaults(result *InitResult, opts InitOptions, prompter Prompter) error {
-	detectedVaults := DetectVaults()
+	detectedVaults := DetectVaultsFn()
 	if opts.Auto {
 		for _, v := range detectedVaults {
-			if v.Detected {
+			if v.Detected && v.Implemented {
 				result.SelectedVaults = append(result.SelectedVaults, v.Type)
 			}
 		}
