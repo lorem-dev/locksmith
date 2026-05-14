@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/lorem-dev/locksmith/internal/bundled"
+	"github.com/lorem-dev/locksmith/internal/config"
 	"github.com/lorem-dev/locksmith/internal/initflow"
 )
 
@@ -405,19 +406,22 @@ func TestHuhPrompter_VaultSelection_PlannedExcluded(t *testing.T) {
 	// Enter 0 to confirm the default selection.
 	p := newHuhWithInput("0\n")
 	vaults := []initflow.DetectedVault{
-		{Type: "gopass", Available: true, Detected: true, Implemented: true},
-		{Type: "1password", Available: true, Detected: true, Implemented: false},
+		{Type: config.VaultGopass, Available: true, Detected: true, Implemented: true},
+		{Type: config.VaultOnePassword, Available: true, Detected: true, Implemented: false},
 	}
 	got, err := p.VaultSelection(vaults)
 	if err != nil {
 		t.Fatalf("VaultSelection() error: %v", err)
 	}
+	if len(got) != 1 {
+		t.Errorf("VaultSelection returned %d vaults, want exactly 1 (gopass)", len(got))
+	}
 	found := false
 	for _, v := range got {
-		if v == "gopass" {
+		if v == config.VaultGopass {
 			found = true
 		}
-		if v == "1password" {
+		if v == config.VaultOnePassword {
 			t.Errorf("VaultSelection() returned planned backend %q", v)
 		}
 	}
@@ -430,13 +434,16 @@ func TestHuhPrompter_VaultSelection_NoImplemented_Errors(t *testing.T) {
 	// All vaults are planned (Implemented: false); VaultSelection must return an error.
 	p := newHuhWithInput("")
 	vaults := []initflow.DetectedVault{
-		{Type: "1password", Available: true, Detected: true, Implemented: false},
+		{Type: config.VaultOnePassword, Available: true, Detected: true, Implemented: false},
 	}
 	_, err := p.VaultSelection(vaults)
 	if err == nil {
 		t.Fatal("VaultSelection() expected error, got nil")
 	}
 	if !strings.Contains(err.Error(), "no implemented vault backends available") {
-		t.Errorf("VaultSelection() error = %q, want message containing 'no implemented vault backends available'", err.Error())
+		t.Errorf(
+			"VaultSelection() error = %q, want message containing 'no implemented vault backends available'",
+			err.Error(),
+		)
 	}
 }

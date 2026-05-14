@@ -22,10 +22,11 @@ type DetectedAgent struct {
 
 // DetectedVault describes a vault backend found on the system.
 type DetectedVault struct {
-	Type        string
-	Detected    bool
-	Available   bool // false on unsupported platforms
-	Implemented bool // false for backends without a working plugin
+	Type         string
+	Detected     bool
+	Available    bool   // false on unsupported platforms
+	Implemented  bool   // false for backends without a working plugin
+	PlatformNote string // non-empty if the backend is platform-restricted, e.g. "Linux only"
 }
 
 // DetectAgents scans homeDir for known AI agent installations.
@@ -66,7 +67,12 @@ func DetectVaults() []DetectedVault {
 		{Type: config.VaultKeychain, Available: runtime.GOOS == platform.Darwin, Implemented: true},
 		{Type: config.VaultGopass, Available: true, Implemented: true},
 		{Type: config.VaultOnePassword, Available: true, Implemented: false},
-		{Type: config.VaultGnomeKeyring, Available: runtime.GOOS == platform.Linux, Implemented: false},
+		{
+			Type:         config.VaultGnomeKeyring,
+			Available:    runtime.GOOS == platform.Linux,
+			Implemented:  false,
+			PlatformNote: "Linux only",
+		},
 	}
 
 	for i := range vaults {
