@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/charmbracelet/huh"
 	"github.com/fatih/color"
@@ -589,8 +590,20 @@ func (p *huhPrompter) ConfigLocation(defaultDir string) (string, error) {
 
 // VaultSelection prompts for vault backend selection.
 func (p *huhPrompter) VaultSelection(vaults []DetectedVault) ([]string, error) {
-	options := make([]huh.Option[string], 0, len(vaults))
+	var implemented, planned []DetectedVault
 	for _, v := range vaults {
+		if v.Implemented {
+			implemented = append(implemented, v)
+		} else {
+			planned = append(planned, v)
+		}
+	}
+	if len(implemented) == 0 {
+		return nil, fmt.Errorf("no implemented vault backends available on this platform")
+	}
+
+	options := make([]huh.Option[string], 0, len(implemented))
+	for _, v := range implemented {
 		label := v.Type
 		if v.Detected {
 			label += " (detected)"
@@ -600,22 +613,44 @@ func (p *huhPrompter) VaultSelection(vaults []DetectedVault) ([]string, error) {
 		}
 		options = append(options, huh.NewOption(label, v.Type))
 	}
-	// Pre-select all vaults that were detected and are available on this platform.
+
 	var selected []string
-	for _, v := range vaults {
+	for _, v := range implemented {
 		if v.Detected && v.Available {
 			selected = append(selected, v.Type)
 		}
 	}
+
 	form := p.formWith(huh.NewForm(huh.NewGroup(
 		huh.NewMultiSelect[string]().
 			Title("Which vault backends do you use?").
+			Description(plannedNote(planned)).
 			Options(options...).Value(&selected),
 	)))
 	if err := form.Run(); err != nil {
 		return nil, fmt.Errorf("selecting vaults: %w", err)
 	}
 	return selected, nil
+}
+
+// plannedNote formats a description listing planned vault backends.
+// Returns empty string when planned is empty (huh shows no description).
+func plannedNote(planned []DetectedVault) string {
+	if len(planned) == 0 {
+		return ""
+	}
+	labels := make([]string, len(planned))
+	for i, v := range planned {
+		labels[i] = plannedLabel(v)
+	}
+	return "Planned (not yet supported): " + strings.Join(labels, ", ") + "."
+}
+
+func plannedLabel(v DetectedVault) string {
+	if v.Type == config.VaultGnomeKeyring {
+		return v.Type + " (Linux only)"
+	}
+	return v.Type
 }
 
 // AgentSelection prompts which detected agents to configure.

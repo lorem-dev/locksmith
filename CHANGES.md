@@ -2,6 +2,9 @@
 
 ## Development
 
+- `locksmith init` interactive vault selection now hides planned (unimplemented)
+  vault backends from the multi-select list and shows them as a description note
+  instead. Only vaults with `Implemented: true` appear as selectable options.
 - `locksmith init --auto` no longer selects vault backends that have no
   working plugin (1password, gnome-keyring). A new `Implemented bool` field
   on `DetectedVault` distinguishes detection from plugin availability; only

@@ -75,8 +75,8 @@ func TestHuhPrompter_VaultSelection_SelectOne(t *testing.T) {
 	// gopass is detected and available, so it is pre-selected; enter 0 to confirm.
 	p := newHuhWithInput("0\n")
 	vaults := []initflow.DetectedVault{
-		{Type: "gopass", Available: true, Detected: true},
-		{Type: "keychain", Available: true, Detected: false},
+		{Type: "gopass", Available: true, Detected: true, Implemented: true},
+		{Type: "keychain", Available: true, Detected: false, Implemented: true},
 	}
 	got, err := p.VaultSelection(vaults)
 	if err != nil {
@@ -91,7 +91,7 @@ func TestHuhPrompter_VaultSelection_SelectNone(t *testing.T) {
 	// Immediately enter 0 → no vaults selected.
 	p := newHuhWithInput("0\n")
 	vaults := []initflow.DetectedVault{
-		{Type: "gopass", Available: true},
+		{Type: "gopass", Available: true, Implemented: true},
 	}
 	got, err := p.VaultSelection(vaults)
 	if err != nil {
@@ -240,7 +240,7 @@ func TestHuhPrompter_VaultSelection_Unavailable(t *testing.T) {
 	// Exercises the "not available on this platform" label branch.
 	p := newHuhWithInput("0\n")
 	vaults := []initflow.DetectedVault{
-		{Type: "keychain", Available: false, Detected: false},
+		{Type: "keychain", Available: false, Detected: false, Implemented: true},
 	}
 	got, err := p.VaultSelection(vaults)
 	if err != nil {
@@ -397,5 +397,46 @@ func TestHuhPrompter_BundleExtractPrompt_Accessible(t *testing.T) {
 	}
 	if res != bundled.Keep {
 		t.Errorf("res = %v, want bundled.Keep (accessible default)", res)
+	}
+}
+
+func TestHuhPrompter_VaultSelection_PlannedExcluded(t *testing.T) {
+	// gopass is implemented and pre-selected; 1password is planned and must be excluded.
+	// Enter 0 to confirm the default selection.
+	p := newHuhWithInput("0\n")
+	vaults := []initflow.DetectedVault{
+		{Type: "gopass", Available: true, Detected: true, Implemented: true},
+		{Type: "1password", Available: true, Detected: true, Implemented: false},
+	}
+	got, err := p.VaultSelection(vaults)
+	if err != nil {
+		t.Fatalf("VaultSelection() error: %v", err)
+	}
+	found := false
+	for _, v := range got {
+		if v == "gopass" {
+			found = true
+		}
+		if v == "1password" {
+			t.Errorf("VaultSelection() returned planned backend %q", v)
+		}
+	}
+	if !found {
+		t.Errorf("VaultSelection() = %v, want result containing gopass", got)
+	}
+}
+
+func TestHuhPrompter_VaultSelection_NoImplemented_Errors(t *testing.T) {
+	// All vaults are planned (Implemented: false); VaultSelection must return an error.
+	p := newHuhWithInput("")
+	vaults := []initflow.DetectedVault{
+		{Type: "1password", Available: true, Detected: true, Implemented: false},
+	}
+	_, err := p.VaultSelection(vaults)
+	if err == nil {
+		t.Fatal("VaultSelection() expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "no implemented vault backends available") {
+		t.Errorf("VaultSelection() error = %q, want message containing 'no implemented vault backends available'", err.Error())
 	}
 }
