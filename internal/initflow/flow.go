@@ -647,8 +647,8 @@ func plannedNote(planned []DetectedVault) string {
 }
 
 func plannedLabel(v DetectedVault) string {
-	if v.Type == config.VaultGnomeKeyring {
-		return v.Type + " (Linux only)"
+	if v.PlatformNote != "" {
+		return v.Type + " (" + v.PlatformNote + ")"
 	}
 	return v.Type
 }
