@@ -31,6 +31,26 @@ When conversing with the user, always respond in the user's language.
 - `docs/superpowers/specs/` - superpowers design specs (gitignored, default spec location)
 - `.worktrees/` - git worktrees (gitignored, default worktree location)
 
+## Project skills (`.claude/skills/`)
+
+Locksmith ships project-specific skills that drive recurring
+workflows. Invoke them via the `Skill` tool. Each skill is
+self-contained; consult its `SKILL.md` for the exact step list.
+
+| Skill | When to use |
+|---|---|
+| `verification` | Mandatory final step of every superpowers plan. Runs lint, race, coverage, build, GPG, docs, and CHANGES.md checks via `.scripts/verification.sh`. |
+| `check-licenses` | After adding or removing any direct Go dependency. Audits license compatibility with Apache 2.0 and updates `LICENSE`. |
+| `release-prep` | On `develop` before cutting a release. Verifies each accumulated `## Development` bullet has matching docs updates since the last tag, then drives `version-bump`. Read-only; never pushes or tags. |
+| `version-bump` | Driven by `release-prep` (rarely invoked directly). Bumps `sdk/version/VERSION`, syncs the README install pin, and invokes `changelog`. Prints the git commands; does not execute them. |
+| `changelog` | Compresses `## Development` into a versioned `## Version vX.Y.Z` section. Triages bullets into BREAKING / Features / Fixes; drops internal noise. |
+
+**Skills that print commands never run them.** `release-prep` and
+`version-bump` are read-only: they print the `git add`, `git push`,
+`gh pr create`, and `git tag` commands for the maintainer to copy.
+The maintainer is responsible for pushing branches, opening PRs,
+merging them, and creating the release tag.
+
 ## Superpowers Conventions
 - **Plans and specs MUST be saved under `docs/superpowers/`. Never save them
   under `.claude/`, the user's home directory, `/tmp`, or anywhere else.**
@@ -43,20 +63,31 @@ When conversing with the user, always respond in the user's language.
 
 ## Final Verification (mandatory last step in every superpowers plan)
 
-Every superpowers plan MUST end with a task that runs the `verification` skill.
-When writing a plan, the last numbered task must be:
+Every superpowers plan MUST end with a task that runs the `verification`
+skill. When writing a plan, the last numbered task must be:
 
 ```
 ### Task N: Final Verification
 - [ ] Run the `verification` skill
 ```
 
-The skill runs `.scripts/verification.sh` which checks: lint, race tests,
-coverage >= 90% per package, build, GPG signatures on branch commits, docs
-updated alongside functional changes, and CHANGES.md has a ## Development entry.
-It then offers to compress CHANGES.md via the `changelog` skill if 5 or more
-entries have accumulated. Do not mark a feature branch done until this task
-passes with all gates green.
+Do not mark a feature branch done until this task passes with all
+gates green. Consult the skill's `SKILL.md` for the gate list.
+
+## Branching
+
+- **Do not commit directly to `main`.** The only exception is hotfixes
+  targeting a released version - and even those should go via a PR
+  unless the situation is genuinely urgent. See the "Hotfix flow"
+  section in `CONTRIBUTING.md` for the branch-from-main pattern and
+  the `## Development` cleanup that follows.
+- Day-to-day work lands on `develop`, either via PRs from feature
+  branches or directly by maintainers.
+- Releases are cut by opening a PR from `develop` into `main`. The
+  merge commit on `main` is the release commit; the tag is created
+  from that commit. See `CONTRIBUTING.md` for the full release flow.
+- When opening a PR, the default base branch is `develop` unless the
+  change is an explicit release PR or hotfix to `main`.
 
 ## Commits
 Follow Conventional Commits (see CONTRIBUTING.md).
@@ -151,23 +182,24 @@ the host `locksmith` version - no network resolution. See
 [`PLUGINS.md`](PLUGINS.md) for the full overview.
 
 ## Changelog (CHANGES.md)
-**Every user-visible change must be recorded in `CHANGES.md` before the work is considered done.**
 
-Rules:
-- Development changes go under `## Development` (create the section if missing).
-- Releases go under `## Version vX.Y.Z`.
-- One bullet per logical change: what changed and why, in plain English.
-- Update `CHANGES.md` in the same commit as the code change - never as a follow-up.
+Every user-visible change must be recorded in `CHANGES.md` under
+`## Development` in the **same commit** as the code change - never
+as a follow-up. One bullet per logical change. Breaking changes
+start with `BREAKING:` (see the `changelog` skill for the full
+rules).
 
-**Superpowers plans must include a dedicated step for updating `CHANGES.md`.**
-When writing a plan (`docs/superpowers/plans/`), add an explicit task like:
+When writing a superpowers plan, include an explicit task for
+updating `CHANGES.md` before the "commit" step:
+
 ```
 - [ ] Update CHANGES.md under ## Development with a summary of the change
 ```
-This step must appear before the "commit" step in every plan.
 
-Use the `changelog` skill (`.claude/skills/changelog/SKILL.md`) to compress the
-`## Development` section into a versioned entry before cutting a release.
+For releases, run the `release-prep` skill on `develop`: it
+verifies docs are updated for each accumulated change, then drives
+`version-bump` (which itself invokes `changelog` for compression).
+See `CONTRIBUTING.md` for the release-via-PR flow.
 
 ## Typography
 All documentation and comments must use ASCII punctuation only:

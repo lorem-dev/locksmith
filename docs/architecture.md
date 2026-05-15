@@ -103,10 +103,17 @@ sends its first MCP request:
   parent until exit (process tree: client -> locksmith -> child,
   ~5-10 MB residency overhead).
 - **Proxy mode** (`--url URL`): same first-line gate. On the first
-  non-empty line locksmith resolves header templates, builds the
-  Transport (Streamable HTTP, SSE, or Auto), and calls Connect. The
-  forwarding loop then sends the buffered first line and continues
-  for the lifetime of the connection.
+  non-empty line locksmith creates the Transport with its static
+  headers (those whose value template contains no vault reference)
+  and a `HeaderResolver` closure that resolves the templated
+  headers on demand. The transport sends the first request with
+  static headers only; if the server responds `401` or `403`, the
+  transport invokes the resolver, caches the resulting auth
+  headers under a mutex, and retries the request once. Subsequent
+  requests reuse the cached headers for the lifetime of the
+  connection (sticky `authenticated` state). Servers that accept
+  the MCP `initialize` handshake without auth therefore never
+  trigger a vault prompt for that connection.
 
 Each mode resolves its secrets exactly once - lazily, but not
 repeatedly. Subsequent client requests reuse the env vars or HTTP
@@ -119,6 +126,15 @@ returns an `"invalid session"` error; the fetcher invokes a
 `SessionStart`), updates its stored session ID under a mutex with a
 compare-and-swap to avoid double refreshes, and retries the request
 once. A second failure is propagated to the caller.
+
+Auth-deferral applies to `StreamableHTTP` and `SSETransport`
+identically: both retry the failed request once with resolved auth
+on `401`/`403`. `AutoTransport` is unaware of auth - it delegates
+to its inner transport. There is one documented limitation: when
+auth is resolved late while a long-lived SSE GET stream is already
+open without auth, the GET is not reopened. Operators of servers
+that authorise the GET but filter notifications on auth should set
+`--transport http`.
 
 In local mode locksmith installs `signal.Notify` for SIGTERM and
 SIGINT while the child is running and forwards each received signal

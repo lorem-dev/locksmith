@@ -1,6 +1,6 @@
 ---
 name: version-bump
-description: Bump the locksmith version, compress the changelog into a versioned section, and print the manual git tag commands. Use before cutting a release.
+description: Bump the locksmith version and compress the changelog into a versioned section. PRINTS the git commit/push/tag commands for the user to copy; never runs git add, commit, push, or tag itself.
 ---
 
 ## Instructions
@@ -96,32 +96,56 @@ drift forward.
 
 ### Step 6 - Compress the changelog
 
-Invoke the `changelog` skill via the `Skill` tool. It prompts for the
-version with its "Ask for version" step. When the prompt arrives,
-supply the chosen version as the answer (this is the version-bump
-skill's responsibility - in conversational flow, type the version
-into the changelog skill's prompt). Today's date in `YYYY-MM-DD` is
-the release date.
+Invoke the `changelog` skill via the `Skill` tool. When the skill's
+"Ask for version" step prompts, answer with the version chosen in
+Step 3 and today's date (`YYYY-MM-DD`); do not re-prompt the user.
 
 The `changelog` skill replaces the old `## Development` block with a
 new empty `## Development` plus a `## Version vX.Y.Z - YYYY-MM-DD`
 section containing the compressed bullets.
 
-### Step 7 - Print next steps
+### Step 7 - Print the commands the user will run manually
 
-Print verbatim:
+> **HARD RULE.** From this point on the skill is read-only. You MUST
+> NOT run `git add`, `git commit`, `git push`, or `git tag`. You
+> MUST NOT open the PR yourself. The commands below are printed for
+> the human maintainer to copy, review, and execute. The human is
+> the one who pushes branches, opens the release PR, merges it, and
+> creates the tag.
+
+Releases ship via a PR from `develop` into `main`; the merge commit
+on `main` is the release commit and the tag is created from it. See
+"Release flow" in `CONTRIBUTING.md`.
+
+Print verbatim (this is your last output - no further tool calls):
 
 ```
-Version bumped to vX.Y.Z. Review the diff, then:
+Version bumped to vX.Y.Z. Run the following yourself.
+
+On develop, review the diff then commit:
+
   git add sdk/version/VERSION CHANGES.md LICENSE README.md
   git commit -S -m "release: vX.Y.Z"
+
+Push develop and open a PR develop -> main with the new
+## Version vX.Y.Z section as the description:
+
+  git push origin develop
+  # then open the PR in your browser or with `gh pr create --base main`
+
+After the PR is merged, tag the merge commit on main:
+
+  git checkout main && git pull
+  git log -1 --format='%s'    # sanity-check HEAD is the release merge
   git tag -s vX.Y.Z -m "vX.Y.Z"
-  git push --follow-tags
+  git push origin vX.Y.Z       # push only the new tag, not all tags
 ```
 
 ### Notes
 
-- Do NOT run `git add`, `git commit`, `git tag`, or `git push`.
-- Do NOT include AI tool names in commit messages or tag messages.
+- The skill ends after Step 7's print. Do NOT continue with git
+  operations; do NOT open the PR; do NOT push or tag.
+- Do NOT include AI tool names in the commit message or tag
+  message that the user will write.
 - Pre-release suffixes (e.g. `-rc1`, `-alpha`) are out of scope for
   this skill; if needed, write the version manually in step 3.

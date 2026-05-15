@@ -1,109 +1,192 @@
 ---
 name: changelog
-description: Compress development changes into a versioned CHANGES.md entry before cutting a release
+description: Compress development changes into a versioned CHANGES.md entry before cutting a release. Keeps only BREAKING changes, user-visible features, and fixes; drops internal noise.
 ---
 
 ## Instructions
 
-Read CHANGES.md and identify all items listed under `## Development`. Call this list `entries`.
-Record `original_count` = the number of items in `entries`.
+**Announce at start:** "I'm using the changelog skill."
 
-If `entries` is empty, skip to "Ask for version".
+Read `CHANGES.md` and collect every bullet under `## Development`
+into a list `entries`. Record `original_count = len(entries)`. If
+`entries` is empty, skip to "Ask for version".
 
----
-
-### Pass 1: Auto-merge (apply silently, no user prompt)
-
-Scan `entries` for these patterns. For each match, replace the involved entries with the merged result. Track: `pass1_count` (groups merged), `dropped_count` (net-zero pairs removed).
-
-**Pattern 1 - Rename + subsequent change:**
-If entry A describes a rename (`X renamed to Y`) and entry B mentions `Y` as the subject of a further change, merge A and B into one entry describing the final state.
-
-Example:
-- `SDK: HideSession renamed to HideSessionId (breaking change)` + `SDK: new MaskSessionId function for log call sites`
-- Becomes: `SDK: HideSession renamed to HideSessionId (breaking change); added MaskSessionId for log call sites.`
-
-**Pattern 2 - Add + Remove (net-zero):**
-If entry A adds feature/symbol X and entry B explicitly removes, reverts, or undoes X, drop both entries entirely. Increment `dropped_count` by the number of removed entries.
-
-**Pattern 3 - Add + Extend:**
-If entry A introduces feature X and entry B extends, refines, or documents the same feature (same component, high overlap in key terms), merge into one entry describing the complete final state.
-
-If no matches are found in Pass 1, proceed to Pass 2 without any output. Do not tell the user "no conflicts found" - just proceed silently.
-
----
-
-### Pass 2: Ambiguous groups (confirm with user)
-
-Scan remaining `entries` for groups where 2 or more entries share the same component, module, config key, or named feature but do not match a clear Pass 1 pattern. Track: `pass2_count` (number of groups confirmed or edited by user - increments by 1 per group, not per entry).
-
-For each ambiguous group, show:
+The output of this skill is a `## Version vX.Y.Z` section with three
+optional subsections, in this fixed order:
 
 ```
-Found overlap:
-  BEFORE:
-    - [original entry 1]
-    - [original entry 2]
-    ...
+## Version vX.Y.Z - YYYY-MM-DD
 
-  PROPOSED:
-    - [single merged entry describing the final observable state]
+### BREAKING CHANGES
+- BREAKING: <verbatim>
 
-Accept? [yes / edit / keep as-is]
+### Features
+- <one-line user-visible feature>
+
+### Fixes
+- <one-line fix>
 ```
 
-Wait for the user's response before moving to the next group:
-- `yes` - use the proposed merged entry; increment `pass2_count`
-- `edit` - user provides replacement text; use it; increment `pass2_count`
-  When the user responds `edit`, reply with: `Please provide the replacement text for this group:` and wait for their input.
-- `keep as-is` - all original entries remain unchanged; do not increment `pass2_count`
+The goal is signal, not exhaustiveness. A reader scanning the
+release entry should see what they need to migrate (BREAKING), what
+they can now do (Features), and what stopped misbehaving (Fixes) -
+nothing else.
 
-If no ambiguous groups are found, skip Pass 2 silently.
+### BREAKING entries (immutable contract)
 
----
+Bullets that begin with `BREAKING:` (uppercase, colon, then space)
+are treated specially in every pass below and in the final write:
 
-### Ask for version
+1. **One bullet per change.** Do NOT merge two `BREAKING:` bullets
+   in any pass. Each remains independently addressable.
+2. **Grouped at the top.** All `BREAKING:` bullets land under the
+   `### BREAKING CHANGES` heading, in their original chronological
+   order. They appear above `### Features` and `### Fixes`.
+3. **Verbatim across compressions.** When folding `## Development`
+   into `## Version vX.Y.Z`, every `BREAKING:` bullet is carried
+   forward as written. Non-BREAKING bullets MAY be merged, rephrased,
+   or dropped per the rules below.
+4. **Immutable after release.** Once a `## Version vX.Y.Z` heading
+   is tagged and pushed, its `BREAKING:` bullets must not be
+   reworded or removed (typo fixes that do not change meaning are
+   allowed).
+5. **Pre-release deletion only with logic revert.** A `BREAKING:`
+   bullet under `## Development` may be removed only if the same
+   change reverts the breaking logic. "Decided not to mention" is
+   not a valid reason.
 
-Ask the user for the version number (e.g. v0.1.0) and release date.
+### Step 1 - Auto-merge pass (silent)
 
----
+Scan `entries` for these patterns. Apply matches silently; track
+`pass1_count` (groups merged) and `dropped_count` (entries removed
+in net-zero pairs).
 
-### Summarize
+**Pattern 1 - Rename + subsequent change:** entry A renames `X` to
+`Y`, entry B describes a change to `Y`. Merge into one entry
+describing the final state.
 
-Summarize the final `entries` into a concise bullet list - group any remaining related changes, keep each bullet to one line.
-After summarizing, record `final_count` = the number of bullets in the final list.
+**Pattern 2 - Add + Remove (net-zero):** entry A adds feature `X`,
+entry B explicitly removes or reverts `X`. Drop both.
 
----
+**Pattern 3 - Add + Extend:** entry A introduces feature `X`,
+entry B extends or refines `X` (same component, high overlap in key
+terms). Merge into one entry describing the final state.
 
-### Diff summary
+Never apply these to `BREAKING:` entries (see rule 1 above).
 
-Before writing, show:
+### Step 2 - Triage into buckets
+
+Classify every surviving entry into exactly one bucket:
+
+| Bucket | What goes there | Examples |
+|---|---|---|
+| **drop** | Internal-only changes invisible to users. Refactors that do not change behaviour. Test-only changes. CI-only changes. Doc-only changes that do not announce new capabilities. Code-style fixes. Comment polish. Dependency bumps without user impact. | "refactor: extract helper", "test: add table cases", "ci: bump golangci-lint", "chore: tidy go.mod", "docs: fix typo" |
+| **break** | Already-tagged `BREAKING:` bullets. | "BREAKING: rename `--vault` to `--vault-name`" |
+| **feat** | New user-visible capability: new command, new flag, new config field, new behaviour, new platform support. One-liner per feature; if the feature is complex, the bullet points at `docs/` rather than describing it in full. | "add `locksmith mcp run` with proxy + local modes (see `docs/configuration.md`)" |
+| **fix** | Behavioural change that corrects a bug, regression, security issue, or visibly wrong output. | "fix(keychain): handle errSecUserCanceled from Touch ID prompt" |
+
+Rules for triage:
+
+- A `fix:` Conventional-Commits type is a strong signal for **fix**,
+  but classify by user impact, not by the commit verb. A "fix"
+  that is actually an internal cleanup is **drop**.
+- A `feat:` commit that is wholly internal (e.g. "feat(internal):
+  add helper") is **drop**.
+- Doc-only entries are **drop** unless they announce a new
+  capability that did not exist before (rare; usually paired with
+  code).
+- When in doubt, lean towards **drop**. The git log is the
+  exhaustive record; the changelog is the highlight reel.
+
+For each entry that is ambiguous (e.g. could be either **drop** or
+**fix** depending on user impact), ask the user before deciding.
+Show:
 
 ```
-Summary:
-  Auto-merged (Pass 1):  <pass1_count> groups
-  Confirmed by you:      <pass2_count> groups
-  Dropped (net-zero):    <dropped_count> entries
+Entry: <original bullet>
+  Suggested: <bucket>
+  Choose: [drop / feat / fix]
+```
+
+Accept `drop`, `feat`, `fix`, or their single-letter prefixes
+(`d`, `feat`, `fix`). Track `pass2_count` = number of ambiguous
+entries the user resolved.
+
+### Step 3 - Compress within buckets
+
+Within **feat** and **fix**:
+
+- One bullet per logical change. If multiple bullets describe
+  pieces of the same feature, merge into one bullet pointing at the
+  final state.
+- One line per bullet. No wrapped paragraphs.
+- If a feature is complex enough to need explanation, the bullet
+  reads like: `add foo (see docs/configuration.md#foo)`. Do not
+  inline the explanation - the changelog is not the docs.
+- Use plain English, present tense, imperative voice ("add", "fix",
+  not "added", "fixes").
+
+Within **break**: no compression. Each `BREAKING:` bullet stays as
+authored.
+
+### Step 4 - Ask for version
+
+Ask the user for the version number (e.g. `v0.3.0`) and release
+date (default: today, `YYYY-MM-DD`).
+
+### Step 5 - Preview
+
+Show a final preview with two parts: what's being written, and
+what's being dropped.
+
+```
+Final entry for vX.Y.Z - YYYY-MM-DD:
+
+  ## Version vX.Y.Z - YYYY-MM-DD
+
+  ### BREAKING CHANGES
+  - BREAKING: ...
+
+  ### Features
+  - ...
+
+  ### Fixes
+  - ...
+
+Dropped from changelog (still in git log):
+  - <original bullet>
+  - <original bullet>
+
+Counts:
+  Auto-merged:   <pass1_count> groups
+  Resolved:      <pass2_count> ambiguous entries
+  Net-zero:      <dropped_count> bullets
+  Triaged:       <drop_count> drops, <feat_count> feats, <fix_count> fixes, <break_count> breaks
   Entries: <original_count> -> <final_count>
-
-Final list for <version> - <date>:
-  - [bullet 1]
-  - [bullet 2]
-  ...
 
 Write CHANGES.md? [yes / edit]
 ```
 
-If the user says `edit`, ask what to change and apply it before writing.
+If `edit`, ask what to change and apply before writing.
 
----
-
-### Write
+### Step 6 - Write
 
 Replace the `## Development` section with:
-1. A new empty `## Development` section at the top
-2. A new `## Version <version> - <date>` section below it containing the compressed bullet list
 
-Write the updated CHANGES.md.
+1. A new empty `## Development` section at the top.
+2. A new `## Version vX.Y.Z - YYYY-MM-DD` section below it
+   containing the three subsections (omit any subsection that has
+   no entries).
 
-Do not include AI tool names in the changelog.
+Write `CHANGES.md`.
+
+### Notes
+
+- Subsections are omitted if empty. A release with only fixes
+  prints only `### Fixes`. A release with no BREAKING changes does
+  not print `### BREAKING CHANGES`.
+- Never include AI-tool names in any bullet.
+- If the user disputes a triage decision after the preview,
+  re-classify and reshow the preview. After three dispute rounds,
+  ask the user to authoritatively pick a bucket per entry to
+  prevent loops.

@@ -2,18 +2,23 @@
 
 ## Development
 
-- `locksmith mcp run` no longer contacts the vault at startup. The
-  first `GetSecret` call for a given MCP server fires on the first
-  MCP request from the AI client, so unused MCP servers never trigger
-  a Touch ID or GPG prompt. Local mode now stays resident as the
-  parent of the MCP server child (process tree:
-  `client -> locksmith -> child`, +5-10 MB RAM per server) and
-  forwards SIGTERM/SIGINT to the child for graceful shutdown.
-- `GRPCFetcher` recovers from `LOCKSMITH_SESSION` expiry between
-  `mcp run` startup and the first lazy fetch: on an `invalid session`
-  error it calls a `RefreshSession` closure (backed by `SessionStart`
-  on the daemon), updates the session ID under a mutex, and retries
-  the request once. Non-expiry errors propagate unchanged.
+## Version v0.3.0 - 2026-05-15
+
+### Features
+
+- add lazy secret resolution to `locksmith mcp run` - the vault is
+  touched on the first MCP request rather than at startup, in both
+  local (stdio-shim) and proxy (templated headers deferred until
+  401/403) modes; the daemon session is transparently refreshed if
+  it expires between startup and the first fetch (see
+  `docs/architecture.md` and `docs/configuration.md`)
+
+### Fixes
+
+- `locksmith init` no longer offers `1password` or `gnome-keyring`
+  as selectable vault backends - they appear as "Planned (not yet
+  supported)" and auto-mode skips them even when `op`/`secret-tool`
+  are in `$PATH`
 
 ## Version v0.2.0 - 2026-05-13
 
