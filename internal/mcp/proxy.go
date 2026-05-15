@@ -126,7 +126,6 @@ func buildAuthResolver(fetcher SecretFetcher, templates []HeaderMapping) HeaderR
 }
 
 func runLoop(ctx context.Context, setup transportSetup, auth *authState, in io.Reader, out io.Writer) error {
-	_ = auth // Reserved for body-level retry (Task 4/5).
 	reader := bufio.NewReader(in)
 
 	firstLine, err := readFirstNonEmptyLine(reader)
@@ -154,6 +153,7 @@ func runLoop(ctx context.Context, setup transportSetup, auth *authState, in io.R
 		out.Write(append(msg, '\n')) //nolint:errcheck
 	}
 
+	state := newProxyState()
 	done := make(chan struct{})
 	shutdown := func() {
 		select {
@@ -167,11 +167,11 @@ func runLoop(ctx context.Context, setup transportSetup, auth *authState, in io.R
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		forwardServerMessages(msgCh, done, writeMsg)
+		forwardServerMessagesWithTracking(msgCh, done, writeMsg, state, auth)
 	}()
 
 	var clientMsgCount uint64
-	if err := sendClientMessage(ctx, transport, firstLine, &clientMsgCount); err != nil {
+	if err := sendClientMessageTracked(ctx, transport, firstLine, &clientMsgCount, state, auth); err != nil {
 		shutdown()
 		wg.Wait()
 		return err
@@ -182,7 +182,7 @@ func runLoop(ctx context.Context, setup transportSetup, auth *authState, in io.R
 		if len(line) > 0 {
 			trimmed := bytes.TrimRight(line, "\r\n")
 			if len(trimmed) > 0 {
-				if err := sendClientMessage(ctx, transport, trimmed, &clientMsgCount); err != nil {
+				if err := sendClientMessageTracked(ctx, transport, trimmed, &clientMsgCount, state, auth); err != nil {
 					shutdown()
 					wg.Wait()
 					return err
@@ -225,15 +225,28 @@ func readFirstNonEmptyLine(reader *bufio.Reader) ([]byte, error) {
 	}
 }
 
-// forwardServerMessages reads server messages from msgCh and dispatches
-// them to writeMsg until either msgCh closes or done fires. When done
-// fires it first drains any messages already buffered in msgCh so late
-// responses still reach the client before shutdown.
-func forwardServerMessages(msgCh <-chan []byte, done <-chan struct{}, writeMsg func([]byte)) {
+// forwardServerMessagesWithTracking reads server messages from msgCh and
+// dispatches them to writeMsg until either msgCh closes or done fires.
+// When done fires it first drains any messages already buffered in
+// msgCh so late responses still reach the client before shutdown. While
+// auth has not been attempted, the response's id is removed from state
+// so the in-flight map only holds requests whose response has not been
+// forwarded yet. Task 5 swaps this for a variant that also inspects
+// responses and triggers resolve+retry.
+func forwardServerMessagesWithTracking(
+	msgCh <-chan []byte,
+	done <-chan struct{},
+	writeMsg func([]byte),
+	state *proxyState,
+	auth *authState,
+) {
 	var count uint64
 	forward := func(msg []byte) {
 		count++
 		log.Debug().Uint64("seq", count).Int("len", len(msg)).Msg("mcp proxy: server -> client")
+		if auth != nil && !auth.Attempted() {
+			_ = state.take(extractID(msg))
+		}
 		writeMsg(msg)
 	}
 	for {
@@ -270,4 +283,77 @@ func sendClientMessage(ctx context.Context, transport Transport, line []byte, co
 		return fmt.Errorf("sending message: %w", err)
 	}
 	return nil
+}
+
+// sendClientMessageTracked sends to transport and, while auth has not
+// been attempted, records the request's id for potential retry. The
+// stored bytes are a copy of line so subsequent stdin reads cannot
+// mutate them.
+func sendClientMessageTracked(
+	ctx context.Context,
+	transport Transport,
+	line []byte,
+	count *uint64,
+	state *proxyState,
+	auth *authState,
+) error {
+	if auth != nil && !auth.Attempted() {
+		if id := extractID(line); id != "" {
+			state.record(id, append([]byte(nil), line...))
+		}
+	}
+	return sendClientMessage(ctx, transport, line, count)
+}
+
+// proxyState tracks in-flight client request bytes by their JSON-RPC id
+// while body-level retry is still possible. Once authState.Attempted()
+// is true, no further tracking happens (zero overhead via take/record
+// short-circuits).
+type proxyState struct {
+	mu       sync.Mutex
+	inFlight map[string][]byte
+}
+
+func newProxyState() *proxyState {
+	return &proxyState{inFlight: make(map[string][]byte)}
+}
+
+// record stores the request bytes under id. No-op for empty id (e.g.
+// notifications) or after clear() has nilled the map.
+func (s *proxyState) record(id string, bytes []byte) {
+	if id == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.inFlight == nil {
+		return
+	}
+	s.inFlight[id] = bytes
+}
+
+// take removes and returns the request bytes for id, or nil if the id
+// is empty, unknown, or the map has been cleared.
+func (s *proxyState) take(id string) []byte {
+	if id == "" {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.inFlight == nil {
+		return nil
+	}
+	b := s.inFlight[id]
+	delete(s.inFlight, id)
+	return b
+}
+
+// clear releases the inFlight map. Subsequent record/take calls are
+// no-ops. Called once authState.Attempted() flips to true.
+//
+//nolint:unused // Wired up by Task 5 (body-level retry).
+func (s *proxyState) clear() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.inFlight = nil
 }
