@@ -1,4 +1,4 @@
-package mcp_test
+package mcp
 
 import (
 	"context"
@@ -6,13 +6,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/lorem-dev/locksmith/internal/mcp"
 )
 
 func TestStreamableHTTP_JSONResponse(t *testing.T) {
@@ -31,7 +30,7 @@ func TestStreamableHTTP_JSONResponse(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	transport, err := mcp.NewTransport(srv.URL, nil, nil, "http")
+	transport, err := NewTransport(srv.URL, nil, nil, "http")
 	require.NoError(t, err)
 	defer transport.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -72,7 +71,7 @@ func TestStreamableHTTP_SSEResponse(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	transport, err := mcp.NewTransport(srv.URL, nil, nil, "http")
+	transport, err := NewTransport(srv.URL, nil, nil, "http")
 	require.NoError(t, err)
 	defer transport.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -123,7 +122,7 @@ func TestAutoTransport_FallsBackToSSE(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	transport, err := mcp.NewTransport(srv.URL, nil, nil, "auto")
+	transport, err := NewTransport(srv.URL, nil, nil, "auto")
 	require.NoError(t, err)
 	defer transport.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -162,7 +161,7 @@ func TestStreamableHTTP_LazyAuth_200_StaysUnauthenticated(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	transport, err := mcp.NewTransport(srv.URL, nil, resolver, "http")
+	transport, err := NewTransport(srv.URL, nil, newAuthState(resolver), "http")
 	require.NoError(t, err)
 	defer transport.Close()
 
@@ -189,7 +188,7 @@ func TestStreamableHTTP_LazyAuth_NoResolver_NoRetry(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	transport, err := mcp.NewTransport(srv.URL, nil, nil, "http")
+	transport, err := NewTransport(srv.URL, nil, nil, "http")
 	require.NoError(t, err)
 	defer transport.Close()
 
@@ -224,7 +223,7 @@ func TestStreamableHTTP_LazyAuth_401_TriggersResolveAndRetry(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	transport, err := mcp.NewTransport(srv.URL, nil, resolver, "http")
+	transport, err := NewTransport(srv.URL, nil, newAuthState(resolver), "http")
 	require.NoError(t, err)
 	defer transport.Close()
 
@@ -260,7 +259,7 @@ func TestStreamableHTTP_LazyAuth_403_TreatedAsAuth(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	transport, err := mcp.NewTransport(srv.URL, nil, resolver, "http")
+	transport, err := NewTransport(srv.URL, nil, newAuthState(resolver), "http")
 	require.NoError(t, err)
 	defer transport.Close()
 
@@ -296,7 +295,7 @@ func TestStreamableHTTP_LazyAuth_AuthSticky(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	transport, err := mcp.NewTransport(srv.URL, nil, resolver, "http")
+	transport, err := NewTransport(srv.URL, nil, newAuthState(resolver), "http")
 	require.NoError(t, err)
 	defer transport.Close()
 
@@ -329,7 +328,7 @@ func TestStreamableHTTP_LazyAuth_AuthFailsAfterRetry(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	transport, err := mcp.NewTransport(srv.URL, nil, resolver, "http")
+	transport, err := NewTransport(srv.URL, nil, newAuthState(resolver), "http")
 	require.NoError(t, err)
 	defer transport.Close()
 
@@ -340,4 +339,44 @@ func TestStreamableHTTP_LazyAuth_AuthFailsAfterRetry(t *testing.T) {
 	err = transport.Send(ctx, []byte(`{}`))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "401")
+}
+
+// TestStreamableHTTP_BodyResolveThen401_NoSecondResolve verifies that
+// when the shared authState has already been resolved (e.g. by the
+// body-level retry path in the proxy run loop), a subsequent 401 from
+// the server is treated as a genuine failure: the transport does NOT
+// invoke the resolver again, and the error is propagated.
+func TestStreamableHTTP_BodyResolveThen401_NoSecondResolve(t *testing.T) {
+	var calls atomic.Int32
+	resolver := func(_ context.Context) (http.Header, error) {
+		calls.Add(1)
+		return http.Header{"X-Token": []string{"ok"}}, nil
+	}
+	auth := newAuthState(resolver)
+	if err := auth.resolveOnce(context.Background()); err != nil {
+		t.Fatalf("seed resolveOnce: %v", err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer server.Close()
+
+	tr := &StreamableHTTP{
+		baseURL:       server.URL,
+		client:        server.Client(),
+		staticHeaders: http.Header{},
+		auth:          auth,
+	}
+	_, err := tr.Connect(context.Background())
+	if err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	err = tr.Send(context.Background(), []byte(`{"jsonrpc":"2.0","id":1,"method":"x"}`))
+	if err == nil {
+		t.Fatal("Send: expected 401 error, got nil")
+	}
+	if got := calls.Load(); got != 1 {
+		t.Errorf("resolver calls = %d, want 1 (no second resolve)", got)
+	}
 }

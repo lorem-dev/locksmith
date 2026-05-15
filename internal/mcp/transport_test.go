@@ -1,4 +1,4 @@
-package mcp_test
+package mcp
 
 import (
 	"strings"
@@ -6,13 +6,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/lorem-dev/locksmith/internal/mcp"
 )
 
 func TestParseSSE(t *testing.T) {
 	input := "event: endpoint\ndata: /messages\n\nevent: message\ndata: {\"jsonrpc\":\"2.0\"}\n\n"
-	events := mcp.CollectSSE(strings.NewReader(input))
+	events := CollectSSE(strings.NewReader(input))
 	require.Len(t, events, 2)
 	assert.Equal(t, "endpoint", events[0].Type)
 	assert.Equal(t, "/messages", events[0].Data)
@@ -22,14 +20,14 @@ func TestParseSSE(t *testing.T) {
 
 func TestParseSSE_DataOnly(t *testing.T) {
 	input := "data: hello\n\ndata: world\n\n"
-	events := mcp.CollectSSE(strings.NewReader(input))
+	events := CollectSSE(strings.NewReader(input))
 	require.Len(t, events, 2)
 	assert.Equal(t, "", events[0].Type)
 	assert.Equal(t, "hello", events[0].Data)
 }
 
 func TestNewTransport_InvalidType(t *testing.T) {
-	_, err := mcp.NewTransport("https://example.com", nil, nil, "grpc")
+	_, err := NewTransport("https://example.com", nil, nil, "grpc")
 	require.ErrorContains(t, err, "unknown transport")
 }
 
@@ -46,8 +44,8 @@ func TestRedactURL(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, mcp.RedactURL(tc.input))
-			assert.NotContains(t, mcp.RedactURL(tc.input), "supersecret")
+			assert.Equal(t, tc.want, RedactURL(tc.input))
+			assert.NotContains(t, RedactURL(tc.input), "supersecret")
 		})
 	}
 }

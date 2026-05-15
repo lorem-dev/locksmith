@@ -40,14 +40,10 @@ type Transport interface {
 }
 
 // HeaderResolver returns the headers that must be attached to a request
-// when the remote MCP server demands authentication. Transport
-// implementations call it lazily on the first 401 or 403 response and
-// cache the result for the lifetime of the connection. The closure may
-// touch the vault and may take seconds to return; callers should not
-// hold any lock that blocks unrelated work while waiting.
-//
-// A nil HeaderResolver disables auth-retry: 401/403 responses are
-// propagated to the caller as ordinary errors.
+// when the remote MCP server demands authentication. authState invokes
+// the resolver at most once per proxy session. The closure may touch
+// the vault and may take seconds to return; callers should not hold any
+// lock that blocks unrelated work while waiting.
 type HeaderResolver func(ctx context.Context) (http.Header, error)
 
 // SSEEvent is a parsed server-sent event.
@@ -124,13 +120,14 @@ func readBody(resp *http.Response) ([]byte, error) {
 // string. transport must be "auto", "sse", or "http".
 //
 // staticHeaders are attached to every request from the first send.
-// resolveAuth, when non-nil, is invoked on the first 401/403 response;
-// its result is cached and merged with staticHeaders on every
-// subsequent request.
+// auth carries the shared one-shot header-resolution lifecycle; the
+// transport calls auth.resolveOnce on 401/403 responses and merges
+// auth.Headers() into every request after a successful resolve. A nil
+// auth disables 401/403 retry.
 func NewTransport(
 	baseURL string,
 	staticHeaders http.Header,
-	resolveAuth HeaderResolver,
+	auth *authState,
 	transport string,
 ) (Transport, error) {
 	client := &http.Client{Timeout: httpClientTimout}
@@ -139,21 +136,21 @@ func NewTransport(
 		return &StreamableHTTP{
 			baseURL:       baseURL,
 			staticHeaders: staticHeaders,
-			resolveAuth:   resolveAuth,
+			auth:          auth,
 			client:        client,
 		}, nil
 	case "sse":
 		return &SSETransport{
 			baseURL:       baseURL,
 			staticHeaders: staticHeaders,
-			resolveAuth:   resolveAuth,
+			auth:          auth,
 			client:        client,
 		}, nil
 	case "auto", "":
 		return &AutoTransport{
 			baseURL:       baseURL,
 			staticHeaders: staticHeaders,
-			resolveAuth:   resolveAuth,
+			auth:          auth,
 			client:        client,
 		}, nil
 	default:

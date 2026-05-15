@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/lorem-dev/locksmith/internal/log"
@@ -23,10 +22,7 @@ type SSETransport struct {
 	cancel   context.CancelFunc
 
 	staticHeaders http.Header
-	resolveAuth   HeaderResolver
-
-	authMu     sync.Mutex
-	cachedAuth http.Header
+	auth          *authState
 }
 
 func (t *SSETransport) Connect(ctx context.Context) (<-chan []byte, error) {
@@ -165,12 +161,13 @@ func (t *SSETransport) postEndpointOnce(ctx context.Context, msg []byte) (*http.
 // shouldRetryWithAuth reports whether the response status warrants an
 // auth resolve and retry. Mirrors StreamableHTTP.shouldRetryWithAuth.
 func (t *SSETransport) shouldRetryWithAuth(status int) bool {
+	if t.auth == nil {
+		return false
+	}
 	if status != http.StatusUnauthorized && status != http.StatusForbidden {
 		return false
 	}
-	t.authMu.Lock()
-	defer t.authMu.Unlock()
-	return t.cachedAuth == nil
+	return !t.auth.Attempted()
 }
 
 func (t *SSETransport) Close() error {
@@ -209,27 +206,24 @@ func (t *SSETransport) effectiveHeaders() http.Header {
 	for k, vs := range t.staticHeaders {
 		out[k] = append([]string(nil), vs...)
 	}
-	t.authMu.Lock()
-	for k, vs := range t.cachedAuth {
+	if t.auth == nil {
+		return out
+	}
+	for k, vs := range t.auth.Headers() {
 		out[k] = append([]string(nil), vs...)
 	}
-	t.authMu.Unlock()
 	return out
 }
 
+// ensureAuth resolves auth via the shared authState. Returns (true, nil)
+// when headers were resolved on this or a prior call, (false, nil) if
+// auth is unavailable, or (false, err) if the resolve failed.
 func (t *SSETransport) ensureAuth(ctx context.Context) (bool, error) {
-	if t.resolveAuth == nil {
+	if t.auth == nil {
 		return false, nil
 	}
-	t.authMu.Lock()
-	defer t.authMu.Unlock()
-	if t.cachedAuth != nil {
-		return true, nil
-	}
-	h, err := t.resolveAuth(ctx)
-	if err != nil {
+	if err := t.auth.resolveOnce(ctx); err != nil {
 		return false, fmt.Errorf("resolving auth headers: %w", err)
 	}
-	t.cachedAuth = h
-	return true, nil
+	return t.auth.Headers() != nil, nil
 }

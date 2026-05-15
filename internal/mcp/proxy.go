@@ -39,7 +39,7 @@ type transportSetup func(ctx context.Context) (Transport, <-chan []byte, error)
 // connection.
 func RunProxy(ctx context.Context, fetcher SecretFetcher, cfg ProxyConfig, in io.Reader, out io.Writer) error {
 	static, templates := splitHeaders(cfg.Headers)
-	resolver := buildAuthResolver(fetcher, templates)
+	auth := newAuthState(buildAuthResolver(fetcher, templates))
 	log.Debug().
 		Str("url", RedactURL(cfg.URL)).
 		Str("transport", cfg.Transport).
@@ -48,7 +48,7 @@ func RunProxy(ctx context.Context, fetcher SecretFetcher, cfg ProxyConfig, in io
 		Msg("mcp proxy: starting (lazy auth)")
 
 	setup := func(ctx context.Context) (Transport, <-chan []byte, error) {
-		transport, err := NewTransport(cfg.URL, static, resolver, cfg.Transport)
+		transport, err := NewTransport(cfg.URL, static, auth, cfg.Transport)
 		if err != nil {
 			log.Debug().Err(err).Msg("mcp proxy: creating transport failed")
 			return nil, nil, err
@@ -60,7 +60,7 @@ func RunProxy(ctx context.Context, fetcher SecretFetcher, cfg ProxyConfig, in io
 		}
 		return transport, msgCh, nil
 	}
-	return runLoop(ctx, setup, in, out)
+	return runLoop(ctx, setup, auth, in, out)
 }
 
 // RunProxyWithTransport runs the proxy loop against a pre-constructed
@@ -81,7 +81,7 @@ func RunProxyWithTransport(
 		}
 		return transport, msgCh, nil
 	}
-	return runLoop(ctx, setup, in, out)
+	return runLoop(ctx, setup, nil, in, out)
 }
 
 // splitHeaders partitions cfg.Headers by whether the template contains a
@@ -103,8 +103,8 @@ func splitHeaders(mappings []HeaderMapping) (http.Header, []HeaderMapping) {
 
 // buildAuthResolver returns a HeaderResolver closure that resolves the
 // supplied templated headers via fetcher on first call. Returns nil if
-// templates is empty - signalling to NewTransport that no auth-retry is
-// possible for this proxy session.
+// templates is empty; wrapping a nil resolver in authState yields a
+// no-op resolveOnce so transports skip the retry path.
 func buildAuthResolver(fetcher SecretFetcher, templates []HeaderMapping) HeaderResolver {
 	if len(templates) == 0 {
 		return nil
@@ -125,7 +125,8 @@ func buildAuthResolver(fetcher SecretFetcher, templates []HeaderMapping) HeaderR
 	}
 }
 
-func runLoop(ctx context.Context, setup transportSetup, in io.Reader, out io.Writer) error {
+func runLoop(ctx context.Context, setup transportSetup, auth *authState, in io.Reader, out io.Writer) error {
+	_ = auth // Reserved for body-level retry (Task 4/5).
 	reader := bufio.NewReader(in)
 
 	firstLine, err := readFirstNonEmptyLine(reader)

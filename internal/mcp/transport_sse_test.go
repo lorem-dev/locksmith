@@ -1,4 +1,4 @@
-package mcp_test
+package mcp
 
 import (
 	"context"
@@ -10,8 +10,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/lorem-dev/locksmith/internal/mcp"
 )
 
 func TestSSETransport_RoundTrip(t *testing.T) {
@@ -38,7 +36,7 @@ func TestSSETransport_RoundTrip(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	transport, err := mcp.NewTransport(srv.URL, nil, nil, "sse")
+	transport, err := NewTransport(srv.URL, nil, nil, "sse")
 	require.NoError(t, err)
 	defer transport.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -76,7 +74,7 @@ func TestSSETransport_AuthHeader(t *testing.T) {
 	defer srv.Close()
 
 	headers := http.Header{"Authorization": {"Bearer tok-123"}}
-	transport, err := mcp.NewTransport(srv.URL, headers, nil, "sse")
+	transport, err := NewTransport(srv.URL, headers, nil, "sse")
 	require.NoError(t, err)
 	defer transport.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -114,7 +112,7 @@ func TestSSETransport_LazyAuth_Connect_401_ReopensWithAuth(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	transport, err := mcp.NewTransport(srv.URL, nil, resolver, "sse")
+	transport, err := NewTransport(srv.URL, nil, newAuthState(resolver), "sse")
 	require.NoError(t, err)
 	defer transport.Close()
 
@@ -158,7 +156,7 @@ func TestSSETransport_LazyAuth_Send_401_RetriesWithAuth(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	transport, err := mcp.NewTransport(srv.URL, nil, resolver, "sse")
+	transport, err := NewTransport(srv.URL, nil, newAuthState(resolver), "sse")
 	require.NoError(t, err)
 	defer transport.Close()
 

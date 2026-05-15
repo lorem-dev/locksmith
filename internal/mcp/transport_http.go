@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 
 	"github.com/lorem-dev/locksmith/internal/log"
 )
@@ -20,10 +19,7 @@ type StreamableHTTP struct {
 	cancel  context.CancelFunc
 
 	staticHeaders http.Header
-	resolveAuth   HeaderResolver
-
-	authMu     sync.Mutex
-	cachedAuth http.Header
+	auth          *authState
 }
 
 func (t *StreamableHTTP) Connect(ctx context.Context) (<-chan []byte, error) {
@@ -153,16 +149,17 @@ func (t *StreamableHTTP) postOnce(ctx context.Context, msg []byte) (*http.Respon
 
 // shouldRetryWithAuth reports whether the given HTTP status is an
 // auth-related rejection that warrants resolving the auth header and
-// retrying once. Only valid before ensureAuth has succeeded; afterwards
+// retrying once. Only valid before authState has resolved; afterwards
 // 401/403 from the server is a genuine failure (the cached auth is
 // wrong or expired) and is propagated.
 func (t *StreamableHTTP) shouldRetryWithAuth(status int) bool {
+	if t.auth == nil {
+		return false
+	}
 	if status != http.StatusUnauthorized && status != http.StatusForbidden {
 		return false
 	}
-	t.authMu.Lock()
-	defer t.authMu.Unlock()
-	return t.cachedAuth == nil
+	return !t.auth.Attempted()
 }
 
 func (t *StreamableHTTP) Close() error {
@@ -173,41 +170,35 @@ func (t *StreamableHTTP) Close() error {
 }
 
 // effectiveHeaders returns the headers to attach to the next request:
-// staticHeaders alone before authentication, staticHeaders + cachedAuth
-// after. The returned header is a fresh copy safe for the caller to
-// mutate (e.g. set Content-Type) without affecting future calls.
+// staticHeaders alone before authentication, staticHeaders + auth
+// headers after. The returned header is a fresh copy safe for the
+// caller to mutate (e.g. set Content-Type) without affecting future
+// calls.
 func (t *StreamableHTTP) effectiveHeaders() http.Header {
 	out := make(http.Header, len(t.staticHeaders))
 	for k, vs := range t.staticHeaders {
 		out[k] = append([]string(nil), vs...)
 	}
-	t.authMu.Lock()
-	for k, vs := range t.cachedAuth {
+	if t.auth == nil {
+		return out
+	}
+	for k, vs := range t.auth.Headers() {
 		out[k] = append([]string(nil), vs...)
 	}
-	t.authMu.Unlock()
 	return out
 }
 
-// ensureAuth resolves the auth headers if they have not been resolved
-// yet. It returns true if auth is available (already cached or just
-// resolved), false if no resolver is configured. A non-nil error means
-// the resolver itself failed; the caller should propagate it.
+// ensureAuth resolves auth via the shared authState. Returns (true, nil)
+// when headers were resolved on this or a prior call, (false, nil) if
+// auth is unavailable, or (false, err) if the resolve failed.
 func (t *StreamableHTTP) ensureAuth(ctx context.Context) (bool, error) {
-	if t.resolveAuth == nil {
+	if t.auth == nil {
 		return false, nil
 	}
-	t.authMu.Lock()
-	defer t.authMu.Unlock()
-	if t.cachedAuth != nil {
-		return true, nil
-	}
-	h, err := t.resolveAuth(ctx)
-	if err != nil {
+	if err := t.auth.resolveOnce(ctx); err != nil {
 		return false, fmt.Errorf("resolving auth headers: %w", err)
 	}
-	t.cachedAuth = h
-	return true, nil
+	return t.auth.Headers() != nil, nil
 }
 
 // AutoTransport tries Streamable HTTP first; falls back to SSE on 404/405.
@@ -218,7 +209,7 @@ type AutoTransport struct {
 	client  *http.Client
 
 	staticHeaders http.Header
-	resolveAuth   HeaderResolver
+	auth          *authState
 
 	inner  Transport
 	outCh  chan []byte
@@ -234,7 +225,7 @@ func (t *AutoTransport) Connect(ctx context.Context) (<-chan []byte, error) {
 	t.inner = &StreamableHTTP{
 		baseURL:       t.baseURL,
 		staticHeaders: t.staticHeaders,
-		resolveAuth:   t.resolveAuth,
+		auth:          t.auth,
 		client:        t.client,
 	}
 	innerCh, err := t.inner.Connect(fwdCtx)
@@ -276,7 +267,7 @@ func (t *AutoTransport) Send(ctx context.Context, msg []byte) error {
 		sse := &SSETransport{
 			baseURL:       t.baseURL,
 			staticHeaders: t.staticHeaders,
-			resolveAuth:   t.resolveAuth,
+			auth:          t.auth,
 			client:        t.client,
 		}
 		sseCh, connectErr := sse.Connect(ctx)
