@@ -2,6 +2,11 @@
 
 ## Development
 
+- `locksmith init` no longer offers vault backends without a working plugin.
+  `1password` and `gnome-keyring` are listed as "Planned (not yet supported)"
+  below the selectable list and cannot be chosen. Auto mode (`--auto`) also
+  skips them even when the underlying CLI binary (`op`, `secret-tool`) is
+  present in `$PATH`.
 - `locksmith mcp run` no longer contacts the vault at startup. The
   first `GetSecret` call for a given MCP server fires on the first
   MCP request from the AI client, so unused MCP servers never trigger

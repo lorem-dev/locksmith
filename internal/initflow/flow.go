@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/charmbracelet/huh"
 	"github.com/fatih/color"
@@ -93,6 +94,13 @@ var (
 	fmtLists    = color.New(color.FgCyan)
 	fmtBooleans = color.New(color.FgMagenta)
 )
+
+// DetectVaultsFnType is the function signature for detecting vault backends.
+type DetectVaultsFnType func() []DetectedVault
+
+// DetectVaultsFn is the function used to detect vault backends. Replaced in
+// tests to inject a stub without touching the real filesystem.
+var DetectVaultsFn DetectVaultsFnType = DetectVaults
 
 // RunInit runs the interactive setup wizard. In --auto mode all prompts are
 // skipped and detected defaults are applied. In --no-tui mode huh's accessible
@@ -215,10 +223,10 @@ func RunInit(opts InitOptions) (*InitResult, error) {
 
 // selectVaults fills result.SelectedVaults based on detection and prompting.
 func selectVaults(result *InitResult, opts InitOptions, prompter Prompter) error {
-	detectedVaults := DetectVaults()
+	detectedVaults := DetectVaultsFn()
 	if opts.Auto {
 		for _, v := range detectedVaults {
-			if v.Detected {
+			if v.Detected && v.Implemented {
 				result.SelectedVaults = append(result.SelectedVaults, v.Type)
 			}
 		}
@@ -582,8 +590,20 @@ func (p *huhPrompter) ConfigLocation(defaultDir string) (string, error) {
 
 // VaultSelection prompts for vault backend selection.
 func (p *huhPrompter) VaultSelection(vaults []DetectedVault) ([]string, error) {
-	options := make([]huh.Option[string], 0, len(vaults))
+	var implemented, planned []DetectedVault
 	for _, v := range vaults {
+		if v.Implemented {
+			implemented = append(implemented, v)
+		} else {
+			planned = append(planned, v)
+		}
+	}
+	if len(implemented) == 0 {
+		return nil, fmt.Errorf("no implemented vault backends available on this platform")
+	}
+
+	options := make([]huh.Option[string], 0, len(implemented))
+	for _, v := range implemented {
 		label := v.Type
 		if v.Detected {
 			label += " (detected)"
@@ -593,22 +613,44 @@ func (p *huhPrompter) VaultSelection(vaults []DetectedVault) ([]string, error) {
 		}
 		options = append(options, huh.NewOption(label, v.Type))
 	}
-	// Pre-select all vaults that were detected and are available on this platform.
+
 	var selected []string
-	for _, v := range vaults {
+	for _, v := range implemented {
 		if v.Detected && v.Available {
 			selected = append(selected, v.Type)
 		}
 	}
+
 	form := p.formWith(huh.NewForm(huh.NewGroup(
 		huh.NewMultiSelect[string]().
 			Title("Which vault backends do you use?").
+			Description(plannedNote(planned)).
 			Options(options...).Value(&selected),
 	)))
 	if err := form.Run(); err != nil {
 		return nil, fmt.Errorf("selecting vaults: %w", err)
 	}
 	return selected, nil
+}
+
+// plannedNote formats a description listing planned vault backends.
+// Returns empty string when planned is empty (huh shows no description).
+func plannedNote(planned []DetectedVault) string {
+	if len(planned) == 0 {
+		return ""
+	}
+	labels := make([]string, len(planned))
+	for i, v := range planned {
+		labels[i] = plannedLabel(v)
+	}
+	return "Planned (not yet supported): " + strings.Join(labels, ", ") + "."
+}
+
+func plannedLabel(v DetectedVault) string {
+	if v.PlatformNote != "" {
+		return v.Type + " (" + v.PlatformNote + ")"
+	}
+	return v.Type
 }
 
 // AgentSelection prompts which detected agents to configure.
