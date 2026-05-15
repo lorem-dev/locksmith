@@ -2,34 +2,23 @@
 
 ## Development
 
-- `locksmith init` no longer offers vault backends without a working plugin.
-  `1password` and `gnome-keyring` are listed as "Planned (not yet supported)"
-  below the selectable list and cannot be chosen. Auto mode (`--auto`) also
-  skips them even when the underlying CLI binary (`op`, `secret-tool`) is
-  present in `$PATH`.
-- `locksmith mcp run` no longer contacts the vault at startup. The
-  first `GetSecret` call for a given MCP server fires on the first
-  MCP request from the AI client, so unused MCP servers never trigger
-  a Touch ID or GPG prompt. Local mode now stays resident as the
-  parent of the MCP server child (process tree:
-  `client -> locksmith -> child`, +5-10 MB RAM per server) and
-  forwards SIGTERM/SIGINT to the child for graceful shutdown.
-- `GRPCFetcher` recovers from `LOCKSMITH_SESSION` expiry between
-  `mcp run` startup and the first lazy fetch: on an `invalid session`
-  error it calls a `RefreshSession` closure (backed by `SessionStart`
-  on the daemon), updates the session ID under a mutex, and retries
-  the request once. Non-expiry errors propagate unchanged.
-- Proxy mode (`locksmith mcp run --url`) no longer sends vault-resolved
-  HTTP headers on the very first request. Static headers (those whose
-  value template contains no `{` token) are sent from the start;
-  templated headers are resolved and attached only after the remote
-  server responds `401` or `403`. Subsequent requests reuse the
-  resolved headers for the lifetime of the proxy session. Servers
-  that authorise the MCP `initialize` handshake without auth never
-  trigger a vault prompt for that connection. Known limitation: when
-  auth resolves late while a long-lived SSE GET stream is already
-  open, the GET is not reopened - operators of such servers should
-  set `--transport http`.
+## Version v0.3.0 - 2026-05-15
+
+### Features
+
+- add lazy secret resolution to `locksmith mcp run` - the vault is
+  touched on the first MCP request rather than at startup, in both
+  local (stdio-shim) and proxy (templated headers deferred until
+  401/403) modes; the daemon session is transparently refreshed if
+  it expires between startup and the first fetch (see
+  `docs/architecture.md` and `docs/configuration.md`)
+
+### Fixes
+
+- `locksmith init` no longer offers `1password` or `gnome-keyring`
+  as selectable vault backends - they appear as "Planned (not yet
+  supported)" and auto-mode skips them even when `op`/`secret-tool`
+  are in `$PATH`
 
 ## Version v0.2.0 - 2026-05-13
 
