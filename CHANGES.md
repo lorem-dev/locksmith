@@ -2,6 +2,13 @@
 
 ## Development
 
+- `locksmith mcp run --url` now triggers templated-header resolution
+  not only on HTTP `401/403` but also when the remote MCP server
+  returns `200 OK` with a JSON-RPC `error` field or a tool-level
+  `result.isError: true`. Resolution and retry happen exactly once
+  per session; if the retry also fails, the error is forwarded to the
+  AI client unchanged. Detection looks only at structural fields - no
+  keyword matching against `result.content[].text`.
 - `locksmith init` no longer offers vault backends without a working plugin.
   `1password` and `gnome-keyring` are listed as "Planned (not yet supported)"
   below the selectable list and cannot be chosen. Auto mode (`--auto`) also

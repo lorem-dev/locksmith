@@ -256,6 +256,14 @@ first request. The auth-deferral is automatic and has no config
 knob; servers that do not require auth on the MCP handshake therefore
 never trigger a vault prompt for that connection.
 
+The same one-shot resolution also fires on **JSON-RPC body errors**:
+if the remote server returns HTTP `200 OK` but the response carries a
+JSON-RPC `error` field or a tool-level `result.isError: true`,
+locksmith treats it as an auth-failure signal, resolves the templated
+headers, and retries the failing request once. If the retry also
+fails, the response is forwarded to the AI client unchanged. No
+configuration knob - the behaviour is automatic.
+
 ### mcp.servers.\<name\>.command
 
 **Required (local mode).** List of strings: executable followed by

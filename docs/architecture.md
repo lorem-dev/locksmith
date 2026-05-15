@@ -115,6 +115,20 @@ sends its first MCP request:
   the MCP `initialize` handshake without auth therefore never
   trigger a vault prompt for that connection.
 
+The same `resolveOnce` lifecycle also triggers on **body-level errors**:
+while the resolver has not yet been invoked, the proxy run loop
+inspects each server response. If the response is a JSON-RPC envelope
+with a non-empty top-level `error` field, or a `result.isError: true`
+tool error, the proxy treats it as an auth-failure signal: it calls
+`resolveOnce`, re-sends the original request bytes (keyed by JSON-RPC
+`id`), and waits for the response with the same id before forwarding
+to the client. Any other responses that arrive during the retry wait
+are forwarded as-is. After the first attempt (success or failure), no
+further body inspection happens; subsequent errors propagate verbatim.
+Free-form text inside `result.content[].text` is never matched against
+keywords - only structural signals (`error`, `isError`) trigger the
+retry.
+
 Each mode resolves its secrets exactly once - lazily, but not
 repeatedly. Subsequent client requests reuse the env vars or HTTP
 headers established on the first message.
