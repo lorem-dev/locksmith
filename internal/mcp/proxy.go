@@ -167,7 +167,7 @@ func runLoop(ctx context.Context, setup transportSetup, auth *authState, in io.R
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		forwardServerMessagesWithTracking(msgCh, done, writeMsg, state, auth)
+		forwardServerMessagesWithTracking(ctx, msgCh, done, writeMsg, state, auth, transport)
 	}()
 
 	var clientMsgCount uint64
@@ -227,52 +227,139 @@ func readFirstNonEmptyLine(reader *bufio.Reader) ([]byte, error) {
 
 // forwardServerMessagesWithTracking reads server messages from msgCh and
 // dispatches them to writeMsg until either msgCh closes or done fires.
-// When done fires it first drains any messages already buffered in
-// msgCh so late responses still reach the client before shutdown. While
-// auth has not been attempted, the response's id is removed from state
-// so the in-flight map only holds requests whose response has not been
-// forwarded yet. Task 5 swaps this for a variant that also inspects
-// responses and triggers resolve+retry.
+// While auth has not been attempted, each incoming response is inspected
+// for a body-level JSON-RPC error. On detection, the original request
+// bytes are looked up in state, the authState resolver is invoked once,
+// the request is re-sent with the freshly resolved headers, and the
+// retry response (matching the same id) is forwarded to the client in
+// place of the original error. If resolve or retry-Send fails, the
+// original error response is forwarded as-is.
 func forwardServerMessagesWithTracking(
+	ctx context.Context,
 	msgCh <-chan []byte,
 	done <-chan struct{},
 	writeMsg func([]byte),
 	state *proxyState,
 	auth *authState,
+	transport Transport,
 ) {
 	var count uint64
 	forward := func(msg []byte) {
 		count++
 		log.Debug().Uint64("seq", count).Int("len", len(msg)).Msg("mcp proxy: server -> client")
+		writeMsg(msg)
+	}
+
+	// drained tracks whether done has fired; once it has, subsequent
+	// recv calls read msgCh non-blockingly so any buffered late
+	// responses are forwarded without waiting on transports that do
+	// not close their server channel on shutdown.
+	drained := false
+	recv := func() ([]byte, bool) {
+		if drained {
+			return tryRecv(msgCh)
+		}
+		msg, ok, doneFired := blockingRecv(msgCh, done)
+		if doneFired {
+			drained = true
+			return tryRecv(msgCh)
+		}
+		return msg, ok
+	}
+
+	for {
+		msg, ok := recv()
+		if !ok {
+			log.Debug().Uint64("count", count).Msg("mcp proxy: server channel closed")
+			return
+		}
+		if auth != nil && !auth.Attempted() && inspectResponse(msg) {
+			if exit := handleBodyError(ctx, msg, state, auth, transport, forward, recv); exit {
+				return
+			}
+			continue
+		}
 		if auth != nil && !auth.Attempted() {
 			_ = state.take(extractID(msg))
 		}
-		writeMsg(msg)
+		forward(msg)
+	}
+}
+
+// tryRecv attempts a non-blocking receive on msgCh. The second return
+// value reports whether a message was produced; closed channels yield
+// (nil, false).
+func tryRecv(msgCh <-chan []byte) ([]byte, bool) {
+	select {
+	case msg, ok := <-msgCh:
+		if !ok {
+			return nil, false
+		}
+		return msg, true
+	default:
+		return nil, false
+	}
+}
+
+// blockingRecv waits for a message on msgCh, or for done to fire. The
+// third return value distinguishes "done fired" from "msgCh closed",
+// so the caller can flip into drain mode for any buffered late
+// responses.
+func blockingRecv(msgCh <-chan []byte, done <-chan struct{}) ([]byte, bool, bool) {
+	select {
+	case m, chOk := <-msgCh:
+		if !chOk {
+			return nil, false, false
+		}
+		return m, true, false
+	case <-done:
+		return nil, false, true
+	}
+}
+
+// handleBodyError performs the body-level retry handshake for one error
+// response. It returns true only when recv reports the server channel
+// is gone mid-retry, signalling the caller to exit the forward loop.
+func handleBodyError(
+	ctx context.Context,
+	msg []byte,
+	state *proxyState,
+	auth *authState,
+	transport Transport,
+	forward func([]byte),
+	recv func() ([]byte, bool),
+) bool {
+	id := extractID(msg)
+	orig := state.take(id)
+	if orig == nil {
+		forward(msg)
+		return false
+	}
+	log.Debug().Str("id", id).Msg("mcp proxy: body-level error detected; resolving headers")
+	if err := auth.resolveOnce(ctx); err != nil {
+		log.Debug().Err(err).Msg("mcp proxy: resolveOnce failed; forwarding original error")
+		forward(msg)
+		state.clear()
+		return false
+	}
+	if err := transport.Send(ctx, orig); err != nil {
+		log.Debug().Err(err).Msg("mcp proxy: retry Send failed; forwarding original error")
+		forward(msg)
+		state.clear()
+		return false
 	}
 	for {
-		select {
-		case msg, ok := <-msgCh:
-			if !ok {
-				log.Debug().Uint64("count", count).Msg("mcp proxy: server channel closed")
-				return
-			}
-			forward(msg)
-		case <-done:
-			for {
-				select {
-				case msg, ok := <-msgCh:
-					if !ok {
-						log.Debug().Uint64("count", count).Msg("mcp proxy: server channel closed during drain")
-						return
-					}
-					forward(msg)
-				default:
-					log.Debug().Uint64("count", count).Msg("mcp proxy: server reader stopped")
-					return
-				}
-			}
+		next, ok := recv()
+		if !ok {
+			return true
+		}
+		forward(next)
+		if extractID(next) == id {
+			break
 		}
 	}
+	state.clear()
+	return false
 }
 
 func sendClientMessage(ctx context.Context, transport Transport, line []byte, count *uint64) error {
@@ -320,7 +407,7 @@ func newProxyState() *proxyState {
 
 // record stores the request bytes under id. No-op for empty id (e.g.
 // notifications) or after clear() has nilled the map.
-func (s *proxyState) record(id string, bytes []byte) {
+func (s *proxyState) record(id string, raw []byte) {
 	if id == "" {
 		return
 	}
@@ -329,7 +416,7 @@ func (s *proxyState) record(id string, bytes []byte) {
 	if s.inFlight == nil {
 		return
 	}
-	s.inFlight[id] = bytes
+	s.inFlight[id] = raw
 }
 
 // take removes and returns the request bytes for id, or nil if the id
@@ -350,8 +437,6 @@ func (s *proxyState) take(id string) []byte {
 
 // clear releases the inFlight map. Subsequent record/take calls are
 // no-ops. Called once authState.Attempted() flips to true.
-//
-//nolint:unused // Wired up by Task 5 (body-level retry).
 func (s *proxyState) clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
