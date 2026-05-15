@@ -351,6 +351,7 @@ func handleBodyError(
 	for {
 		next, ok := recv()
 		if !ok {
+			log.Debug().Str("id", id).Msg("mcp proxy: retry wait interrupted by shutdown")
 			return true
 		}
 		forward(next)
@@ -436,7 +437,10 @@ func (s *proxyState) take(id string) []byte {
 }
 
 // clear releases the inFlight map. Subsequent record/take calls are
-// no-ops. Called once authState.Attempted() flips to true.
+// no-ops. Called from the body-error retry handshake on each exit
+// branch (resolve failure, send failure, retry completed) - once any
+// of those fires, authState.Attempted() is true and tracking is no
+// longer needed.
 func (s *proxyState) clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
