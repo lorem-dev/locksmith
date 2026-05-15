@@ -5,157 +5,140 @@
 All direct third-party dependencies must carry a license compatible with
 Apache 2.0 before being merged.
 
-**When adding a new library:**
-1. Run the `check-licenses` skill after editing `go.mod`.
-2. Review the license table the skill displays and confirm each entry.
-3. The skill updates `LICENSE` automatically.
+**Not acceptable** (prohibit commercial use or impose copyleft
+incompatible with Apache 2.0):
 
-**Licenses that are NOT acceptable** (prohibit commercial use or impose
-copyleft incompatible with Apache 2.0):
 - GPL-2.0 / GPL-3.0 / AGPL-3.0
-- LGPL-2.1 (Go links statically, so LGPL's dynamic-linking exception does
-  not apply)
+- LGPL-2.1 (Go links statically, so the dynamic-linking exception
+  does not apply)
 - SSPL-1.0 / BSL-1.1
 - Any Creative Commons -NC- variant
-- Any license containing a "Commons Clause" addendum
+- Any license carrying a "Commons Clause" addendum
 
-If the library you need carries one of these licenses, look for a
-permissive alternative or raise the issue with the maintainers before
-adding it.
+If the library you need carries one of these, look for a permissive
+alternative or raise the issue with the maintainers.
 
-## Version Bumps
+When adding or removing a library, run the `check-licenses` skill
+after editing `go.mod`. The skill updates the `LICENSE` "Third-Party
+Notices" section automatically.
 
-Locksmith follows [Semantic Versioning](https://semver.org/) -
-`MAJOR.MINOR.PATCH`.
+## Branching model
 
-The canonical version lives in `sdk/version/VERSION`. The repo-root
-`VERSION` is a symlink to that file for convenience (`cat VERSION`
-works at any path). The file content has no `v` prefix; git tags do
-(e.g. `v0.1.0`).
+Locksmith uses two long-lived branches:
 
-`sdk/version.Current` is populated at build time via `//go:embed`, so
-no `-ldflags` are required. `go install
-github.com/lorem-dev/locksmith/cmd/locksmith@latest` produces a binary
-containing the version that was tagged.
+- **`develop`** is the integration branch. New features, refactors,
+  and non-urgent fixes land here either via PRs from short-lived
+  feature branches or directly by maintainers. `## Development` in
+  `CHANGES.md` tracks everything that has merged since the last
+  release.
+- **`main`** holds released versions only. Every commit on `main` is
+  either a release merge from `develop` or - rarely - a hotfix.
 
-### Cutting a release
+**Direct commits to `main` are not allowed** outside of hotfixes.
+When opening a PR, the base branch is `develop` unless the change is
+explicitly a release or hotfix.
 
-1. Run the `version-bump` skill. It prompts for the new version,
-   updates `sdk/version/VERSION`, and invokes the `changelog` skill to
-   compress `## Development` into a versioned section in `CHANGES.md`.
-2. Optionally run `check-licenses` (the skill prompts you).
-3. Review the diff (`git diff`).
-4. Commit and tag manually:
+### Release flow
+
+1. Work accumulates on `develop`; each user-visible change gets a
+   bullet under `## Development` in `CHANGES.md` in the same commit.
+2. When ready to release, on `develop` run the `release-prep` skill.
+   It verifies that each accumulated bullet has matching docs
+   updates since the last tag, then invokes `version-bump` (which
+   bumps `sdk/version/VERSION`, syncs the README install pin, and
+   invokes `changelog` to compress `## Development` into a new
+   `## Version vX.Y.Z` section).
+3. Commit the bump + changelog as `release: vX.Y.Z` (GPG-signed) and
+   push `develop`.
+4. Open a PR from `develop` into `main` with the new
+   `## Version vX.Y.Z` body as the description.
+5. Merge the PR. **The merge commit on `main` is the release
+   commit.**
+6. Tag the merge commit on `main`:
+
    ```bash
-   git add sdk/version/VERSION CHANGES.md LICENSE
-   git commit -S -m "release: vX.Y.Z"
+   git checkout main && git pull
    git tag -s vX.Y.Z -m "vX.Y.Z"
-   git push --follow-tags
+   git push --tags
    ```
-5. CI verifies the release. The `make check-version` target must pass:
-   the git tag matches `VERSION`, and `CHANGES.md` has a
-   `## Version vX.Y.Z` section.
 
-### Wiring CI
+7. The tag triggers the release workflow, which builds binaries,
+   signs `checksums.txt`, and publishes a GitHub release using the
+   `## Version vX.Y.Z` body as the release notes.
 
-`check-version` reads `$GITHUB_REF` (GitHub Actions) or
-`$CI_COMMIT_TAG` (GitLab CI). On non-tag builds it is a no-op (exit 0).
+### Hotfix flow
 
-GitHub Actions:
+For an urgent fix to an already-released version:
+
+1. Branch from `main` (e.g. `hotfix/cve-2026-xxxx`).
+2. Apply the fix and a `CHANGES.md` entry. Bump the patch number on
+   `sdk/version/VERSION`.
+3. Open a PR into `main`. After merging, tag the merge commit as
+   above.
+4. Sync `develop`:
+   - Cherry-pick or merge the fix commit into `develop` so the next
+     release does not regress it.
+   - **Remove the hotfix bullet from `develop`'s `## Development`
+     section** - it has already shipped on `main` as `vX.Y.(Z+1)`
+     and must not be counted again when the next minor/major
+     release is cut.
+   - Update `develop`'s `sdk/version/VERSION` if the next release on
+     `develop` should now bump from `vX.Y.(Z+1)` rather than the
+     pre-hotfix base.
+
+## Versioning
+
+Locksmith follows [Semantic Versioning](https://semver.org/):
+`MAJOR.MINOR.PATCH`. The canonical version lives in
+`sdk/version/VERSION`; the repo-root `VERSION` symlink points to it.
+The file content has no `v` prefix; git tags do (e.g. `v0.1.0`).
+`sdk/version.Current` is populated at build time via `//go:embed`.
+
+`make check-version` asserts that the git tag matches `VERSION` and
+that `CHANGES.md` has a `## Version vX.Y.Z` section for the tagged
+version. It reads the tag from `$GITHUB_REF` (GitHub Actions) or
+`$CI_COMMIT_TAG` (GitLab CI); on non-tag builds it is a no-op. CI
+runs it on every tag build:
 
 ```yaml
+# GitHub Actions
 - name: Verify release version
   if: startsWith(github.ref, 'refs/tags/v')
   run: make check-version
 ```
 
-GitLab CI:
-
 ```yaml
+# GitLab CI
 verify-version:
-  rules:
-    - if: '$CI_COMMIT_TAG =~ /^v/'
-  script:
-    - make check-version
+  rules: [{ if: '$CI_COMMIT_TAG =~ /^v/' }]
+  script: [make check-version]
 ```
+
+On non-tag builds the target is a no-op.
 
 ## GPG Signing
 
-Signing commits is strongly recommended. It lets maintainers verify that commits genuinely
-come from you and have not been tampered with.
+Signing commits is strongly recommended. Maintainers verify that
+commits come from you and have not been tampered with.
 
 ```bash
-# Sign a single commit
 git commit -S -m "feat: ..."
-
-# Make signing the default for this repo
-git config commit.gpgsign true
+git config commit.gpgsign true   # default for this repo
 ```
 
-If you already have commits without signatures you can re-sign them before opening a PR:
+Re-sign unsigned commits before opening a PR:
 
 ```bash
-# Find the last signed commit and rebase everything after it
 LAST_SIGNED=$(git log --format="%G? %H" | awk '$1=="G"{print $2; exit}')
 git rebase "$LAST_SIGNED" --exec "git commit --amend --no-edit -S"
 ```
 
-## Commit Messages
-
-Use [Conventional Commits](https://www.conventionalcommits.org/):
-
-```
-<type>(<scope>): <description>
-
-[optional body]
-
-[optional footer]
-Relates #<GITHUB-ISSUE>
-```
-
-**Types:** `feat`, `fix`, `chore`, `docs`, `test`, `refactor`, `perf`, `ci`, `build`
-
-**Rules:**
-- Description in English, imperative mood ("add", not "added")
-- No mentions of AI tools, agents, or assistants anywhere in commits:
-  no `Co-Authored-By: Claude ...` or similar lines, no "generated by",
-  no "with the help of AI", no tool names in subject or body
-- Reference issues with `Relates #123` in the footer when applicable
-- Keep subject line under 72 characters
-- Use `(scope)` sparingly - only reuse a scope that already exists in the git log.
-  Before adding a scope, run `git log --oneline | grep "type(" | head -20` to check
-  what scopes are established. Prefer no scope over inventing a new one.
-
-**Examples:**
-```
-feat(session): add TTL-based expiry with memory wipe
-fix(keychain): handle errSecUserCanceled from Touch ID prompt
-chore: update golangci-lint to v1.57
-```
-
-## Test Coverage
-
-- Minimum coverage per package: **90%**
-- Run before submitting: `make test-coverage`
-- Race detector must pass: `make test-race`
-- Integration tests: `make test-integration`
-
-## Code Style
-
-- Follow `golangci-lint` rules defined in `.golangci.yml`
-- All exported symbols must have godoc comments
-- Complex unexported logic must have inline comments
-- CLI command files in `internal/cli/` must be named `<command>_cmd.go`
-  (e.g. `get_cmd.go`, `serve_cmd.go`). Non-command files (`root.go`,
-  `client.go`, `color.go`, `errors.go`) are exempt. Tests go in
-  `<command>_cmd_test.go`.
-
-## Release signing setup
+## Release signing (CI)
 
 The release workflow signs `checksums.txt` with a dedicated GPG key
 that is separate from any maintainer's personal commit-signing key.
-This is a one-time setup; rotate every five years or on suspected
-compromise.
+The signing itself happens in CI; the steps below are the one-time
+bootstrap (or 5-year rotation) of the key that CI uses.
 
 1. Generate a dedicated release key:
 
@@ -172,21 +155,19 @@ compromise.
    EOF
    ```
 
-   Add a passphrase by removing the `%no-protection` line; you
-   will then need to set `LOCKSMITH_RELEASE_GPG_PASSPHRASE` in
-   step 4.
+   Drop the `%no-protection` line to add a passphrase; you will
+   then have to supply `LOCKSMITH_RELEASE_GPG_PASSPHRASE` in step 4.
 
-2. Get the fingerprint and export both halves:
+2. Export both halves:
 
    ```sh
    FPR="$(gpg --list-secret-keys --with-colons contact@lorem.dev \
         | awk -F: '/^fpr:/ {print $10; exit}')"
    gpg --armor --export-secret-keys "$FPR" > release-key.priv.asc
    gpg --armor --export             "$FPR" > release-key.asc
-   echo "Fingerprint: $FPR"
    ```
 
-3. Commit the public key (GPG-signed commit):
+3. Commit the public key (GPG-signed):
 
    ```sh
    mkdir -p .github
@@ -195,34 +176,31 @@ compromise.
    git commit -S -m "chore(release): add release-signing public key"
    ```
 
-   Reproduce the fingerprint and expiry in
-   [`docs/verification.md`](docs/verification.md) so users have an
-   out-of-band reference. The current key is:
-
-   - Fingerprint: `CFE6 485E 2351 9A25 A475  B900 AD0F 7A29 E439 8670`
-   - Generated: 2026-05-07; expires 2031-05-06.
+   Record the fingerprint and expiry in
+   [`docs/verification.md`](docs/verification.md). The current key
+   is fingerprint
+   `CFE6 485E 2351 9A25 A475  B900 AD0F 7A29 E439 8670`, generated
+   2026-05-07, expires 2031-05-06.
 
 4. Add the GitHub Actions secrets in
    `Settings -> Secrets and variables -> Actions`:
 
-   - `LOCKSMITH_RELEASE_GPG_KEY` = the contents of
-     `release-key.priv.asc` (entire ASCII-armored block).
-   - `LOCKSMITH_RELEASE_GPG_PASSPHRASE` = the passphrase, or an
-     empty string if the key is unprotected.
+   - `LOCKSMITH_RELEASE_GPG_KEY` = contents of `release-key.priv.asc`.
+   - `LOCKSMITH_RELEASE_GPG_PASSPHRASE` = the passphrase (or empty).
 
 5. Securely destroy the local secret material:
 
    ```sh
    shred -u release-key.priv.asc
-   gpg --delete-secret-keys "$FPR"   # optional - keep only public locally
+   gpg --delete-secret-keys "$FPR"   # optional
    ```
 
-6. **Rotation.** Every five years, repeat steps 1-4. Do NOT delete
-   prior public keys from the repo; users may still verify older
-   releases with them.
+6. **Rotation.** Every five years (or on suspected compromise),
+   repeat steps 1-4. Do NOT delete prior public keys from the repo;
+   users may still verify older releases with them.
 
-7. **First release verification.** After the first tagged release
-   following this setup, locally verify the artifacts:
+7. **Verify the next release.** After the first tagged release with
+   this key, verify locally:
 
    ```sh
    curl -fsSLO https://github.com/lorem-dev/locksmith/releases/latest/download/checksums.txt
@@ -230,41 +208,83 @@ compromise.
    gpg --verify checksums.txt.asc checksums.txt
    ```
 
-   A `Good signature` line confirms the workflow is signing with the
-   intended key.
+   A `Good signature` line confirms CI is signing with the intended
+   key.
+
+## Commit Messages
+
+Use [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+<type>(<scope>): <description>
+
+[optional body]
+
+Relates #<issue>
+```
+
+**Types:** `feat`, `fix`, `chore`, `docs`, `test`, `refactor`,
+`perf`, `ci`, `build`.
+
+**Rules:**
+
+- English, imperative mood ("add", not "added").
+- Subject line under 72 chars.
+- Reference issues with `Relates #123` in the footer when applicable.
+- Use `(scope)` only when it already exists in the git log; prefer
+  no scope over inventing one. Check with
+  `git log --oneline | grep "type(" | head -20`.
+- No mentions of AI tools, agents, or assistants anywhere - no
+  `Co-Authored-By: Claude ...`, no "generated by", no tool names.
+
+**Examples:**
+
+```
+feat(session): add TTL-based expiry with memory wipe
+fix(keychain): handle errSecUserCanceled from Touch ID prompt
+chore: update golangci-lint to v1.57
+```
+
+## Test Coverage and Style
+
+- Minimum coverage per package: **90%** (`make test-coverage`).
+- Race detector must pass (`make test-race`).
+- Integration tests: `make test-integration`.
+- Follow `golangci-lint` rules in `.golangci.yml`.
+- All exported symbols must have godoc comments.
+- CLI command files in `internal/cli/` must be named
+  `<command>_cmd.go` (e.g. `get_cmd.go`); tests go in
+  `<command>_cmd_test.go`. Non-command files (`root.go`,
+  `client.go`, `color.go`, `errors.go`) are exempt.
+
+`make verify` bundles lint, race, coverage, build, GPG signatures,
+docs completeness, and CHANGES.md checks - run it before submitting.
 
 ## Plugin versioning and compatibility
 
 Bundled plugins (`plugins/gopass`, `plugins/keychain`) and any
-third-party plugins follow these rules. The CI test job
-(`make test-race`) enforces them - a plugin PR cannot land green
-without satisfying every check.
+third-party plugins follow the rules below. `make test-race`
+enforces them - a plugin PR cannot land green without satisfying
+every check.
 
 ### Bundled plugins (lockstep with host)
 
-A bundled plugin has no separate version field, no separate tag,
-and no separate release cycle. Its version is the version of the
-`locksmith` binary that bundled it (see [PLUGINS.md](PLUGINS.md)).
+A bundled plugin has no separate version field, tag, or release
+cycle. Its version is the version of the `locksmith` binary that
+bundled it (see [PLUGINS.md](PLUGINS.md)).
 
 Each bundled plugin's `Info()` MUST set:
 
 - `MaxLocksmithVersion = sdkversion.Current` (using
-  `github.com/lorem-dev/locksmith/sdk/version`). Already enforced
-  by unit tests in `plugins/<name>/provider_test.go`. Keep these
-  tests in place when refactoring.
-- `MinLocksmithVersion`: the earliest host version the plugin is
+  `github.com/lorem-dev/locksmith/sdk/version`). Enforced by unit
+  tests in `plugins/<name>/provider_test.go`.
+- `MinLocksmithVersion` - the earliest host version the plugin is
   still tested against. Bumped only when the plugin starts using an
-  SDK feature unavailable in earlier hosts; document the bump in
+  SDK feature unavailable in earlier hosts; record the bump in
   `CHANGES.md` under `## Development`.
-- `Platforms`: list of supported `runtime.GOOS` values, taken from
-  `sdk/platform` (`platform.Darwin`, `platform.Linux`). An empty
-  list means "skip the platform check" and SHOULD NOT be used by
-  bundled plugins.
-
-When the SDK or proto contract changes in a way that breaks plugin
-builds, the same commit MUST update all bundled plugins. The
-race-test CI job catches plugin compile failures; a green run is
-the enforcement point.
+- `Platforms` - list of `runtime.GOOS` values, drawn from
+  `sdk/platform`. Empty list means "skip the platform check" and
+  SHOULD NOT be used by bundled plugins.
 
 ### Third-party plugins
 
@@ -273,38 +293,23 @@ Authors own their own versioning and tag cadence.
 - `MinLocksmithVersion` is strongly recommended; omitting it
   produces a `min_version_missing` warning visible in
   `locksmith vault health`.
-- `MaxLocksmithVersion` is optional but recommended. Format:
+- `MaxLocksmithVersion` is optional but recommended. Format
   `major.minor.patch`, no `v` prefix, no pre-release suffix
   (validated by `internal/plugin.CompatValidator`).
 - Use `sdk/platform` constants for `Platforms`.
-- Add unit tests covering `Info()`, modeled on
+- Add unit tests covering `Info()`, modelled on
   `plugins/gopass/provider_test.go`.
-
-### Required compatibility checks (every plugin)
-
-Every plugin MUST pass these in `make test-race`:
-
-1. `Info()` returns non-empty `MinLocksmithVersion`.
-2. `Info()` returns `MaxLocksmithVersion = sdkversion.Current`
-   (bundled plugins) or a concrete `major.minor.patch` string
-   (third-party).
-3. `Info()` returns `Platforms` containing the target OS.
-4. The plugin builds against the SDK pinned in the repo's
-   `go.work` (verified by `make init` running before tests).
-5. `internal/plugin.CompatValidator.Validate(info)` produces no
-   warnings under the current `sdk/version.Current` on the
-   plugin's declared platform.
 
 ### SDK / proto breaking changes
 
 Any non-additive change to `sdk/vault.Provider`, `sdk/errors`,
-`sdk/log`, `sdk/session`, `sdk/platform`, or `proto/` is a
-breaking change for plugin authors. Such a change MUST:
+`sdk/log`, `sdk/session`, `sdk/platform`, or `proto/` is a breaking
+change for plugin authors. The same commit MUST:
 
-1. Update all bundled plugins in the same commit; the green
-   race-test job confirms the workspace still compiles.
+1. Update all bundled plugins; the green race-test job confirms the
+   workspace compiles.
 2. Document the migration in `docs/plugins/authoring.md` or
-   `docs/plugins/compatibility.md` (whichever fits).
+   `docs/plugins/compatibility.md`.
 3. Add a `CHANGES.md ## Development` entry beginning with
    `BREAKING:` (see "Changelog policy" below).
 4. Bump bundled plugins' `MinLocksmithVersion` to the upcoming
@@ -317,71 +322,36 @@ breaking change for plugin authors. Such a change MUST:
 - Bundle pipeline: [docs/plugins/architecture.md](docs/plugins/architecture.md).
 - Plugin overview for end users: [PLUGINS.md](PLUGINS.md).
 
-## Changelog policy (BREAKING changes)
+## Changelog policy
 
-The basic rule that "every user-visible change goes under
-`## Development` in CHANGES.md, in the same commit" is documented
-in [CLAUDE.md](CLAUDE.md). This section adds the rules for
-BREAKING entries, which the `changelog` skill and the release
-workflow rely on.
+Every user-visible change must have a bullet under `## Development`
+in `CHANGES.md`, written in the same commit. See [CLAUDE.md](CLAUDE.md)
+for the project-wide rule.
 
 ### What is a breaking change?
 
 Any of:
 
-- Alters the daemon-plugin protocol (`proto/`,
-  `sdk/vault.Provider`, `sdk/errors`, `sdk/log`, `sdk/session`,
-  `sdk/platform`).
-- Removes or renames a CLI flag, command, or environment
-  variable.
+- Alters the daemon-plugin protocol (`proto/`, `sdk/vault.Provider`,
+  `sdk/errors`, `sdk/log`, `sdk/session`, `sdk/platform`).
+- Removes or renames a CLI flag, command, or environment variable.
 - Changes `config.yaml` schema in a non-additive way.
 - Drops support for a previously documented platform or host
   version.
 
-### Authoring rules
-
-Apply to both `## Development` and any `## Version vX.Y.Z`
-section.
-
-1. **Required entry.** Every breaking change MUST have a bullet
-   beginning with `BREAKING:` (uppercase, colon, then space). No
-   exception. Same commit as the code change.
-2. **Grouped at the top.** Within a section, all `BREAKING:`
-   bullets come first, before non-breaking entries, in the
-   chronological order they were introduced.
-3. **One bullet per change.** Do NOT merge multiple breaking
-   changes into a single bullet, even when related. Each must
-   remain independently addressable in the historical log.
-4. **Preserved across compressions.** When the `changelog` skill
-   collapses `## Development` into `## Version vX.Y.Z`, every
-   `BREAKING:` bullet is carried forward verbatim. The skill
-   MUST NOT merge two `BREAKING:` bullets and MUST NOT drop one.
-   Non-breaking bullets MAY be merged or rephrased.
-5. **Permanence after release.** Once a `## Version vX.Y.Z`
-   heading is tagged and pushed, its `BREAKING:` bullets are
-   immutable; edits are allowed only for typos that do not
-   change meaning.
-6. **Pre-release deletion is allowed only with the offending
-   logic.** A `BREAKING:` bullet under `## Development` MAY be
-   removed only if the breaking change itself is reverted in the
-   same commit (the logic that produced the breakage is removed).
-   Other reasons - "decided not to mention", "not interesting
-   enough" - are forbidden.
-7. **Plugin floor bump.** A breaking change to the SDK or proto
-   MUST bump bundled plugins' `MinLocksmithVersion` to the
-   upcoming release tag in the same commit (mirrors the rule in
-   "Plugin versioning and compatibility" above).
+Breaking changes MUST be authored as a bullet beginning with
+`BREAKING:` (uppercase, colon, then space), in the same commit as
+the change. The `changelog` skill is the source of truth for how
+`BREAKING:` bullets are grouped, preserved across compressions, and
+treated as immutable after release - consult its `SKILL.md` for the
+detailed authoring rules.
 
 ### Release-time guarantee
 
 The release workflow's `extract-changelog` step reads the
-`## Version vX.Y.Z` section corresponding to the pushed tag and
-uses its full body - including all `BREAKING:` bullets, in their
-grouped order at the top - as the GitHub-release body. There is
-no separate release-notes file; the published changelog IS the
-release notes.
+`## Version vX.Y.Z` section matching the pushed tag and uses its
+full body (with all `BREAKING:` bullets grouped at the top) as the
+GitHub-release body. The published changelog IS the release notes;
+there is no separate release-notes file.
 
-`make check-version` already asserts that a `## Version vX.Y.Z`
-section exists for the tagged version. The release workflow
-refuses to publish if the section is missing or empty
-(`extract-changelog` returns an error on an empty body).
+The workflow refuses to publish if the section is missing or empty.
