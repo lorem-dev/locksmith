@@ -10,9 +10,6 @@ import (
 	"os/exec"
 	"strings"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
 	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
 	sdkerrors "github.com/lorem-dev/locksmith/sdk/errors"
 	sdkversion "github.com/lorem-dev/locksmith/sdk/version"
@@ -102,20 +99,62 @@ func (p *GopassProvider) GetSecret(
 	}, nil
 }
 
-// SetSecret is a stub pending implementation in a follow-up task.
+// SetSecret writes a secret to gopass via `gopass insert -m [-f] <path>`.
+// The secret is piped via stdin. The -f flag is added when
+// req.Opts["force"] == "true", which maps to gopass's overwrite mode.
 func (p *GopassProvider) SetSecret(
-	_ context.Context,
-	_ *vaultv1.SetSecretRequest,
+	ctx context.Context, req *vaultv1.SetSecretRequest,
 ) (*vaultv1.SetSecretResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "gopass SetSecret pending implementation")
+	if len(req.Secret) == 0 {
+		return nil, sdkerrors.InvalidArgumentError("gopass: secret must not be empty")
+	}
+	secretPath := req.Path
+	if store, ok := req.Opts["store"]; ok && store != "" {
+		secretPath = store + "/" + req.Path
+	}
+
+	args := []string{"insert", "-m"}
+	if req.Opts["force"] == "true" {
+		args = append(args, "-f")
+	}
+	args = append(args, secretPath)
+
+	factory := p.resolveCmdFactory()
+	var stderr bytes.Buffer
+	cmd := factory(ctx, "gopass", args...)
+	cmd.Env = buildGopassEnv()
+	cmd.Stdin = bytes.NewReader(req.Secret)
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		stderrStr := strings.TrimSpace(stderr.String())
+		return nil, fmt.Errorf("gopass insert %q: %s: %w", secretPath, stderrStr, err)
+	}
+	return &vaultv1.SetSecretResponse{}, nil
 }
 
-// KeyExists is a stub pending implementation in a follow-up task.
+// KeyExists probes the gopass store via `gopass ls --flat <path>` and
+// reports whether the path is present. A non-zero exit is treated as
+// "not present" rather than an error; this matches gopass's behaviour
+// for paths that do not exist.
 func (p *GopassProvider) KeyExists(
-	_ context.Context,
-	_ *vaultv1.KeyExistsRequest,
+	ctx context.Context, req *vaultv1.KeyExistsRequest,
 ) (*vaultv1.KeyExistsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "gopass KeyExists pending implementation")
+	secretPath := req.Path
+	if store, ok := req.Opts["store"]; ok && store != "" {
+		secretPath = store + "/" + req.Path
+	}
+
+	factory := p.resolveCmdFactory()
+	var stdout, stderr bytes.Buffer
+	cmd := factory(ctx, "gopass", "ls", "--flat", secretPath)
+	cmd.Env = buildGopassEnv()
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return &vaultv1.KeyExistsResponse{Exists: false}, nil
+	}
+	exists := strings.Contains(stdout.String(), secretPath)
+	return &vaultv1.KeyExistsResponse{Exists: exists}, nil
 }
 
 // HealthCheck verifies that gopass is installed and the store is initialized.
@@ -143,9 +182,9 @@ func (p *GopassProvider) HealthCheck(
 func (p *GopassProvider) Info(_ context.Context, _ *vaultv1.InfoRequest) (*vaultv1.InfoResponse, error) {
 	return &vaultv1.InfoResponse{
 		Name:                "gopass",
-		Version:             "0.1.0",
+		Version:             "0.2.0",
 		Platforms:           []string{"darwin", "linux"},
-		MinLocksmithVersion: "0.1.0",
+		MinLocksmithVersion: "0.4.0",
 		MaxLocksmithVersion: sdkversion.Current,
 	}, nil
 }
