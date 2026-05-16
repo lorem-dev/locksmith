@@ -43,6 +43,32 @@ func (p *MyVaultProvider) Info(ctx context.Context, req *vaultv1.InfoRequest) (*
 func main() { sdk.Serve(&MyVaultProvider{}) }
 ```
 
+## Write methods
+
+`SetSecret` and `KeyExists` were added in v0.4.0. Every plugin must
+implement them. Read-only plugins return `codes.Unimplemented`:
+
+```go
+import (
+    "google.golang.org/grpc/codes"
+    "google.golang.org/grpc/status"
+)
+
+func (p *MyVaultProvider) SetSecret(_ context.Context, _ *vaultv1.SetSecretRequest) (*vaultv1.SetSecretResponse, error) {
+    return nil, status.Errorf(codes.Unimplemented, "my-vault does not support write")
+}
+
+func (p *MyVaultProvider) KeyExists(_ context.Context, _ *vaultv1.KeyExistsRequest) (*vaultv1.KeyExistsResponse, error) {
+    return nil, status.Errorf(codes.Unimplemented, "my-vault does not support existence probe")
+}
+```
+
+The host CLI translates `Unimplemented` from `SetSecret` into a
+user-friendly "vault does not support write" error. When `KeyExists`
+returns `Unimplemented`, the host skips the strict existence check
+and proceeds to `SetSecret` (which then enforces overwrite
+semantics per the plugin's own behaviour).
+
 ## Plugin Discovery
 
 Name your binary `locksmith-plugin-<type>` and place it in one of:

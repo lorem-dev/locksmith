@@ -115,6 +115,20 @@ Skip the `keys:` block and pass `--vault` and `--path` explicitly:
 locksmith get --vault work --path dev/github
 ```
 
+## Adding secrets via locksmith
+
+Instead of `gopass insert work/api/key`, you can use locksmith:
+
+```sh
+locksmith vault set work-api-key
+echo -n "secret-value" | locksmith vault set work-api-key --force
+```
+
+The path and store from `config.yaml` are applied automatically.
+This is a convenience over `gopass insert`; gopass itself remains
+the source of truth and your existing `gopass` workflows continue to
+work.
+
 ## Troubleshooting
 
 **`gopass not found in PATH`**

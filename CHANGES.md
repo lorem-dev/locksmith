@@ -2,14 +2,18 @@
 
 ## Development
 
-- keychain plugin: implement `SetSecret` and `KeyExists`. Writes use
-  `kSecAccessControlUserPresence` access control (Touch ID with passcode
-  fallback) plus `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`; because
-  `SecItemUpdate` cannot change access control, writes delete-then-add.
-  `KeyExists` probes with `kSecReturnData=false` so it never triggers an
-  auth prompt. Plugin version bumped to `0.2.0`, `MinLocksmithVersion`
-  bumped to `0.4.0`.
-- sdk/errors: add `InvalidArgumentError` constructor.
+- BREAKING: SDK adds `SetSecret` and `KeyExists` to `vault.Provider`.
+  Third-party plugins must add the two methods, returning
+  `codes.Unimplemented` if they do not support write or efficient
+  existence checks. See `docs/plugins/authoring.md`.
+- add `locksmith vault set <alias>` for writing new secrets via any
+  vault that supports write (keychain and gopass today). Strict by
+  default (refuses to overwrite without `--force`); reads from
+  `--from-file`, stdin, or TTY-hidden prompt.
+- add `locksmith vault migrate [<alias>|--all] [--dry-run]` for
+  re-storing existing macOS Keychain items with biometric access
+  control so subsequent reads prompt for Touch ID instead of a
+  password (see `plugins/keychain/README.md`).
 
 ## Version v0.3.0 - 2026-05-15
 

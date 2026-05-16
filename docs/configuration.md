@@ -111,6 +111,13 @@ keys:
 
 **Service resolution order:** path prefix `service/account` > vault `service:` > `"locksmith"` (backward-compatible default).
 
+> **Touch ID note:** Items created via the macOS Keychain Access GUI
+> use a password prompt, not Touch ID. To enable Touch ID, write new
+> items with `locksmith vault set <alias>` or migrate existing items
+> with `locksmith vault migrate --all`. See
+> [`plugins/keychain/README.md`](../plugins/keychain/README.md) for
+> details.
+
 **Full example:**
 
 ```yaml

@@ -36,3 +36,21 @@ Any compatibility warnings appear with a `!` prefix under the affected vault:
 
     gopass               OK    gopass found at /usr/bin/gopass
       ! platform_mismatch: plugin supports [darwin] but running on linux
+
+## RPCs
+
+| RPC | Added in | Required | Behaviour for unsupported vaults |
+|---|---|---|---|
+| `GetSecret` | v0.1.0 | yes | n/a |
+| `HealthCheck` | v0.1.0 | yes | n/a |
+| `Info` | v0.1.0 | yes | n/a |
+| `SetSecret` | v0.4.0 | yes | return `codes.Unimplemented` |
+| `KeyExists` | v0.4.0 | yes | return `codes.Unimplemented` (host skips strict check) |
+
+### v0.4.0 plugin compatibility
+
+`SetSecret` and `KeyExists` are additive RPCs. Plugins built against
+the v0.3.x SDK do not implement them; the host's CLI commands that
+call them surface `Unimplemented` to the user. Plugins rebuilt
+against the v0.4.0+ SDK must add both methods to satisfy the
+`vault.Provider` Go interface.
