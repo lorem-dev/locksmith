@@ -71,5 +71,6 @@ func newVaultCmd() *cobra.Command {
 			},
 		},
 	)
+	cmd.AddCommand(newVaultSetCmd())
 	return cmd
 }
