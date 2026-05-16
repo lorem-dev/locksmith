@@ -153,7 +153,13 @@ func (p *GopassProvider) KeyExists(
 	if err := cmd.Run(); err != nil {
 		return &vaultv1.KeyExistsResponse{Exists: false}, nil
 	}
-	exists := strings.Contains(stdout.String(), secretPath)
+	exists := false
+	for _, line := range strings.Split(stdout.String(), "\n") {
+		if strings.TrimSpace(line) == secretPath {
+			exists = true
+			break
+		}
+	}
 	return &vaultv1.KeyExistsResponse{Exists: exists}, nil
 }
 

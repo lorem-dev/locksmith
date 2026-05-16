@@ -36,7 +36,7 @@ func (r *recordingCmdFactory) factory(ctx context.Context, name string, args ...
 		tmp = "/tmp"
 	}
 	r.stdinPath = filepath.Join(tmp, fmt.Sprintf("gopass-stdin-%d-%d", os.Getpid(), time.Now().UnixNano()))
-	script := fmt.Sprintf(`cat > %q; printf %%s %q; printf %%s %q 1>&2; exit %d`,
+	script := fmt.Sprintf(`cat > %q; printf %%b %q; printf %%b %q 1>&2; exit %d`,
 		r.stdinPath, r.stdout, r.stderr, r.exit)
 	return exec.CommandContext(ctx, "sh", "-c", script)
 }
@@ -396,6 +396,22 @@ func TestKeyExists_FalseEmptyStdout(t *testing.T) {
 	}
 	if resp.Exists {
 		t.Error("expected exists=false (stdout did not contain path)")
+	}
+}
+
+func TestKeyExists_NoPrefixFalsePositive(t *testing.T) {
+	// stdout from `gopass ls --flat personal/git` could contain
+	// "personal/github" and "personal/gitlab" - neither is an exact
+	// match for "personal/git", so KeyExists must report false.
+	rec := &recordingCmdFactory{stdout: "personal/github\npersonal/gitlab\n"}
+	p := &GopassProvider{cmdFactory: rec.factory}
+
+	resp, err := p.KeyExists(context.Background(), &vaultv1.KeyExistsRequest{Path: "personal/git"})
+	if err != nil {
+		t.Fatalf("KeyExists: %v", err)
+	}
+	if resp.Exists {
+		t.Error("expected exists=false: 'personal/git' is a prefix, not an exact match")
 	}
 }
 
