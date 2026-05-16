@@ -2,6 +2,15 @@
 
 ## Development
 
+- keychain plugin: implement `SetSecret` and `KeyExists`. Writes use
+  `kSecAccessControlUserPresence` access control (Touch ID with passcode
+  fallback) plus `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`; because
+  `SecItemUpdate` cannot change access control, writes delete-then-add.
+  `KeyExists` probes with `kSecReturnData=false` so it never triggers an
+  auth prompt. Plugin version bumped to `0.2.0`, `MinLocksmithVersion`
+  bumped to `0.4.0`.
+- sdk/errors: add `InvalidArgumentError` constructor.
+
 ## Version v0.3.0 - 2026-05-15
 
 ### Features
