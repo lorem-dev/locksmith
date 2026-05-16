@@ -25,7 +25,7 @@ func NewRootCmd() *cobra.Command {
 		newServeCmd(&cfgFile),
 		newGetCmd(),
 		newSessionCmd(),
-		newVaultCmd(),
+		newVaultCmd(&cfgFile),
 		newConfigCmd(&cfgFile),
 		newInitCmd(),
 		newAutostartCmd(),

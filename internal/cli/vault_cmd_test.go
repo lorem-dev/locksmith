@@ -63,7 +63,8 @@ func TestRenderHealth_NoWarnings(t *testing.T) {
 }
 
 func TestNewVaultCmd_HasHealthSubcommand(t *testing.T) {
-	cmd := newVaultCmd()
+	var cfg string
+	cmd := newVaultCmd(&cfg)
 	for _, sub := range cmd.Commands() {
 		if sub.Use == "health" {
 			return

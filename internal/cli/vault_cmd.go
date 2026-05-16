@@ -12,7 +12,7 @@ import (
 )
 
 // newVaultCmd returns the `locksmith vault` command group.
-func newVaultCmd() *cobra.Command {
+func newVaultCmd(cfgFile *string) *cobra.Command {
 	cmd := &cobra.Command{Use: "vault", Short: "Manage vault providers"}
 	cmd.AddCommand(
 		&cobra.Command{
@@ -72,5 +72,6 @@ func newVaultCmd() *cobra.Command {
 		},
 	)
 	cmd.AddCommand(newVaultSetCmd())
+	cmd.AddCommand(newVaultMigrateCmd(cfgFile))
 	return cmd
 }
