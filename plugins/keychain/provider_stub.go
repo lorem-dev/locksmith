@@ -9,6 +9,9 @@ import (
 	"fmt"
 	"runtime"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
 	"github.com/lorem-dev/locksmith/sdk/platform"
 	sdkversion "github.com/lorem-dev/locksmith/sdk/version"
@@ -23,6 +26,22 @@ func (p *KeychainProvider) GetSecret(
 	_ *vaultv1.GetSecretRequest,
 ) (*vaultv1.GetSecretResponse, error) {
 	return nil, fmt.Errorf("keychain is only available on macOS (current OS: %s)", runtime.GOOS)
+}
+
+// SetSecret returns an error on non-macOS platforms.
+func (p *KeychainProvider) SetSecret(
+	_ context.Context,
+	_ *vaultv1.SetSecretRequest,
+) (*vaultv1.SetSecretResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "keychain plugin requires macOS (current OS: %s)", runtime.GOOS)
+}
+
+// KeyExists returns an error on non-macOS platforms.
+func (p *KeychainProvider) KeyExists(
+	_ context.Context,
+	_ *vaultv1.KeyExistsRequest,
+) (*vaultv1.KeyExistsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "keychain plugin requires macOS (current OS: %s)", runtime.GOOS)
 }
 
 // HealthCheck reports the keychain as unavailable on non-macOS platforms.

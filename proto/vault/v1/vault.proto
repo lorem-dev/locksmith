@@ -7,6 +7,8 @@ option go_package = "github.com/lorem-dev/locksmith/gen/proto/vault/v1;vaultv1";
 // VaultProviderService is the gRPC service that every vault plugin must implement.
 service VaultProviderService {
   rpc GetSecret(GetSecretRequest) returns (GetSecretResponse);
+  rpc SetSecret(SetSecretRequest) returns (SetSecretResponse);
+  rpc KeyExists(KeyExistsRequest) returns (KeyExistsResponse);
   rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
   rpc Info(InfoRequest) returns (InfoResponse);
 }
@@ -19,6 +21,24 @@ message GetSecretRequest {
 message GetSecretResponse {
   bytes secret = 1;
   string content_type = 2;
+}
+
+message SetSecretRequest {
+  string path = 1;
+  bytes secret = 2;
+  string content_type = 3;
+  map<string, string> opts = 4;
+}
+
+message SetSecretResponse {}
+
+message KeyExistsRequest {
+  string path = 1;
+  map<string, string> opts = 2;
+}
+
+message KeyExistsResponse {
+  bool exists = 1;
 }
 
 message HealthCheckRequest {}

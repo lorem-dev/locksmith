@@ -10,6 +10,9 @@ import (
 	"os/exec"
 	"strings"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
 	sdkerrors "github.com/lorem-dev/locksmith/sdk/errors"
 	sdkversion "github.com/lorem-dev/locksmith/sdk/version"
@@ -97,6 +100,22 @@ func (p *GopassProvider) GetSecret(
 		Secret:      bytes.TrimRight(stdout.Bytes(), "\n"),
 		ContentType: "text/plain",
 	}, nil
+}
+
+// SetSecret is a stub pending implementation in a follow-up task.
+func (p *GopassProvider) SetSecret(
+	_ context.Context,
+	_ *vaultv1.SetSecretRequest,
+) (*vaultv1.SetSecretResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "gopass SetSecret pending implementation")
+}
+
+// KeyExists is a stub pending implementation in a follow-up task.
+func (p *GopassProvider) KeyExists(
+	_ context.Context,
+	_ *vaultv1.KeyExistsRequest,
+) (*vaultv1.KeyExistsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "gopass KeyExists pending implementation")
 }
 
 // HealthCheck verifies that gopass is installed and the store is initialized.

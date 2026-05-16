@@ -71,6 +71,9 @@ import (
 	"strings"
 	"unsafe"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	vaultv1 "github.com/lorem-dev/locksmith/gen/proto/vault/v1"
 	sdkerrors "github.com/lorem-dev/locksmith/sdk/errors"
 	"github.com/lorem-dev/locksmith/sdk/platform"
@@ -140,6 +143,22 @@ func (p *KeychainProvider) GetSecret(
 		return nil, err
 	}
 	return &vaultv1.GetSecretResponse{Secret: secret, ContentType: "text/plain"}, nil
+}
+
+// SetSecret is a stub pending implementation in a follow-up task.
+func (p *KeychainProvider) SetSecret(
+	_ context.Context,
+	_ *vaultv1.SetSecretRequest,
+) (*vaultv1.SetSecretResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "keychain SetSecret pending implementation")
+}
+
+// KeyExists is a stub pending implementation in a follow-up task.
+func (p *KeychainProvider) KeyExists(
+	_ context.Context,
+	_ *vaultv1.KeyExistsRequest,
+) (*vaultv1.KeyExistsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "keychain KeyExists pending implementation")
 }
 
 // HealthCheck confirms the macOS Keychain is accessible.

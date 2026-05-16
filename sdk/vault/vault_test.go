@@ -23,6 +23,14 @@ func (m *mockProvider) GetSecret(_ context.Context, _ *vaultv1.GetSecretRequest)
 	return &vaultv1.GetSecretResponse{Secret: []byte("test-secret"), ContentType: "text/plain"}, nil
 }
 
+func (m *mockProvider) SetSecret(_ context.Context, _ *vaultv1.SetSecretRequest) (*vaultv1.SetSecretResponse, error) {
+	return &vaultv1.SetSecretResponse{}, nil
+}
+
+func (m *mockProvider) KeyExists(_ context.Context, _ *vaultv1.KeyExistsRequest) (*vaultv1.KeyExistsResponse, error) {
+	return &vaultv1.KeyExistsResponse{}, nil
+}
+
 func (m *mockProvider) HealthCheck(
 	_ context.Context,
 	_ *vaultv1.HealthCheckRequest,
@@ -41,6 +49,14 @@ type errorProvider struct {
 }
 
 func (e *errorProvider) GetSecret(_ context.Context, _ *vaultv1.GetSecretRequest) (*vaultv1.GetSecretResponse, error) {
+	return nil, status.Errorf(e.code, "%s", e.msg)
+}
+
+func (e *errorProvider) SetSecret(_ context.Context, _ *vaultv1.SetSecretRequest) (*vaultv1.SetSecretResponse, error) {
+	return nil, status.Errorf(e.code, "%s", e.msg)
+}
+
+func (e *errorProvider) KeyExists(_ context.Context, _ *vaultv1.KeyExistsRequest) (*vaultv1.KeyExistsResponse, error) {
 	return nil, status.Errorf(e.code, "%s", e.msg)
 }
 

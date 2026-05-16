@@ -125,6 +125,206 @@ func (x *GetSecretResponse) GetContentType() string {
 	return ""
 }
 
+type SetSecretRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	Secret        []byte                 `protobuf:"bytes,2,opt,name=secret,proto3" json:"secret,omitempty"`
+	ContentType   string                 `protobuf:"bytes,3,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
+	Opts          map[string]string      `protobuf:"bytes,4,rep,name=opts,proto3" json:"opts,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetSecretRequest) Reset() {
+	*x = SetSecretRequest{}
+	mi := &file_vault_v1_vault_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetSecretRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetSecretRequest) ProtoMessage() {}
+
+func (x *SetSecretRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vault_v1_vault_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetSecretRequest.ProtoReflect.Descriptor instead.
+func (*SetSecretRequest) Descriptor() ([]byte, []int) {
+	return file_vault_v1_vault_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *SetSecretRequest) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *SetSecretRequest) GetSecret() []byte {
+	if x != nil {
+		return x.Secret
+	}
+	return nil
+}
+
+func (x *SetSecretRequest) GetContentType() string {
+	if x != nil {
+		return x.ContentType
+	}
+	return ""
+}
+
+func (x *SetSecretRequest) GetOpts() map[string]string {
+	if x != nil {
+		return x.Opts
+	}
+	return nil
+}
+
+type SetSecretResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetSecretResponse) Reset() {
+	*x = SetSecretResponse{}
+	mi := &file_vault_v1_vault_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetSecretResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetSecretResponse) ProtoMessage() {}
+
+func (x *SetSecretResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vault_v1_vault_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetSecretResponse.ProtoReflect.Descriptor instead.
+func (*SetSecretResponse) Descriptor() ([]byte, []int) {
+	return file_vault_v1_vault_proto_rawDescGZIP(), []int{3}
+}
+
+type KeyExistsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	Opts          map[string]string      `protobuf:"bytes,2,rep,name=opts,proto3" json:"opts,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *KeyExistsRequest) Reset() {
+	*x = KeyExistsRequest{}
+	mi := &file_vault_v1_vault_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *KeyExistsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*KeyExistsRequest) ProtoMessage() {}
+
+func (x *KeyExistsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vault_v1_vault_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use KeyExistsRequest.ProtoReflect.Descriptor instead.
+func (*KeyExistsRequest) Descriptor() ([]byte, []int) {
+	return file_vault_v1_vault_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *KeyExistsRequest) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *KeyExistsRequest) GetOpts() map[string]string {
+	if x != nil {
+		return x.Opts
+	}
+	return nil
+}
+
+type KeyExistsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Exists        bool                   `protobuf:"varint,1,opt,name=exists,proto3" json:"exists,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *KeyExistsResponse) Reset() {
+	*x = KeyExistsResponse{}
+	mi := &file_vault_v1_vault_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *KeyExistsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*KeyExistsResponse) ProtoMessage() {}
+
+func (x *KeyExistsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vault_v1_vault_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use KeyExistsResponse.ProtoReflect.Descriptor instead.
+func (*KeyExistsResponse) Descriptor() ([]byte, []int) {
+	return file_vault_v1_vault_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *KeyExistsResponse) GetExists() bool {
+	if x != nil {
+		return x.Exists
+	}
+	return false
+}
+
 type HealthCheckRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -133,7 +333,7 @@ type HealthCheckRequest struct {
 
 func (x *HealthCheckRequest) Reset() {
 	*x = HealthCheckRequest{}
-	mi := &file_vault_v1_vault_proto_msgTypes[2]
+	mi := &file_vault_v1_vault_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -145,7 +345,7 @@ func (x *HealthCheckRequest) String() string {
 func (*HealthCheckRequest) ProtoMessage() {}
 
 func (x *HealthCheckRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vault_v1_vault_proto_msgTypes[2]
+	mi := &file_vault_v1_vault_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -158,7 +358,7 @@ func (x *HealthCheckRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthCheckRequest.ProtoReflect.Descriptor instead.
 func (*HealthCheckRequest) Descriptor() ([]byte, []int) {
-	return file_vault_v1_vault_proto_rawDescGZIP(), []int{2}
+	return file_vault_v1_vault_proto_rawDescGZIP(), []int{6}
 }
 
 type HealthCheckResponse struct {
@@ -171,7 +371,7 @@ type HealthCheckResponse struct {
 
 func (x *HealthCheckResponse) Reset() {
 	*x = HealthCheckResponse{}
-	mi := &file_vault_v1_vault_proto_msgTypes[3]
+	mi := &file_vault_v1_vault_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -183,7 +383,7 @@ func (x *HealthCheckResponse) String() string {
 func (*HealthCheckResponse) ProtoMessage() {}
 
 func (x *HealthCheckResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vault_v1_vault_proto_msgTypes[3]
+	mi := &file_vault_v1_vault_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -196,7 +396,7 @@ func (x *HealthCheckResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthCheckResponse.ProtoReflect.Descriptor instead.
 func (*HealthCheckResponse) Descriptor() ([]byte, []int) {
-	return file_vault_v1_vault_proto_rawDescGZIP(), []int{3}
+	return file_vault_v1_vault_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *HealthCheckResponse) GetAvailable() bool {
@@ -221,7 +421,7 @@ type InfoRequest struct {
 
 func (x *InfoRequest) Reset() {
 	*x = InfoRequest{}
-	mi := &file_vault_v1_vault_proto_msgTypes[4]
+	mi := &file_vault_v1_vault_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -233,7 +433,7 @@ func (x *InfoRequest) String() string {
 func (*InfoRequest) ProtoMessage() {}
 
 func (x *InfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vault_v1_vault_proto_msgTypes[4]
+	mi := &file_vault_v1_vault_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -246,7 +446,7 @@ func (x *InfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InfoRequest.ProtoReflect.Descriptor instead.
 func (*InfoRequest) Descriptor() ([]byte, []int) {
-	return file_vault_v1_vault_proto_rawDescGZIP(), []int{4}
+	return file_vault_v1_vault_proto_rawDescGZIP(), []int{8}
 }
 
 type InfoResponse struct {
@@ -262,7 +462,7 @@ type InfoResponse struct {
 
 func (x *InfoResponse) Reset() {
 	*x = InfoResponse{}
-	mi := &file_vault_v1_vault_proto_msgTypes[5]
+	mi := &file_vault_v1_vault_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -274,7 +474,7 @@ func (x *InfoResponse) String() string {
 func (*InfoResponse) ProtoMessage() {}
 
 func (x *InfoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vault_v1_vault_proto_msgTypes[5]
+	mi := &file_vault_v1_vault_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -287,7 +487,7 @@ func (x *InfoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InfoResponse.ProtoReflect.Descriptor instead.
 func (*InfoResponse) Descriptor() ([]byte, []int) {
-	return file_vault_v1_vault_proto_rawDescGZIP(), []int{5}
+	return file_vault_v1_vault_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *InfoResponse) GetName() string {
@@ -338,7 +538,24 @@ const file_vault_v1_vault_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"N\n" +
 	"\x11GetSecretResponse\x12\x16\n" +
 	"\x06secret\x18\x01 \x01(\fR\x06secret\x12!\n" +
-	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\"\x14\n" +
+	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\"\xd4\x01\n" +
+	"\x10SetSecretRequest\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x16\n" +
+	"\x06secret\x18\x02 \x01(\fR\x06secret\x12!\n" +
+	"\fcontent_type\x18\x03 \x01(\tR\vcontentType\x128\n" +
+	"\x04opts\x18\x04 \x03(\v2$.vault.v1.SetSecretRequest.OptsEntryR\x04opts\x1a7\n" +
+	"\tOptsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x13\n" +
+	"\x11SetSecretResponse\"\x99\x01\n" +
+	"\x10KeyExistsRequest\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x128\n" +
+	"\x04opts\x18\x02 \x03(\v2$.vault.v1.KeyExistsRequest.OptsEntryR\x04opts\x1a7\n" +
+	"\tOptsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"+\n" +
+	"\x11KeyExistsResponse\x12\x16\n" +
+	"\x06exists\x18\x01 \x01(\bR\x06exists\"\x14\n" +
 	"\x12HealthCheckRequest\"M\n" +
 	"\x13HealthCheckResponse\x12\x1c\n" +
 	"\tavailable\x18\x01 \x01(\bR\tavailable\x12\x18\n" +
@@ -349,9 +566,11 @@ const file_vault_v1_vault_proto_rawDesc = "" +
 	"\aversion\x18\x02 \x01(\tR\aversion\x12\x1c\n" +
 	"\tplatforms\x18\x03 \x03(\tR\tplatforms\x122\n" +
 	"\x15min_locksmith_version\x18\x04 \x01(\tR\x13minLocksmithVersion\x122\n" +
-	"\x15max_locksmith_version\x18\x05 \x01(\tR\x13maxLocksmithVersion2\xdf\x01\n" +
+	"\x15max_locksmith_version\x18\x05 \x01(\tR\x13maxLocksmithVersion2\xeb\x02\n" +
 	"\x14VaultProviderService\x12D\n" +
-	"\tGetSecret\x12\x1a.vault.v1.GetSecretRequest\x1a\x1b.vault.v1.GetSecretResponse\x12J\n" +
+	"\tGetSecret\x12\x1a.vault.v1.GetSecretRequest\x1a\x1b.vault.v1.GetSecretResponse\x12D\n" +
+	"\tSetSecret\x12\x1a.vault.v1.SetSecretRequest\x1a\x1b.vault.v1.SetSecretResponse\x12D\n" +
+	"\tKeyExists\x12\x1a.vault.v1.KeyExistsRequest\x1a\x1b.vault.v1.KeyExistsResponse\x12J\n" +
 	"\vHealthCheck\x12\x1c.vault.v1.HealthCheckRequest\x1a\x1d.vault.v1.HealthCheckResponse\x125\n" +
 	"\x04Info\x12\x15.vault.v1.InfoRequest\x1a\x16.vault.v1.InfoResponseB;Z9github.com/lorem-dev/locksmith/gen/proto/vault/v1;vaultv1b\x06proto3"
 
@@ -367,29 +586,41 @@ func file_vault_v1_vault_proto_rawDescGZIP() []byte {
 	return file_vault_v1_vault_proto_rawDescData
 }
 
-var file_vault_v1_vault_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_vault_v1_vault_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_vault_v1_vault_proto_goTypes = []any{
 	(*GetSecretRequest)(nil),    // 0: vault.v1.GetSecretRequest
 	(*GetSecretResponse)(nil),   // 1: vault.v1.GetSecretResponse
-	(*HealthCheckRequest)(nil),  // 2: vault.v1.HealthCheckRequest
-	(*HealthCheckResponse)(nil), // 3: vault.v1.HealthCheckResponse
-	(*InfoRequest)(nil),         // 4: vault.v1.InfoRequest
-	(*InfoResponse)(nil),        // 5: vault.v1.InfoResponse
-	nil,                         // 6: vault.v1.GetSecretRequest.OptsEntry
+	(*SetSecretRequest)(nil),    // 2: vault.v1.SetSecretRequest
+	(*SetSecretResponse)(nil),   // 3: vault.v1.SetSecretResponse
+	(*KeyExistsRequest)(nil),    // 4: vault.v1.KeyExistsRequest
+	(*KeyExistsResponse)(nil),   // 5: vault.v1.KeyExistsResponse
+	(*HealthCheckRequest)(nil),  // 6: vault.v1.HealthCheckRequest
+	(*HealthCheckResponse)(nil), // 7: vault.v1.HealthCheckResponse
+	(*InfoRequest)(nil),         // 8: vault.v1.InfoRequest
+	(*InfoResponse)(nil),        // 9: vault.v1.InfoResponse
+	nil,                         // 10: vault.v1.GetSecretRequest.OptsEntry
+	nil,                         // 11: vault.v1.SetSecretRequest.OptsEntry
+	nil,                         // 12: vault.v1.KeyExistsRequest.OptsEntry
 }
 var file_vault_v1_vault_proto_depIdxs = []int32{
-	6, // 0: vault.v1.GetSecretRequest.opts:type_name -> vault.v1.GetSecretRequest.OptsEntry
-	0, // 1: vault.v1.VaultProviderService.GetSecret:input_type -> vault.v1.GetSecretRequest
-	2, // 2: vault.v1.VaultProviderService.HealthCheck:input_type -> vault.v1.HealthCheckRequest
-	4, // 3: vault.v1.VaultProviderService.Info:input_type -> vault.v1.InfoRequest
-	1, // 4: vault.v1.VaultProviderService.GetSecret:output_type -> vault.v1.GetSecretResponse
-	3, // 5: vault.v1.VaultProviderService.HealthCheck:output_type -> vault.v1.HealthCheckResponse
-	5, // 6: vault.v1.VaultProviderService.Info:output_type -> vault.v1.InfoResponse
-	4, // [4:7] is the sub-list for method output_type
-	1, // [1:4] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	10, // 0: vault.v1.GetSecretRequest.opts:type_name -> vault.v1.GetSecretRequest.OptsEntry
+	11, // 1: vault.v1.SetSecretRequest.opts:type_name -> vault.v1.SetSecretRequest.OptsEntry
+	12, // 2: vault.v1.KeyExistsRequest.opts:type_name -> vault.v1.KeyExistsRequest.OptsEntry
+	0,  // 3: vault.v1.VaultProviderService.GetSecret:input_type -> vault.v1.GetSecretRequest
+	2,  // 4: vault.v1.VaultProviderService.SetSecret:input_type -> vault.v1.SetSecretRequest
+	4,  // 5: vault.v1.VaultProviderService.KeyExists:input_type -> vault.v1.KeyExistsRequest
+	6,  // 6: vault.v1.VaultProviderService.HealthCheck:input_type -> vault.v1.HealthCheckRequest
+	8,  // 7: vault.v1.VaultProviderService.Info:input_type -> vault.v1.InfoRequest
+	1,  // 8: vault.v1.VaultProviderService.GetSecret:output_type -> vault.v1.GetSecretResponse
+	3,  // 9: vault.v1.VaultProviderService.SetSecret:output_type -> vault.v1.SetSecretResponse
+	5,  // 10: vault.v1.VaultProviderService.KeyExists:output_type -> vault.v1.KeyExistsResponse
+	7,  // 11: vault.v1.VaultProviderService.HealthCheck:output_type -> vault.v1.HealthCheckResponse
+	9,  // 12: vault.v1.VaultProviderService.Info:output_type -> vault.v1.InfoResponse
+	8,  // [8:13] is the sub-list for method output_type
+	3,  // [3:8] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_vault_v1_vault_proto_init() }
@@ -403,7 +634,7 @@ func file_vault_v1_vault_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_vault_v1_vault_proto_rawDesc), len(file_vault_v1_vault_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
