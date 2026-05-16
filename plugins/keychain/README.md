@@ -127,6 +127,59 @@ keys:
 
 Resolution order: `service/account` in path > vault `service:` > `"locksmith"`.
 
+## Touch ID and biometric access
+
+By default, macOS Keychain items created via the Keychain Access GUI
+(or `security add-generic-password` without explicit ACL flags) are
+plain generic passwords. macOS shows a **password prompt** when an
+app reads them - even on Macs with Touch ID enrolled - because the
+item itself has no biometric access control.
+
+Locksmith can re-store existing items, or write new ones, with the
+`kSecAccessControlUserPresence` ACL plus
+`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`. Such items prompt
+for Touch ID first, fall back to the device passcode if biometry is
+unavailable, and are not synced via iCloud Keychain.
+
+### Migrate existing items
+
+After upgrading to v0.4.0+:
+
+```sh
+locksmith vault migrate --all
+```
+
+This reads each `keychain`-typed key in `config.yaml` (one last
+password prompt per item), deletes the existing keychain entry, and
+re-stores it with biometric ACL. Subsequent reads prompt for Touch
+ID.
+
+A single alias can be migrated with `locksmith vault migrate
+<alias>`. `--dry-run` lists what would be migrated without writing.
+
+### Add new items via locksmith
+
+```sh
+locksmith vault set github-token
+echo -n "ghp_xxx" | locksmith vault set github-token --force
+locksmith vault set github-token --from-file ~/secrets/gh.txt
+```
+
+`set` reads the secret value from `--from-file`, piped stdin, or an
+interactive TTY prompt (with confirmation). New items get the
+biometric ACL automatically; no Keychain Access GUI step needed.
+
+### Caveats
+
+- Keychain Access GUI does not preserve the biometric ACL when you
+  edit an item. If you edit a migrated item in the GUI, the ACL is
+  lost and the next locksmith read prompts for a password again.
+  Re-run `locksmith vault migrate <alias>` to restore the ACL.
+- `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` means items do not
+  sync to other Macs via iCloud Keychain. This is intentional for
+  security; if you need cross-device secrets, use a vault designed
+  for sync (e.g. 1Password, gopass with a synced store).
+
 ## Troubleshooting
 
 **`keychain: The specified item could not be found in the keychain.` (errSecItemNotFound, -25300)**

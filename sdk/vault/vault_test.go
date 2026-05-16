@@ -23,6 +23,14 @@ func (m *mockProvider) GetSecret(_ context.Context, _ *vaultv1.GetSecretRequest)
 	return &vaultv1.GetSecretResponse{Secret: []byte("test-secret"), ContentType: "text/plain"}, nil
 }
 
+func (m *mockProvider) SetSecret(_ context.Context, _ *vaultv1.SetSecretRequest) (*vaultv1.SetSecretResponse, error) {
+	return &vaultv1.SetSecretResponse{}, nil
+}
+
+func (m *mockProvider) KeyExists(_ context.Context, _ *vaultv1.KeyExistsRequest) (*vaultv1.KeyExistsResponse, error) {
+	return &vaultv1.KeyExistsResponse{Exists: true}, nil
+}
+
 func (m *mockProvider) HealthCheck(
 	_ context.Context,
 	_ *vaultv1.HealthCheckRequest,
@@ -41,6 +49,14 @@ type errorProvider struct {
 }
 
 func (e *errorProvider) GetSecret(_ context.Context, _ *vaultv1.GetSecretRequest) (*vaultv1.GetSecretResponse, error) {
+	return nil, status.Errorf(e.code, "%s", e.msg)
+}
+
+func (e *errorProvider) SetSecret(_ context.Context, _ *vaultv1.SetSecretRequest) (*vaultv1.SetSecretResponse, error) {
+	return nil, status.Errorf(e.code, "%s", e.msg)
+}
+
+func (e *errorProvider) KeyExists(_ context.Context, _ *vaultv1.KeyExistsRequest) (*vaultv1.KeyExistsResponse, error) {
 	return nil, status.Errorf(e.code, "%s", e.msg)
 }
 
@@ -231,5 +247,91 @@ func TestGRPCClient_Info(t *testing.T) {
 	}
 	if resp.Name != "mock" {
 		t.Errorf("Name = %q, want %q", resp.Name, "mock")
+	}
+}
+
+func TestGRPCServer_SetSecret(t *testing.T) {
+	server := vault.NewGRPCServer(&mockProvider{})
+	_, err := server.SetSecret(context.Background(), &vaultv1.SetSecretRequest{
+		Path:   "test",
+		Secret: []byte("v"),
+	})
+	if err != nil {
+		t.Fatalf("SetSecret() error: %v", err)
+	}
+}
+
+func TestGRPCServer_KeyExists(t *testing.T) {
+	server := vault.NewGRPCServer(&mockProvider{})
+	resp, err := server.KeyExists(context.Background(), &vaultv1.KeyExistsRequest{Path: "test"})
+	if err != nil {
+		t.Fatalf("KeyExists() error: %v", err)
+	}
+	if !resp.Exists {
+		t.Error("Exists = false, want true")
+	}
+}
+
+func TestGRPCClient_SetSecret(t *testing.T) {
+	conn := startServer(t, &mockProvider{})
+	client := vault.NewGRPCClient(conn)
+	_, err := client.SetSecret(context.Background(), &vaultv1.SetSecretRequest{
+		Path:   "test",
+		Secret: []byte("v"),
+	})
+	if err != nil {
+		t.Fatalf("SetSecret() error: %v", err)
+	}
+}
+
+func TestGRPCClient_KeyExists(t *testing.T) {
+	conn := startServer(t, &mockProvider{})
+	client := vault.NewGRPCClient(conn)
+	resp, err := client.KeyExists(context.Background(), &vaultv1.KeyExistsRequest{Path: "test"})
+	if err != nil {
+		t.Fatalf("KeyExists() error: %v", err)
+	}
+	if !resp.Exists {
+		t.Error("Exists = false, want true")
+	}
+}
+
+func TestGRPCClient_SetSecret_PreservesStatusCode(t *testing.T) {
+	conn := startServer(t, &errorProvider{code: codes.Unimplemented, msg: "no write"})
+	client := vault.NewGRPCClient(conn)
+
+	_, gotErr := client.SetSecret(context.Background(), &vaultv1.SetSecretRequest{
+		Path:   "test",
+		Secret: []byte("v"),
+	})
+	if gotErr == nil {
+		t.Fatal("SetSecret() returned nil error, want error")
+	}
+	var ve *sdkerrors.VaultError
+	if !errors.As(gotErr, &ve) {
+		t.Fatalf("error type = %T, want *sdkerrors.VaultError", gotErr)
+	}
+	if ve.Code != codes.Unimplemented {
+		t.Errorf("VaultError.Code = %v, want Unimplemented", ve.Code)
+	}
+	if ve.Message != "no write" {
+		t.Errorf("VaultError.Message = %q, want %q", ve.Message, "no write")
+	}
+}
+
+func TestGRPCClient_KeyExists_PreservesStatusCode(t *testing.T) {
+	conn := startServer(t, &errorProvider{code: codes.Unimplemented, msg: "no probe"})
+	client := vault.NewGRPCClient(conn)
+
+	_, gotErr := client.KeyExists(context.Background(), &vaultv1.KeyExistsRequest{Path: "test"})
+	if gotErr == nil {
+		t.Fatal("KeyExists() returned nil error, want error")
+	}
+	var ve *sdkerrors.VaultError
+	if !errors.As(gotErr, &ve) {
+		t.Fatalf("error type = %T, want *sdkerrors.VaultError", gotErr)
+	}
+	if ve.Code != codes.Unimplemented {
+		t.Errorf("VaultError.Code = %v, want Unimplemented", ve.Code)
 	}
 }

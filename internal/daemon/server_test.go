@@ -384,6 +384,15 @@ type fakeProvider struct {
 
 	healthAvailable bool
 	healthMessage   string
+
+	// Recording fields for read/write operations.
+	mu             sync.Mutex
+	getResponses   [][]byte // sequence of secrets returned by GetSecret
+	getErr         error
+	setRequests    []*vaultv1.SetSecretRequest
+	setErr         error
+	existsResponse bool
+	existsErr      error
 }
 
 func (f *fakeProvider) HealthCheck(
@@ -401,6 +410,48 @@ func (f *fakeProvider) Info(
 	_ *vaultv1.InfoRequest,
 ) (*vaultv1.InfoResponse, error) {
 	return &vaultv1.InfoResponse{}, nil
+}
+
+func (f *fakeProvider) GetSecret(
+	_ context.Context,
+	_ *vaultv1.GetSecretRequest,
+) (*vaultv1.GetSecretResponse, error) {
+	if f.getErr != nil {
+		return nil, f.getErr
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.getResponses) == 0 {
+		return &vaultv1.GetSecretResponse{Secret: []byte("default"), ContentType: "text/plain"}, nil
+	}
+	val := f.getResponses[0]
+	if len(f.getResponses) > 1 {
+		f.getResponses = f.getResponses[1:]
+	}
+	return &vaultv1.GetSecretResponse{Secret: val, ContentType: "text/plain"}, nil
+}
+
+func (f *fakeProvider) SetSecret(
+	_ context.Context,
+	req *vaultv1.SetSecretRequest,
+) (*vaultv1.SetSecretResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.setErr != nil {
+		return nil, f.setErr
+	}
+	f.setRequests = append(f.setRequests, req)
+	return &vaultv1.SetSecretResponse{}, nil
+}
+
+func (f *fakeProvider) KeyExists(
+	_ context.Context,
+	_ *vaultv1.KeyExistsRequest,
+) (*vaultv1.KeyExistsResponse, error) {
+	if f.existsErr != nil {
+		return nil, f.existsErr
+	}
+	return &vaultv1.KeyExistsResponse{Exists: f.existsResponse}, nil
 }
 
 // fakeRegistry implements daemon's pluginRegistry interface for tests.
@@ -431,6 +482,295 @@ func newRegistryServer(reg *fakeRegistry) *daemon.Server {
 		Keys:     map[string]config.Key{},
 	}
 	return daemon.NewServerWithRegistry(func() *config.Config { return cfg }, session.NewStore(), reg, nil)
+}
+
+// newConfiguredServer builds a server with the standard test config
+// (vault "keychain", key "test-key" -> path "test-path") and the given
+// registry, so SetSecret/KeyExists/GetSecret can resolve "test-key".
+func newConfiguredServer(reg *fakeRegistry) (*daemon.Server, string) {
+	cfg := &config.Config{
+		Defaults: config.Defaults{SessionTTL: "1h"},
+		Vaults:   map[string]config.Vault{"keychain": {Type: "keychain"}},
+		Keys:     map[string]config.Key{"test-key": {Vault: "keychain", Path: "test-path"}},
+	}
+	srv := daemon.NewServerWithRegistry(func() *config.Config { return cfg }, session.NewStore(), reg, nil)
+	startResp, _ := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{Ttl: "1h"})
+	return srv, startResp.SessionId
+}
+
+func TestServer_SetSecret_Success(t *testing.T) {
+	prov := &fakeProvider{}
+	srv, sid := newConfiguredServer(&fakeRegistry{types: []string{"keychain"}, provider: prov})
+
+	_, err := srv.SetSecret(context.Background(), &locksmithv1.SetSecretRequest{
+		SessionId: sid,
+		KeyAlias:  "test-key",
+		Secret:    []byte("ghp_xxx"),
+	})
+	if err != nil {
+		t.Fatalf("SetSecret() error: %v", err)
+	}
+	prov.mu.Lock()
+	defer prov.mu.Unlock()
+	if len(prov.setRequests) != 1 {
+		t.Fatalf("setRequests len = %d, want 1", len(prov.setRequests))
+	}
+	got := prov.setRequests[0]
+	if string(got.Secret) != "ghp_xxx" {
+		t.Errorf("Secret = %q, want %q", string(got.Secret), "ghp_xxx")
+	}
+	if got.Path != "test-path" {
+		t.Errorf("Path = %q, want %q", got.Path, "test-path")
+	}
+}
+
+func TestServer_SetSecret_InvalidSession(t *testing.T) {
+	prov := &fakeProvider{}
+	srv, _ := newConfiguredServer(&fakeRegistry{types: []string{"keychain"}, provider: prov})
+
+	_, err := srv.SetSecret(context.Background(), &locksmithv1.SetSecretRequest{
+		SessionId: "ls_bogus",
+		KeyAlias:  "test-key",
+		Secret:    []byte("x"),
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid session")
+	}
+	st, ok := status.FromError(err)
+	if !ok || st.Code() != codes.Unauthenticated {
+		t.Errorf("expected Unauthenticated, got %v", err)
+	}
+}
+
+func TestServer_SetSecret_EvictsCache(t *testing.T) {
+	prov := &fakeProvider{getResponses: [][]byte{[]byte("v1"), []byte("v2")}}
+	srv, sid := newConfiguredServer(&fakeRegistry{types: []string{"keychain"}, provider: prov})
+
+	// First read populates cache.
+	resp, err := srv.GetSecret(context.Background(), &locksmithv1.GetSecretRequest{
+		SessionId: sid, KeyAlias: "test-key",
+	})
+	if err != nil {
+		t.Fatalf("GetSecret#1 error: %v", err)
+	}
+	if string(resp.Secret) != "v1" {
+		t.Fatalf("GetSecret#1 = %q, want v1", string(resp.Secret))
+	}
+
+	// Write evicts cache.
+	if _, setErr := srv.SetSecret(context.Background(), &locksmithv1.SetSecretRequest{
+		SessionId: sid, KeyAlias: "test-key", Secret: []byte("new"),
+	}); setErr != nil {
+		t.Fatalf("SetSecret error: %v", setErr)
+	}
+
+	// Next read should hit the provider again and receive v2.
+	resp2, err := srv.GetSecret(context.Background(), &locksmithv1.GetSecretRequest{
+		SessionId: sid, KeyAlias: "test-key",
+	})
+	if err != nil {
+		t.Fatalf("GetSecret#2 error: %v", err)
+	}
+	if string(resp2.Secret) != "v2" {
+		t.Errorf("GetSecret#2 = %q, want v2 (cache should have been evicted)", string(resp2.Secret))
+	}
+}
+
+func TestServer_SetSecret_PluginUnimplemented(t *testing.T) {
+	prov := &fakeProvider{setErr: status.Error(codes.Unimplemented, "no write")}
+	srv, sid := newConfiguredServer(&fakeRegistry{types: []string{"keychain"}, provider: prov})
+
+	_, err := srv.SetSecret(context.Background(), &locksmithv1.SetSecretRequest{
+		SessionId: sid, KeyAlias: "test-key", Secret: []byte("x"),
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	st, ok := status.FromError(err)
+	if !ok || st.Code() != codes.Unimplemented {
+		t.Errorf("expected Unimplemented, got %v", err)
+	}
+}
+
+func TestServer_SetSecret_PluginInternalError(t *testing.T) {
+	prov := &fakeProvider{setErr: errors.New("boom")}
+	srv, sid := newConfiguredServer(&fakeRegistry{types: []string{"keychain"}, provider: prov})
+
+	_, err := srv.SetSecret(context.Background(), &locksmithv1.SetSecretRequest{
+		SessionId: sid, KeyAlias: "test-key", Secret: []byte("x"),
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	st, ok := status.FromError(err)
+	if !ok || st.Code() != codes.Internal {
+		t.Errorf("expected Internal, got %v", err)
+	}
+}
+
+func TestServer_SetSecret_ForceOpt(t *testing.T) {
+	prov := &fakeProvider{}
+	srv, sid := newConfiguredServer(&fakeRegistry{types: []string{"keychain"}, provider: prov})
+
+	if _, err := srv.SetSecret(context.Background(), &locksmithv1.SetSecretRequest{
+		SessionId: sid, KeyAlias: "test-key", Secret: []byte("x"), Force: true,
+	}); err != nil {
+		t.Fatalf("SetSecret() error: %v", err)
+	}
+	prov.mu.Lock()
+	defer prov.mu.Unlock()
+	if len(prov.setRequests) != 1 {
+		t.Fatalf("setRequests len = %d, want 1", len(prov.setRequests))
+	}
+	if got := prov.setRequests[0].Opts["force"]; got != "true" {
+		t.Errorf("opts[force] = %q, want \"true\"", got)
+	}
+}
+
+func TestServer_SetSecret_UnknownAlias(t *testing.T) {
+	prov := &fakeProvider{}
+	srv, sid := newConfiguredServer(&fakeRegistry{types: []string{"keychain"}, provider: prov})
+
+	_, err := srv.SetSecret(context.Background(), &locksmithv1.SetSecretRequest{
+		SessionId: sid, KeyAlias: "nope", Secret: []byte("x"),
+	})
+	if err == nil {
+		t.Fatal("expected error for unknown alias")
+	}
+	st, ok := status.FromError(err)
+	if !ok || st.Code() != codes.InvalidArgument {
+		t.Errorf("expected InvalidArgument, got %v", err)
+	}
+}
+
+func TestServer_SetSecret_NoPluginManager(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.Defaults{SessionTTL: "1h"},
+		Vaults:   map[string]config.Vault{"keychain": {Type: "keychain"}},
+		Keys:     map[string]config.Key{"test-key": {Vault: "keychain", Path: "test-path"}},
+	}
+	srv := daemon.NewServer(func() *config.Config { return cfg }, session.NewStore(), nil, nil)
+	startResp, _ := srv.SessionStart(context.Background(), &locksmithv1.SessionStartRequest{Ttl: "1h"})
+
+	_, err := srv.SetSecret(context.Background(), &locksmithv1.SetSecretRequest{
+		SessionId: startResp.SessionId, KeyAlias: "test-key", Secret: []byte("x"),
+	})
+	if err == nil {
+		t.Fatal("expected error when plugin manager is nil")
+	}
+	st, ok := status.FromError(err)
+	if !ok || st.Code() != codes.Unavailable {
+		t.Errorf("expected Unavailable, got %v", err)
+	}
+}
+
+func TestServer_SetSecret_PluginNotFound(t *testing.T) {
+	srv, sid := newConfiguredServer(&fakeRegistry{types: []string{"keychain"}, provider: nil})
+
+	_, err := srv.SetSecret(context.Background(), &locksmithv1.SetSecretRequest{
+		SessionId: sid, KeyAlias: "test-key", Secret: []byte("x"),
+	})
+	if err == nil {
+		t.Fatal("expected error when provider unavailable")
+	}
+	st, ok := status.FromError(err)
+	if !ok || st.Code() != codes.NotFound {
+		t.Errorf("expected NotFound, got %v", err)
+	}
+}
+
+func TestServer_KeyExists_True(t *testing.T) {
+	prov := &fakeProvider{existsResponse: true}
+	srv, sid := newConfiguredServer(&fakeRegistry{types: []string{"keychain"}, provider: prov})
+
+	resp, err := srv.KeyExists(context.Background(), &locksmithv1.KeyExistsRequest{
+		SessionId: sid, KeyAlias: "test-key",
+	})
+	if err != nil {
+		t.Fatalf("KeyExists() error: %v", err)
+	}
+	if !resp.Exists {
+		t.Error("Exists = false, want true")
+	}
+}
+
+func TestServer_KeyExists_False(t *testing.T) {
+	prov := &fakeProvider{existsResponse: false}
+	srv, sid := newConfiguredServer(&fakeRegistry{types: []string{"keychain"}, provider: prov})
+
+	resp, err := srv.KeyExists(context.Background(), &locksmithv1.KeyExistsRequest{
+		SessionId: sid, KeyAlias: "test-key",
+	})
+	if err != nil {
+		t.Fatalf("KeyExists() error: %v", err)
+	}
+	if resp.Exists {
+		t.Error("Exists = true, want false")
+	}
+}
+
+func TestServer_KeyExists_InvalidSession(t *testing.T) {
+	prov := &fakeProvider{}
+	srv, _ := newConfiguredServer(&fakeRegistry{types: []string{"keychain"}, provider: prov})
+
+	_, err := srv.KeyExists(context.Background(), &locksmithv1.KeyExistsRequest{
+		SessionId: "ls_bogus", KeyAlias: "test-key",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid session")
+	}
+	st, ok := status.FromError(err)
+	if !ok || st.Code() != codes.Unauthenticated {
+		t.Errorf("expected Unauthenticated, got %v", err)
+	}
+}
+
+func TestServer_KeyExists_UnknownAlias(t *testing.T) {
+	prov := &fakeProvider{}
+	srv, sid := newConfiguredServer(&fakeRegistry{types: []string{"keychain"}, provider: prov})
+
+	_, err := srv.KeyExists(context.Background(), &locksmithv1.KeyExistsRequest{
+		SessionId: sid, KeyAlias: "nope",
+	})
+	if err == nil {
+		t.Fatal("expected error for unknown alias")
+	}
+	st, ok := status.FromError(err)
+	if !ok || st.Code() != codes.InvalidArgument {
+		t.Errorf("expected InvalidArgument, got %v", err)
+	}
+}
+
+func TestServer_KeyExists_PluginError(t *testing.T) {
+	prov := &fakeProvider{existsErr: status.Error(codes.Unavailable, "down")}
+	srv, sid := newConfiguredServer(&fakeRegistry{types: []string{"keychain"}, provider: prov})
+
+	_, err := srv.KeyExists(context.Background(), &locksmithv1.KeyExistsRequest{
+		SessionId: sid, KeyAlias: "test-key",
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	st, ok := status.FromError(err)
+	if !ok || st.Code() != codes.Unavailable {
+		t.Errorf("expected Unavailable, got %v", err)
+	}
+}
+
+func TestServer_KeyExists_PluginInternalError(t *testing.T) {
+	prov := &fakeProvider{existsErr: errors.New("boom")}
+	srv, sid := newConfiguredServer(&fakeRegistry{types: []string{"keychain"}, provider: prov})
+
+	_, err := srv.KeyExists(context.Background(), &locksmithv1.KeyExistsRequest{
+		SessionId: sid, KeyAlias: "test-key",
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	st, ok := status.FromError(err)
+	if !ok || st.Code() != codes.Internal {
+		t.Errorf("expected Internal, got %v", err)
+	}
 }
 
 func TestVaultHealth_IncludesCompatWarnings(t *testing.T) {

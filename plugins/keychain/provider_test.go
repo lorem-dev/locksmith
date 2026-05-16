@@ -244,6 +244,114 @@ func TestKeychainError_Internal(t *testing.T) {
 	}
 }
 
+func TestSetSecret_Success(t *testing.T) {
+	orig := keychainSetPasswordFunc
+	defer func() { keychainSetPasswordFunc = orig }()
+
+	var gotService, gotAccount string
+	var gotSecret []byte
+	keychainSetPasswordFunc = func(service, account string, secret []byte) error {
+		gotService, gotAccount = service, account
+		gotSecret = append([]byte(nil), secret...)
+		return nil
+	}
+
+	p := &KeychainProvider{}
+	_, err := p.SetSecret(context.Background(), &vaultv1.SetSecretRequest{
+		Path:   "github/token",
+		Secret: []byte("ghp_xxx"),
+		Opts:   map[string]string{"service": "com.acme.work"},
+	})
+	if err != nil {
+		t.Fatalf("SetSecret: %v", err)
+	}
+	if gotService != "github" || gotAccount != "token" {
+		t.Errorf("service/account = %q/%q, want github/token (path overrides opts.service)", gotService, gotAccount)
+	}
+	if string(gotSecret) != "ghp_xxx" {
+		t.Errorf("secret = %q, want ghp_xxx", gotSecret)
+	}
+}
+
+func TestSetSecret_ServiceFromOpts(t *testing.T) {
+	orig := keychainSetPasswordFunc
+	defer func() { keychainSetPasswordFunc = orig }()
+
+	var gotService string
+	keychainSetPasswordFunc = func(service, account string, secret []byte) error {
+		gotService = service
+		return nil
+	}
+
+	p := &KeychainProvider{}
+	if _, err := p.SetSecret(context.Background(), &vaultv1.SetSecretRequest{
+		Path:   "plain-account",
+		Secret: []byte("v"),
+		Opts:   map[string]string{"service": "com.acme.work"},
+	}); err != nil {
+		t.Fatalf("SetSecret: %v", err)
+	}
+	if gotService != "com.acme.work" {
+		t.Errorf("service = %q, want com.acme.work", gotService)
+	}
+}
+
+func TestSetSecret_EmptySecret(t *testing.T) {
+	p := &KeychainProvider{}
+	_, err := p.SetSecret(context.Background(), &vaultv1.SetSecretRequest{
+		Path:   "a",
+		Secret: nil,
+	})
+	if err == nil {
+		t.Fatal("expected error for empty secret")
+	}
+}
+
+func TestSetSecret_PropagatesError(t *testing.T) {
+	orig := keychainSetPasswordFunc
+	defer func() { keychainSetPasswordFunc = orig }()
+	keychainSetPasswordFunc = func(string, string, []byte) error {
+		return keychainError(-25293, "errSecAuthFailed")
+	}
+
+	p := &KeychainProvider{}
+	if _, err := p.SetSecret(context.Background(), &vaultv1.SetSecretRequest{
+		Path: "a/b", Secret: []byte("v"),
+	}); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestKeyExists_True(t *testing.T) {
+	orig := keychainExistsFunc
+	defer func() { keychainExistsFunc = orig }()
+	keychainExistsFunc = func(string, string) (bool, error) { return true, nil }
+
+	p := &KeychainProvider{}
+	resp, err := p.KeyExists(context.Background(), &vaultv1.KeyExistsRequest{Path: "github/token"})
+	if err != nil {
+		t.Fatalf("KeyExists: %v", err)
+	}
+	if !resp.Exists {
+		t.Error("expected exists=true")
+	}
+}
+
+func TestKeyExists_False(t *testing.T) {
+	orig := keychainExistsFunc
+	defer func() { keychainExistsFunc = orig }()
+	keychainExistsFunc = func(string, string) (bool, error) { return false, nil }
+
+	p := &KeychainProvider{}
+	resp, err := p.KeyExists(context.Background(), &vaultv1.KeyExistsRequest{Path: "missing/token"})
+	if err != nil {
+		t.Fatalf("KeyExists: %v", err)
+	}
+	if resp.Exists {
+		t.Error("expected exists=false")
+	}
+}
+
 func TestInfoCompatibility(t *testing.T) {
 	p := &KeychainProvider{}
 	resp, err := p.Info(context.Background(), &vaultv1.InfoRequest{})

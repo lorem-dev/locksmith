@@ -20,6 +20,8 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	VaultProviderService_GetSecret_FullMethodName   = "/vault.v1.VaultProviderService/GetSecret"
+	VaultProviderService_SetSecret_FullMethodName   = "/vault.v1.VaultProviderService/SetSecret"
+	VaultProviderService_KeyExists_FullMethodName   = "/vault.v1.VaultProviderService/KeyExists"
 	VaultProviderService_HealthCheck_FullMethodName = "/vault.v1.VaultProviderService/HealthCheck"
 	VaultProviderService_Info_FullMethodName        = "/vault.v1.VaultProviderService/Info"
 )
@@ -31,6 +33,8 @@ const (
 // VaultProviderService is the gRPC service that every vault plugin must implement.
 type VaultProviderServiceClient interface {
 	GetSecret(ctx context.Context, in *GetSecretRequest, opts ...grpc.CallOption) (*GetSecretResponse, error)
+	SetSecret(ctx context.Context, in *SetSecretRequest, opts ...grpc.CallOption) (*SetSecretResponse, error)
+	KeyExists(ctx context.Context, in *KeyExistsRequest, opts ...grpc.CallOption) (*KeyExistsResponse, error)
 	HealthCheck(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error)
 	Info(ctx context.Context, in *InfoRequest, opts ...grpc.CallOption) (*InfoResponse, error)
 }
@@ -47,6 +51,26 @@ func (c *vaultProviderServiceClient) GetSecret(ctx context.Context, in *GetSecre
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetSecretResponse)
 	err := c.cc.Invoke(ctx, VaultProviderService_GetSecret_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vaultProviderServiceClient) SetSecret(ctx context.Context, in *SetSecretRequest, opts ...grpc.CallOption) (*SetSecretResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetSecretResponse)
+	err := c.cc.Invoke(ctx, VaultProviderService_SetSecret_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vaultProviderServiceClient) KeyExists(ctx context.Context, in *KeyExistsRequest, opts ...grpc.CallOption) (*KeyExistsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(KeyExistsResponse)
+	err := c.cc.Invoke(ctx, VaultProviderService_KeyExists_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -80,6 +104,8 @@ func (c *vaultProviderServiceClient) Info(ctx context.Context, in *InfoRequest, 
 // VaultProviderService is the gRPC service that every vault plugin must implement.
 type VaultProviderServiceServer interface {
 	GetSecret(context.Context, *GetSecretRequest) (*GetSecretResponse, error)
+	SetSecret(context.Context, *SetSecretRequest) (*SetSecretResponse, error)
+	KeyExists(context.Context, *KeyExistsRequest) (*KeyExistsResponse, error)
 	HealthCheck(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error)
 	Info(context.Context, *InfoRequest) (*InfoResponse, error)
 	mustEmbedUnimplementedVaultProviderServiceServer()
@@ -94,6 +120,12 @@ type UnimplementedVaultProviderServiceServer struct{}
 
 func (UnimplementedVaultProviderServiceServer) GetSecret(context.Context, *GetSecretRequest) (*GetSecretResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSecret not implemented")
+}
+func (UnimplementedVaultProviderServiceServer) SetSecret(context.Context, *SetSecretRequest) (*SetSecretResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetSecret not implemented")
+}
+func (UnimplementedVaultProviderServiceServer) KeyExists(context.Context, *KeyExistsRequest) (*KeyExistsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method KeyExists not implemented")
 }
 func (UnimplementedVaultProviderServiceServer) HealthCheck(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method HealthCheck not implemented")
@@ -136,6 +168,42 @@ func _VaultProviderService_GetSecret_Handler(srv interface{}, ctx context.Contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VaultProviderServiceServer).GetSecret(ctx, req.(*GetSecretRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VaultProviderService_SetSecret_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetSecretRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VaultProviderServiceServer).SetSecret(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VaultProviderService_SetSecret_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VaultProviderServiceServer).SetSecret(ctx, req.(*SetSecretRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VaultProviderService_KeyExists_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(KeyExistsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VaultProviderServiceServer).KeyExists(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VaultProviderService_KeyExists_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VaultProviderServiceServer).KeyExists(ctx, req.(*KeyExistsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -186,6 +254,14 @@ var VaultProviderService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSecret",
 			Handler:    _VaultProviderService_GetSecret_Handler,
+		},
+		{
+			MethodName: "SetSecret",
+			Handler:    _VaultProviderService_SetSecret_Handler,
+		},
+		{
+			MethodName: "KeyExists",
+			Handler:    _VaultProviderService_KeyExists_Handler,
 		},
 		{
 			MethodName: "HealthCheck",

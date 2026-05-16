@@ -124,7 +124,7 @@ func (s *Server) GetSecret(
 		return nil, fmt.Errorf("invalid session: %w", err)
 	}
 
-	vaultType, path, opts, err := s.resolveKey(req)
+	vaultType, path, opts, err := s.resolveKey(req.KeyAlias, req.VaultName, req.Path)
 	if err != nil {
 		return nil, err
 	}
@@ -162,6 +162,93 @@ func (s *Server) GetSecret(
 		Msg("secret retrieved and cached")
 
 	return &locksmithv1.GetSecretResponse{Secret: resp.Secret, ContentType: resp.ContentType}, nil
+}
+
+// SetSecret writes a secret through the vault plugin and evicts any
+// stale cache entries from active sessions. Plugin errors (including
+// codes.Unimplemented from read-only vaults) are propagated unchanged.
+func (s *Server) SetSecret(
+	ctx context.Context,
+	req *locksmithv1.SetSecretRequest,
+) (*locksmithv1.SetSecretResponse, error) {
+	if _, err := s.store.Get(req.SessionId); err != nil {
+		return nil, status.Errorf(codes.Unauthenticated, "invalid session: %s", err.Error())
+	}
+
+	vaultType, path, opts, err := s.resolveKey(req.KeyAlias, req.VaultName, req.Path)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
+	}
+
+	if req.Force {
+		opts["force"] = "true"
+	}
+
+	if s.plugins == nil {
+		return nil, status.Errorf(codes.Unavailable, "no plugin manager available")
+	}
+	provider, err := s.plugins.Get(vaultType)
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "vault plugin: %s", err.Error())
+	}
+
+	if _, err := provider.SetSecret(ctx, &vaultv1.SetSecretRequest{
+		Path:   path,
+		Secret: req.Secret,
+		Opts:   opts,
+	}); err != nil {
+		// Propagate gRPC status codes unchanged (Unimplemented from
+		// the plugin must reach the CLI as Unimplemented).
+		if st, ok := status.FromError(err); ok && st.Code() != codes.OK {
+			return nil, status.Errorf(st.Code(), "writing secret: %s", st.Message())
+		}
+		return nil, status.Errorf(codes.Internal, "writing secret: %s", err.Error())
+	}
+
+	cacheKey := vaultType + ":" + path
+	s.store.EvictKey(cacheKey)
+	log.Info().
+		Str("session_id", sdksession.MaskSessionId(req.SessionId)).
+		Str("vault", vaultType).
+		Str("path", path).
+		Msg("secret written and cache evicted")
+
+	return &locksmithv1.SetSecretResponse{}, nil
+}
+
+// KeyExists reports whether a secret is present in the vault without
+// fetching its value. Used by the CLI's strict-by-default `vault set`
+// to refuse to overwrite without --force.
+func (s *Server) KeyExists(
+	ctx context.Context,
+	req *locksmithv1.KeyExistsRequest,
+) (*locksmithv1.KeyExistsResponse, error) {
+	if _, err := s.store.Get(req.SessionId); err != nil {
+		return nil, status.Errorf(codes.Unauthenticated, "invalid session: %s", err.Error())
+	}
+
+	vaultType, path, opts, err := s.resolveKey(req.KeyAlias, req.VaultName, req.Path)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
+	}
+
+	if s.plugins == nil {
+		return nil, status.Errorf(codes.Unavailable, "no plugin manager available")
+	}
+	provider, err := s.plugins.Get(vaultType)
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "vault plugin: %s", err.Error())
+	}
+
+	resp, err := provider.KeyExists(ctx, &vaultv1.KeyExistsRequest{Path: path, Opts: opts})
+	if err != nil {
+		if st, ok := status.FromError(err); ok && st.Code() != codes.OK {
+			return nil, status.Errorf(st.Code(), "checking key existence: %s", st.Message())
+		}
+		return nil, status.Errorf(codes.Internal, "checking key existence: %s", err.Error())
+	}
+
+	return &locksmithv1.KeyExistsResponse{Exists: resp.Exists}, nil
 }
 
 // VaultList returns info for all loaded vault plugins.
@@ -234,21 +321,22 @@ func (s *Server) ReloadConfig(
 	return &locksmithv1.ReloadConfigResponse{Message: "config reloaded"}, nil
 }
 
-// resolveKey returns vault type, secret path, and extra opts for a GetSecret request.
-// Supports both key alias lookup and direct vault+path fallback.
+// resolveKey returns vault type, secret path, and extra opts for a secret
+// request. Supports both key alias lookup and direct vault+path fallback.
+// Shared by GetSecret, SetSecret, and KeyExists handlers.
 func (s *Server) resolveKey(
-	req *locksmithv1.GetSecretRequest,
+	keyAlias, vaultName, reqPath string,
 ) (vaultType, path string, opts map[string]string, err error) {
 	cfg := s.cfgFn()
 	opts = make(map[string]string)
-	if req.KeyAlias != "" {
-		keyDef, ok := cfg.Keys[req.KeyAlias]
+	if keyAlias != "" {
+		keyDef, ok := cfg.Keys[keyAlias]
 		if !ok {
-			return "", "", nil, fmt.Errorf("unknown key alias %q", req.KeyAlias)
+			return "", "", nil, fmt.Errorf("unknown key alias %q", keyAlias)
 		}
 		vaultDef, ok := cfg.Vaults[keyDef.Vault]
 		if !ok {
-			return "", "", nil, fmt.Errorf("key %q references unknown vault %q", req.KeyAlias, keyDef.Vault)
+			return "", "", nil, fmt.Errorf("key %q references unknown vault %q", keyAlias, keyDef.Vault)
 		}
 		if vaultDef.Store != "" {
 			opts["store"] = vaultDef.Store
@@ -258,19 +346,19 @@ func (s *Server) resolveKey(
 		}
 		return vaultDef.Type, keyDef.Path, opts, nil
 	}
-	if req.VaultName == "" || req.Path == "" {
+	if vaultName == "" || reqPath == "" {
 		return "", "", nil, fmt.Errorf("either key_alias or both vault_name and path are required")
 	}
-	if vaultDef, ok := cfg.Vaults[req.VaultName]; ok {
+	if vaultDef, ok := cfg.Vaults[vaultName]; ok {
 		if vaultDef.Store != "" {
 			opts["store"] = vaultDef.Store
 		}
 		if vaultDef.Service != "" {
 			opts["service"] = vaultDef.Service
 		}
-		return vaultDef.Type, req.Path, opts, nil
+		return vaultDef.Type, reqPath, opts, nil
 	}
-	return req.VaultName, req.Path, opts, nil
+	return vaultName, reqPath, opts, nil
 }
 
 // parseTTL returns the requested duration, falling back to defaultTTL when requested is empty.

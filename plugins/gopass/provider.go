@@ -99,6 +99,70 @@ func (p *GopassProvider) GetSecret(
 	}, nil
 }
 
+// SetSecret writes a secret to gopass via `gopass insert -m [-f] <path>`.
+// The secret is piped via stdin. The -f flag is added when
+// req.Opts["force"] == "true", which maps to gopass's overwrite mode.
+func (p *GopassProvider) SetSecret(
+	ctx context.Context, req *vaultv1.SetSecretRequest,
+) (*vaultv1.SetSecretResponse, error) {
+	if len(req.Secret) == 0 {
+		return nil, sdkerrors.InvalidArgumentError("gopass: secret must not be empty")
+	}
+	secretPath := req.Path
+	if store, ok := req.Opts["store"]; ok && store != "" {
+		secretPath = store + "/" + req.Path
+	}
+
+	args := []string{"insert", "-m"}
+	if req.Opts["force"] == "true" {
+		args = append(args, "-f")
+	}
+	args = append(args, secretPath)
+
+	factory := p.resolveCmdFactory()
+	var stderr bytes.Buffer
+	cmd := factory(ctx, "gopass", args...)
+	cmd.Env = buildGopassEnv()
+	cmd.Stdin = bytes.NewReader(req.Secret)
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		stderrStr := strings.TrimSpace(stderr.String())
+		return nil, fmt.Errorf("gopass insert %q: %s: %w", secretPath, stderrStr, err)
+	}
+	return &vaultv1.SetSecretResponse{}, nil
+}
+
+// KeyExists probes the gopass store via `gopass ls --flat <path>` and
+// reports whether the path is present. A non-zero exit is treated as
+// "not present" rather than an error; this matches gopass's behaviour
+// for paths that do not exist.
+func (p *GopassProvider) KeyExists(
+	ctx context.Context, req *vaultv1.KeyExistsRequest,
+) (*vaultv1.KeyExistsResponse, error) {
+	secretPath := req.Path
+	if store, ok := req.Opts["store"]; ok && store != "" {
+		secretPath = store + "/" + req.Path
+	}
+
+	factory := p.resolveCmdFactory()
+	var stdout, stderr bytes.Buffer
+	cmd := factory(ctx, "gopass", "ls", "--flat", secretPath)
+	cmd.Env = buildGopassEnv()
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return &vaultv1.KeyExistsResponse{Exists: false}, nil
+	}
+	exists := false
+	for _, line := range strings.Split(stdout.String(), "\n") {
+		if strings.TrimSpace(line) == secretPath {
+			exists = true
+			break
+		}
+	}
+	return &vaultv1.KeyExistsResponse{Exists: exists}, nil
+}
+
 // HealthCheck verifies that gopass is installed and the store is initialized.
 func (p *GopassProvider) HealthCheck(
 	_ context.Context,
@@ -124,9 +188,9 @@ func (p *GopassProvider) HealthCheck(
 func (p *GopassProvider) Info(_ context.Context, _ *vaultv1.InfoRequest) (*vaultv1.InfoResponse, error) {
 	return &vaultv1.InfoResponse{
 		Name:                "gopass",
-		Version:             "0.1.0",
+		Version:             "0.2.0",
 		Platforms:           []string{"darwin", "linux"},
-		MinLocksmithVersion: "0.1.0",
+		MinLocksmithVersion: "0.4.0",
 		MaxLocksmithVersion: sdkversion.Current,
 	}, nil
 }

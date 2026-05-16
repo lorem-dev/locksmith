@@ -131,6 +131,20 @@ func (s *Store) CacheSecret(sessionID, keyName string, secret []byte) {
 	sess.secrets[keyName] = secret
 }
 
+// EvictKey removes a cached secret entry from every active session. The
+// stored bytes are zero-wiped first. Used after a write (SetSecret) so
+// the next read does not serve a stale value from cache.
+func (s *Store) EvictKey(keyName string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, sess := range s.sessions {
+		if val, ok := sess.secrets[keyName]; ok {
+			wipeBytes(val)
+			delete(sess.secrets, keyName)
+		}
+	}
+}
+
 // GetCachedSecret retrieves a cached secret. Returns (nil, false) if the key
 // is not cached, the session does not exist, or the key is not in the allowlist.
 func (s *Store) GetCachedSecret(sessionID, keyName string) ([]byte, bool) {

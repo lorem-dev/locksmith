@@ -63,6 +63,14 @@ func (p *mockProvider) GetSecret(_ context.Context, req *vaultv1.GetSecretReques
 	return &vaultv1.GetSecretResponse{Secret: p.secret, ContentType: p.contentType}, nil
 }
 
+func (p *mockProvider) SetSecret(_ context.Context, _ *vaultv1.SetSecretRequest) (*vaultv1.SetSecretResponse, error) {
+	return &vaultv1.SetSecretResponse{}, nil
+}
+
+func (p *mockProvider) KeyExists(_ context.Context, _ *vaultv1.KeyExistsRequest) (*vaultv1.KeyExistsResponse, error) {
+	return &vaultv1.KeyExistsResponse{}, nil
+}
+
 func (p *mockProvider) HealthCheck(
 	_ context.Context,
 	_ *vaultv1.HealthCheckRequest,

@@ -35,3 +35,8 @@ func UnauthenticatedError(msg string) error {
 
 // InternalError returns a VaultError with code Internal.
 func InternalError(msg string) error { return &VaultError{Code: codes.Internal, Message: msg} }
+
+// InvalidArgumentError returns a VaultError with code InvalidArgument.
+func InvalidArgumentError(msg string) error {
+	return &VaultError{Code: codes.InvalidArgument, Message: msg}
+}

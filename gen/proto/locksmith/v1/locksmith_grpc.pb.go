@@ -20,6 +20,8 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	LocksmithService_GetSecret_FullMethodName    = "/locksmith.v1.LocksmithService/GetSecret"
+	LocksmithService_SetSecret_FullMethodName    = "/locksmith.v1.LocksmithService/SetSecret"
+	LocksmithService_KeyExists_FullMethodName    = "/locksmith.v1.LocksmithService/KeyExists"
 	LocksmithService_SessionStart_FullMethodName = "/locksmith.v1.LocksmithService/SessionStart"
 	LocksmithService_SessionEnd_FullMethodName   = "/locksmith.v1.LocksmithService/SessionEnd"
 	LocksmithService_SessionList_FullMethodName  = "/locksmith.v1.LocksmithService/SessionList"
@@ -36,6 +38,8 @@ const (
 // CLI is a thin client to this service.
 type LocksmithServiceClient interface {
 	GetSecret(ctx context.Context, in *GetSecretRequest, opts ...grpc.CallOption) (*GetSecretResponse, error)
+	SetSecret(ctx context.Context, in *SetSecretRequest, opts ...grpc.CallOption) (*SetSecretResponse, error)
+	KeyExists(ctx context.Context, in *KeyExistsRequest, opts ...grpc.CallOption) (*KeyExistsResponse, error)
 	SessionStart(ctx context.Context, in *SessionStartRequest, opts ...grpc.CallOption) (*SessionStartResponse, error)
 	SessionEnd(ctx context.Context, in *SessionEndRequest, opts ...grpc.CallOption) (*SessionEndResponse, error)
 	SessionList(ctx context.Context, in *SessionListRequest, opts ...grpc.CallOption) (*SessionListResponse, error)
@@ -56,6 +60,26 @@ func (c *locksmithServiceClient) GetSecret(ctx context.Context, in *GetSecretReq
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetSecretResponse)
 	err := c.cc.Invoke(ctx, LocksmithService_GetSecret_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *locksmithServiceClient) SetSecret(ctx context.Context, in *SetSecretRequest, opts ...grpc.CallOption) (*SetSecretResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetSecretResponse)
+	err := c.cc.Invoke(ctx, LocksmithService_SetSecret_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *locksmithServiceClient) KeyExists(ctx context.Context, in *KeyExistsRequest, opts ...grpc.CallOption) (*KeyExistsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(KeyExistsResponse)
+	err := c.cc.Invoke(ctx, LocksmithService_KeyExists_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -130,6 +154,8 @@ func (c *locksmithServiceClient) ReloadConfig(ctx context.Context, in *ReloadCon
 // CLI is a thin client to this service.
 type LocksmithServiceServer interface {
 	GetSecret(context.Context, *GetSecretRequest) (*GetSecretResponse, error)
+	SetSecret(context.Context, *SetSecretRequest) (*SetSecretResponse, error)
+	KeyExists(context.Context, *KeyExistsRequest) (*KeyExistsResponse, error)
 	SessionStart(context.Context, *SessionStartRequest) (*SessionStartResponse, error)
 	SessionEnd(context.Context, *SessionEndRequest) (*SessionEndResponse, error)
 	SessionList(context.Context, *SessionListRequest) (*SessionListResponse, error)
@@ -148,6 +174,12 @@ type UnimplementedLocksmithServiceServer struct{}
 
 func (UnimplementedLocksmithServiceServer) GetSecret(context.Context, *GetSecretRequest) (*GetSecretResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSecret not implemented")
+}
+func (UnimplementedLocksmithServiceServer) SetSecret(context.Context, *SetSecretRequest) (*SetSecretResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetSecret not implemented")
+}
+func (UnimplementedLocksmithServiceServer) KeyExists(context.Context, *KeyExistsRequest) (*KeyExistsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method KeyExists not implemented")
 }
 func (UnimplementedLocksmithServiceServer) SessionStart(context.Context, *SessionStartRequest) (*SessionStartResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SessionStart not implemented")
@@ -202,6 +234,42 @@ func _LocksmithService_GetSecret_Handler(srv interface{}, ctx context.Context, d
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(LocksmithServiceServer).GetSecret(ctx, req.(*GetSecretRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _LocksmithService_SetSecret_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetSecretRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LocksmithServiceServer).SetSecret(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LocksmithService_SetSecret_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LocksmithServiceServer).SetSecret(ctx, req.(*SetSecretRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _LocksmithService_KeyExists_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(KeyExistsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LocksmithServiceServer).KeyExists(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LocksmithService_KeyExists_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LocksmithServiceServer).KeyExists(ctx, req.(*KeyExistsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -324,6 +392,14 @@ var LocksmithService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSecret",
 			Handler:    _LocksmithService_GetSecret_Handler,
+		},
+		{
+			MethodName: "SetSecret",
+			Handler:    _LocksmithService_SetSecret_Handler,
+		},
+		{
+			MethodName: "KeyExists",
+			Handler:    _LocksmithService_KeyExists_Handler,
 		},
 		{
 			MethodName: "SessionStart",

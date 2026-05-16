@@ -19,6 +19,8 @@ import (
 // Each method is called by the daemon over gRPC.
 type Provider interface {
 	GetSecret(ctx context.Context, req *vaultv1.GetSecretRequest) (*vaultv1.GetSecretResponse, error)
+	SetSecret(ctx context.Context, req *vaultv1.SetSecretRequest) (*vaultv1.SetSecretResponse, error)
+	KeyExists(ctx context.Context, req *vaultv1.KeyExistsRequest) (*vaultv1.KeyExistsResponse, error)
 	HealthCheck(ctx context.Context, req *vaultv1.HealthCheckRequest) (*vaultv1.HealthCheckResponse, error)
 	Info(ctx context.Context, req *vaultv1.InfoRequest) (*vaultv1.InfoResponse, error)
 }
@@ -97,6 +99,16 @@ func (s *GRPCServer) GetSecret(ctx context.Context, req *vaultv1.GetSecretReques
 	return s.impl.GetSecret(ctx, req)
 }
 
+// SetSecret delegates to the underlying Provider implementation.
+func (s *GRPCServer) SetSecret(ctx context.Context, req *vaultv1.SetSecretRequest) (*vaultv1.SetSecretResponse, error) {
+	return s.impl.SetSecret(ctx, req)
+}
+
+// KeyExists delegates to the underlying Provider implementation.
+func (s *GRPCServer) KeyExists(ctx context.Context, req *vaultv1.KeyExistsRequest) (*vaultv1.KeyExistsResponse, error) {
+	return s.impl.KeyExists(ctx, req)
+}
+
 // HealthCheck delegates to the underlying Provider implementation.
 func (s *GRPCServer) HealthCheck(
 	ctx context.Context,
@@ -125,6 +137,34 @@ func NewGRPCClient(conn *grpc.ClientConn) Provider {
 // second gRPC boundary (plugin -> daemon -> CLI).
 func (c *GRPCClient) GetSecret(ctx context.Context, req *vaultv1.GetSecretRequest) (*vaultv1.GetSecretResponse, error) {
 	resp, err := c.client.GetSecret(ctx, req)
+	if err != nil {
+		if s, ok := status.FromError(err); ok && s.Code() != codes.OK {
+			return nil, &sdkerrors.VaultError{Code: s.Code(), Message: s.Message()}
+		}
+		return nil, err
+	}
+	return resp, nil
+}
+
+// SetSecret calls the remote plugin's SetSecret over gRPC and unwraps any
+// gRPC status error into a *VaultError so the status code survives the
+// second gRPC boundary (plugin -> daemon -> CLI).
+func (c *GRPCClient) SetSecret(ctx context.Context, req *vaultv1.SetSecretRequest) (*vaultv1.SetSecretResponse, error) {
+	resp, err := c.client.SetSecret(ctx, req)
+	if err != nil {
+		if s, ok := status.FromError(err); ok && s.Code() != codes.OK {
+			return nil, &sdkerrors.VaultError{Code: s.Code(), Message: s.Message()}
+		}
+		return nil, err
+	}
+	return resp, nil
+}
+
+// KeyExists calls the remote plugin's KeyExists over gRPC and unwraps any
+// gRPC status error into a *VaultError so the status code survives the
+// second gRPC boundary (plugin -> daemon -> CLI).
+func (c *GRPCClient) KeyExists(ctx context.Context, req *vaultv1.KeyExistsRequest) (*vaultv1.KeyExistsResponse, error) {
+	resp, err := c.client.KeyExists(ctx, req)
 	if err != nil {
 		if s, ok := status.FromError(err); ok && s.Code() != codes.OK {
 			return nil, &sdkerrors.VaultError{Code: s.Code(), Message: s.Message()}

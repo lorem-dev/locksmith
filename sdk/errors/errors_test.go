@@ -42,6 +42,7 @@ func TestVaultError_Constructors(t *testing.T) {
 		{"Unavailable", sdkerrors.UnavailableError("plugin down"), codes.Unavailable, "plugin down"},
 		{"Unauthenticated", sdkerrors.UnauthenticatedError("no passphrase"), codes.Unauthenticated, "no passphrase"},
 		{"Internal", sdkerrors.InternalError("unexpected"), codes.Internal, "unexpected"},
+		{"InvalidArgument", sdkerrors.InvalidArgumentError("bad input"), codes.InvalidArgument, "bad input"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

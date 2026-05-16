@@ -54,6 +54,14 @@ func (p *stubProvider) GetSecret(_ context.Context, _ *vaultv1.GetSecretRequest)
 	return nil, nil
 }
 
+func (p *stubProvider) SetSecret(_ context.Context, _ *vaultv1.SetSecretRequest) (*vaultv1.SetSecretResponse, error) {
+	return nil, nil
+}
+
+func (p *stubProvider) KeyExists(_ context.Context, _ *vaultv1.KeyExistsRequest) (*vaultv1.KeyExistsResponse, error) {
+	return nil, nil
+}
+
 func (p *stubProvider) HealthCheck(
 	_ context.Context,
 	_ *vaultv1.HealthCheckRequest,

@@ -8,6 +8,8 @@ option go_package = "github.com/lorem-dev/locksmith/gen/proto/locksmith/v1;locks
 // CLI is a thin client to this service.
 service LocksmithService {
   rpc GetSecret(GetSecretRequest) returns (GetSecretResponse);
+  rpc SetSecret(SetSecretRequest) returns (SetSecretResponse);
+  rpc KeyExists(KeyExistsRequest) returns (KeyExistsResponse);
   rpc SessionStart(SessionStartRequest) returns (SessionStartResponse);
   rpc SessionEnd(SessionEndRequest) returns (SessionEndResponse);
   rpc SessionList(SessionListRequest) returns (SessionListResponse);
@@ -26,6 +28,28 @@ message GetSecretRequest {
 message GetSecretResponse {
   bytes secret = 1;
   string content_type = 2;
+}
+
+message SetSecretRequest {
+  string session_id = 1;
+  string key_alias = 2;
+  string vault_name = 3;
+  string path = 4;
+  bytes secret = 5;
+  bool force = 6;
+}
+
+message SetSecretResponse {}
+
+message KeyExistsRequest {
+  string session_id = 1;
+  string key_alias = 2;
+  string vault_name = 3;
+  string path = 4;
+}
+
+message KeyExistsResponse {
+  bool exists = 1;
 }
 
 message SessionStartRequest {

@@ -117,6 +117,40 @@ func TestStore_CacheSecret(t *testing.T) {
 	}
 }
 
+func TestStore_EvictKey(t *testing.T) {
+	s := session.NewStore()
+	sess1, _ := s.Create(time.Hour, nil)
+	sess2, _ := s.Create(time.Hour, nil)
+	s.CacheSecret(sess1.ID, "alias", []byte("v1"))
+	s.CacheSecret(sess2.ID, "alias", []byte("v2"))
+	s.CacheSecret(sess1.ID, "other", []byte("keep"))
+
+	s.EvictKey("alias")
+
+	if _, ok := s.GetCachedSecret(sess1.ID, "alias"); ok {
+		t.Error("session1: expected alias to be evicted")
+	}
+	if _, ok := s.GetCachedSecret(sess2.ID, "alias"); ok {
+		t.Error("session2: expected alias to be evicted")
+	}
+	if v, ok := s.GetCachedSecret(sess1.ID, "other"); !ok || string(v) != "keep" {
+		t.Errorf("session1: 'other' key should be untouched, got %q ok=%v", v, ok)
+	}
+}
+
+func TestStore_EvictKey_WipesBytes(t *testing.T) {
+	s := session.NewStore()
+	sess, _ := s.Create(time.Hour, nil)
+	secret := []byte("wipe-me")
+	s.CacheSecret(sess.ID, "k", secret)
+	s.EvictKey("k")
+	for i, b := range secret {
+		if b != 0 {
+			t.Errorf("secret byte[%d] = %d after EvictKey, want 0", i, b)
+		}
+	}
+}
+
 func TestStore_CacheSecret_NotAllowed(t *testing.T) {
 	s := session.NewStore()
 	sess, _ := s.Create(time.Hour, []string{"allowed-key"})
